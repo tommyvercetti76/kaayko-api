@@ -4,29 +4,21 @@ This directory contains a complete test suite for the Kaayko Firebase Functions 
 
 ## 📁 Test Files Overview
 
-### 🎯 **Core Comprehensive Test Scripts**
+### 🎯 **Essential Test Scripts**
 
 | File | Purpose | Coverage | Lines |
 |------|---------|----------|-------|
-| `comprehensive_api_tests.js` | **Complete API functionality testing** | All endpoints, success/error cases, validation | 500+ |
 | `integration_tests.js` | **End-to-end workflow testing** | User journeys, cross-API integration | 600+ |
 | `security_tests.js` | **Security vulnerability testing** | SQL injection, XSS, auth bypass | 600+ |
 | `performance_tests.js` | **Load and performance testing** | Response times, throughput, scalability | 700+ |
-| `edge_case_tests.js` | **Boundary and stress testing** | Edge cases, malformed input, high load | 400+ |
+| `forecast_heatmap_analyzer.js` | **🆕 Forecast API Analytics** | Deep forecast analysis, heatmaps, statistics | 500+ |
 
 ### 🚀 **Execution Scripts**
 
 | File | Purpose | Usage |
 |------|---------|-------|
-| `run_all_comprehensive_tests.sh` | **Master test orchestrator** | Runs all test suites with reporting |
-| `enhanced_test_suite.js` | Legacy enhanced testing | Detailed API validation |
-| `production_test_suite.js` | Production environment testing | Live system validation |
-| `interactive_test_suite.js` | Interactive menu-driven testing | Manual test selection |
-
-### ⚙️ **Configuration & Utilities**
-- `test_config.json` - Test configuration and endpoints
-- `service_manager.js` - Service management utilities
-- `run_all_tests.sh` - Legacy test runner
+| `run-tests.sh` | **Master test orchestrator** | Runs all test suites with reporting |
+| `forecast_heatmap_analyzer.js` | **🆕 Forecast Analytics** | Deep dive analysis with visual heatmaps |
 
 ## 🚀 **Quick Start**
 
@@ -35,26 +27,26 @@ This directory contains a complete test suite for the Kaayko Firebase Functions 
 #### Quick Testing (5 minutes)
 ```bash
 cd tests
-./run_all_comprehensive_tests.sh --quick
+./run-tests.sh --quick
 ```
 
 #### Standard Testing (15 minutes)
 ```bash
 cd tests
-./run_all_comprehensive_tests.sh
+./run-tests.sh
 ```
 
-#### Full Testing (30 minutes)
+#### **🆕 Forecast API Deep Analysis**
 ```bash
 cd tests
-./run_all_comprehensive_tests.sh --full
+node forecast_heatmap_analyzer.js
 ```
 
 ### **🔧 Individual Test Suites**
 
-#### Core API Testing
+#### Integration Testing
 ```bash
-node comprehensive_api_tests.js --verbose
+node integration_tests.js --verbose
 ```
 
 #### Security Assessment
@@ -67,14 +59,9 @@ node security_tests.js --aggressive --report
 node performance_tests.js --users=50 --duration=120000
 ```
 
-#### Integration Validation
+#### **🆕 Forecast Heatmap Analysis**
 ```bash
-node integration_tests.js --verbose
-```
-
-#### Edge Case Testing
-```bash
-node edge_case_tests.js --stress
+node forecast_heatmap_analyzer.js
 ```
 
 ## 🎯 **Test Coverage**
