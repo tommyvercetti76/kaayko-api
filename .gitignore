@@ -1,0 +1,31 @@
+# Dependencies
+node_modules/
+venv/
+__pycache__/
+
+# Environment files
+.env
+.env.local
+
+# Build outputs
+dist/
+build/
+
+# Firebase
+.firebase/
+
+# Python cache
+*.pyc
+*.pyo
+
+# Large files (keep locally but don't commit to save repo size)
+ml-service/cleaned_weather_data.csv
+ml-service/kaayko_production_model.pkl
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
