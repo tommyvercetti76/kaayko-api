@@ -29,6 +29,13 @@ node performance_tests.js --profiling --baseUrl="$BASE_URL" --maxConcurrent=3
 PERFORMANCE_EXIT=$?
 
 echo ""
+
+# Run Quick Forecast Analysis (NEW - Fast version)
+echo "🗺️ Running Quick Forecast Analysis..."
+node forecast_heatmap_optimizer.js --fast
+FORECAST_EXIT=$?
+
+echo ""
 echo "===================="
 echo "📊 Test Suite Summary"
 echo "===================="
@@ -49,6 +56,12 @@ if [ $PERFORMANCE_EXIT -eq 0 ]; then
     echo "✅ Performance Tests: PASSED"
 else
     echo "⚠️ Performance Tests: FAILED (may be due to rate limiting)"
+fi
+
+if [ $FORECAST_EXIT -eq 0 ]; then
+    echo "✅ Forecast Analysis: PASSED"
+else
+    echo "⚠️ Forecast Analysis: FAILED"
 fi
 
 # Exit with failure if critical tests failed

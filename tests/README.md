@@ -39,7 +39,14 @@ cd tests
 #### **🆕 Forecast API Deep Analysis**
 ```bash
 cd tests
+# Full detailed analysis (2-3 seconds)
 node forecast_heatmap_analyzer.js
+
+# Quick analysis (1.7 seconds)
+node forecast_heatmap_optimizer.js --fast
+
+# Ultra-fast summary (1 line, 1.8 seconds)
+node forecast_heatmap_optimizer.js --minimal --quiet
 ```
 
 ### **🔧 Individual Test Suites**
@@ -61,7 +68,16 @@ node performance_tests.js --users=50 --duration=120000
 
 #### **🆕 Forecast Heatmap Analysis**
 ```bash
+# Comprehensive analysis with full heatmap
 node forecast_heatmap_analyzer.js
+
+# Quick optimized analysis
+node forecast_heatmap_optimizer.js --fast
+
+# Performance modes available:
+# --minimal --quiet  (1 line summary)
+# --fast            (quick summary)  
+# --verbose         (detailed output)
 ```
 
 ## 🎯 **Test Coverage**
