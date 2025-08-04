@@ -12,6 +12,7 @@ This directory contains a complete test suite for the Kaayko Firebase Functions 
 | `security_tests.js` | **Security vulnerability testing** | SQL injection, XSS, auth bypass | 600+ |
 | `performance_tests.js` | **Load and performance testing** | Response times, throughput, scalability | 700+ |
 | `forecast_heatmap_analyzer.js` | **🆕 Forecast API Analytics** | Deep forecast analysis, heatmaps, statistics | 500+ |
+| `multi_location_heatmap.js` | **🆕 Multi-Location Heatmaps** | Comparative analysis across all paddling locations | 600+ |
 
 ### 🚀 **Execution Scripts**
 
@@ -47,6 +48,18 @@ node forecast_heatmap_optimizer.js --fast
 
 # Ultra-fast summary (1 line, 1.8 seconds)
 node forecast_heatmap_optimizer.js --minimal --quiet
+```
+
+### **🆕 Multi-Location Analysis**
+```bash
+# Analyze all paddling locations with forecasts
+node multi_location_heatmap.js
+
+# Quick analysis with fewer locations (recommended)
+node multi_location_heatmap.js --limit 10
+
+# Minimal analysis for fast results
+node multi_location_heatmap.js --minimal
 ```
 
 ### **🔧 Individual Test Suites**
