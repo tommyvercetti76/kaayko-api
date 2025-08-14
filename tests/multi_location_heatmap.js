@@ -24,12 +24,23 @@ const CONFIG = {
     OUTPUT: {
         generateHTML: true,
         saveJSON: true,
-        consoleOutput: true
+        consoleOutput: true,
+        generateCharts: true,
+        generatePredictions: true
     },
     PERFORMANCE: {
-        maxLocations: process.argv.includes('--all') ? 50 : 10,
-        concurrent: 3,
-        timeout: 10000
+        maxLocations: process.argv.includes('--all') ? 50 : 17,
+        concurrent: 2, // Reduced for rate limiting
+        timeout: 15000, // Increased timeout
+        delayBetweenRequests: 500, // Add delay between requests
+        retryAttempts: 3,
+        batchSize: 5 // Process in smaller batches
+    },
+    PREDICTIONS: {
+        forecastDays: 7, // Extend predictions
+        trendAnalysis: true,
+        seasonalPatterns: true,
+        riskAssessment: true
     }
 };
 
@@ -62,33 +73,76 @@ let GLOBAL_STATS = {
 };
 
 /**
- * 🔄 Make HTTP Request with error handling
+ * 🔄 Make HTTP Request with retry logic and rate limiting
  */
 function makeRequest(url, description = '') {
     return new Promise((resolve, reject) => {
         const startTime = Date.now();
         
-        https.get(url, (res) => {
-            let data = '';
-            res.on('data', (chunk) => data += chunk);
-            res.on('end', () => {
-                const responseTime = Date.now() - startTime;
-                try {
-                    const jsonData = JSON.parse(data);
-                    resolve({
-                        statusCode: res.statusCode,
-                        data: jsonData,
-                        responseTime,
-                        size: data.length
-                    });
-                } catch (error) {
-                    reject(new Error(`Parse Error for ${description}: ${error.message}`));
+        const attemptRequest = (attempt = 1) => {
+            https.get(url, (res) => {
+                let data = '';
+                res.on('data', (chunk) => data += chunk);
+                res.on('end', () => {
+                    const responseTime = Date.now() - startTime;
+                    
+                    // Handle rate limiting
+                    if (res.statusCode === 429) {
+                        console.log(`${ICONS.warning} Rate limited for ${description}, attempt ${attempt}/${CONFIG.PERFORMANCE.retryAttempts}`);
+                        if (attempt < CONFIG.PERFORMANCE.retryAttempts) {
+                            const delay = Math.pow(2, attempt) * 1000; // Exponential backoff
+                            setTimeout(() => attemptRequest(attempt + 1), delay);
+                            return;
+                        } else {
+                            reject(new Error(`Rate limit exceeded for ${description} after ${CONFIG.PERFORMANCE.retryAttempts} attempts`));
+                            return;
+                        }
+                    }
+                    
+                    try {
+                        const jsonData = JSON.parse(data);
+                        resolve({
+                            statusCode: res.statusCode,
+                            data: jsonData,
+                            responseTime,
+                            size: data.length,
+                            attempt
+                        });
+                    } catch (error) {
+                        if (attempt < CONFIG.PERFORMANCE.retryAttempts) {
+                            console.log(`${ICONS.warning} Parse error for ${description}, retrying... (${attempt}/${CONFIG.PERFORMANCE.retryAttempts})`);
+                            setTimeout(() => attemptRequest(attempt + 1), 1000);
+                        } else {
+                            reject(new Error(`Parse Error for ${description}: ${error.message}`));
+                        }
+                    }
+                });
+            }).on('error', (error) => {
+                if (attempt < CONFIG.PERFORMANCE.retryAttempts) {
+                    console.log(`${ICONS.warning} Request error for ${description}, retrying... (${attempt}/${CONFIG.PERFORMANCE.retryAttempts})`);
+                    setTimeout(() => attemptRequest(attempt + 1), 1000);
+                } else {
+                    reject(new Error(`Request Error for ${description}: ${error.message}`));
+                }
+            }).setTimeout(CONFIG.PERFORMANCE.timeout, () => {
+                if (attempt < CONFIG.PERFORMANCE.retryAttempts) {
+                    console.log(`${ICONS.warning} Timeout for ${description}, retrying... (${attempt}/${CONFIG.PERFORMANCE.retryAttempts})`);
+                    setTimeout(() => attemptRequest(attempt + 1), 2000);
+                } else {
+                    reject(new Error(`Timeout for ${description} after ${CONFIG.PERFORMANCE.retryAttempts} attempts`));
                 }
             });
-        }).on('error', (error) => {
-            reject(new Error(`Request Error for ${description}: ${error.message}`));
-        });
+        };
+        
+        attemptRequest();
     });
+}
+
+/**
+ * ⏱️ Sleep function for rate limiting
+ */
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 /**
@@ -135,28 +189,38 @@ async function fetchLocations() {
 }
 
 /**
- * 🌊 Fetch Forecast for Single Location
+ * 🌊 Fetch Forecast for Single Location with rate limiting
  */
-async function fetchLocationForecast(location) {
+async function fetchLocationForecast(location, batchIndex = 0) {
     if (!location.coordinates.lat || !location.coordinates.lng) {
         console.log(`${ICONS.warning} Skipping ${location.name} - no coordinates`);
         return null;
     }
     
+    // Add delay based on batch index to prevent rate limiting
+    if (batchIndex > 0) {
+        await sleep(CONFIG.PERFORMANCE.delayBetweenRequests * batchIndex);
+    }
+    
     try {
         const url = `${CONFIG.BASE_URL}${CONFIG.ENDPOINTS.forecast}?lat=${location.coordinates.lat}&lng=${location.coordinates.lng}`;
+        console.log(`🔄 Fetching forecast for ${location.name}... (batch ${batchIndex + 1})`);
+        
         const response = await makeRequest(url, location.name);
         
         if (response.statusCode !== 200 || !response.data.success) {
-            console.log(`${ICONS.warning} Failed to get forecast for ${location.name}`);
+            console.log(`${ICONS.warning} Failed to get forecast for ${location.name} (status: ${response.statusCode})`);
             return null;
         }
+        
+        console.log(`✅ Got forecast for ${location.name} in ${response.responseTime}ms`);
         
         return {
             location: location,
             forecast: response.data.forecast,
             metadata: response.data.metadata || {},
-            responseTime: response.responseTime
+            responseTime: response.responseTime,
+            attempt: response.attempt || 1
         };
         
     } catch (error) {
@@ -166,7 +230,7 @@ async function fetchLocationForecast(location) {
 }
 
 /**
- * 📊 Analyze Location Forecast Data
+ * 📊 Analyze Location Forecast Data with Advanced Predictions
  */
 function analyzeLocationForecast(locationData) {
     if (!locationData || !locationData.forecast) return null;
@@ -178,17 +242,38 @@ function analyzeLocationForecast(locationData) {
     let dangerHours = 0;
     let temperatures = [];
     let windSpeeds = [];
+    let hourlyRatings = [];
+    let hourlyTemps = [];
+    let hourlyWinds = [];
     let bestHour = null;
     let worstHour = null;
     let bestRating = 0;
     let worstRating = 5;
+    let timeSeriesData = [];
     
     locationData.forecast.forEach((day, dayIndex) => {
         Object.entries(day.hourly).forEach(([hour, hourData]) => {
             totalHours++;
             
             const rating = hourData.rating || hourData.apiRating || 0;
+            const temp = hourData.temperature || 0;
+            const wind = hourData.windSpeed || 0;
+            
             totalRating += rating;
+            hourlyRatings.push(rating);
+            hourlyTemps.push(temp);
+            hourlyWinds.push(wind);
+            
+            // Create time series entry
+            timeSeriesData.push({
+                timestamp: `${day.date} ${hour}:00`,
+                hour: parseInt(hour),
+                day: dayIndex,
+                rating: rating,
+                temperature: temp,
+                windSpeed: wind,
+                warnings: hourData.warnings || []
+            });
             
             // Track best/worst
             if (rating > bestRating) {
@@ -214,6 +299,11 @@ function analyzeLocationForecast(locationData) {
         });
     });
     
+    // Advanced Analytics
+    const predictions = generatePredictions(timeSeriesData, hourlyRatings, hourlyTemps, hourlyWinds);
+    const patterns = analyzePatterns(timeSeriesData);
+    const riskAssessment = calculateRiskMetrics(timeSeriesData);
+    
     return {
         location: locationData.location,
         stats: {
@@ -234,8 +324,234 @@ function analyzeLocationForecast(locationData) {
             windRange: windSpeeds.length > 0 ? `${Math.min(...windSpeeds).toFixed(1)} - ${Math.max(...windSpeeds).toFixed(1)} km/h` : 'N/A'
         },
         forecast: locationData.forecast,
-        responseTime: locationData.responseTime
+        responseTime: locationData.responseTime,
+        timeSeries: timeSeriesData,
+        predictions: predictions,
+        patterns: patterns,
+        riskAssessment: riskAssessment
     };
+}
+
+/**
+ * 🔮 Generate Advanced Predictions
+ */
+function generatePredictions(timeSeriesData, ratings, temps, winds) {
+    // Trend Analysis
+    const ratingTrend = calculateTrend(ratings);
+    const tempTrend = calculateTrend(temps);
+    const windTrend = calculateTrend(winds);
+    
+    // Moving averages
+    const movingAvg6h = calculateMovingAverage(ratings, 6);
+    const movingAvg12h = calculateMovingAverage(ratings, 12);
+    
+    // Predict next 24 hours based on patterns
+    const nextDayPrediction = predictNextPeriod(timeSeriesData, 24);
+    
+    // Optimal time windows
+    const optimalWindows = findOptimalTimeWindows(timeSeriesData);
+    
+    return {
+        trends: {
+            rating: ratingTrend,
+            temperature: tempTrend,
+            windSpeed: windTrend
+        },
+        movingAverages: {
+            sixHour: movingAvg6h,
+            twelveHour: movingAvg12h
+        },
+        nextDayForecast: nextDayPrediction,
+        optimalWindows: optimalWindows,
+        confidence: calculatePredictionConfidence(timeSeriesData)
+    };
+}
+
+/**
+ * 📈 Calculate Trend (linear regression slope)
+ */
+function calculateTrend(values) {
+    if (values.length < 2) return 0;
+    
+    const n = values.length;
+    const sumX = (n * (n - 1)) / 2;
+    const sumY = values.reduce((a, b) => a + b, 0);
+    const sumXY = values.reduce((sum, y, x) => sum + x * y, 0);
+    const sumXX = (n * (n - 1) * (2 * n - 1)) / 6;
+    
+    const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
+    return slope;
+}
+
+/**
+ * 📊 Calculate Moving Average
+ */
+function calculateMovingAverage(values, window) {
+    const averages = [];
+    for (let i = window - 1; i < values.length; i++) {
+        const slice = values.slice(i - window + 1, i + 1);
+        averages.push(slice.reduce((a, b) => a + b, 0) / window);
+    }
+    return averages;
+}
+
+/**
+ * 🔮 Predict Next Period
+ */
+function predictNextPeriod(timeSeriesData, hours) {
+    const predictions = [];
+    const recentData = timeSeriesData.slice(-24); // Use last 24 hours for prediction
+    
+    for (let h = 0; h < hours; h++) {
+        // Simple pattern-based prediction
+        const hourOfDay = (recentData[recentData.length - 1].hour + h + 1) % 24;
+        const similarHours = timeSeriesData.filter(d => d.hour === hourOfDay);
+        
+        if (similarHours.length > 0) {
+            const avgRating = similarHours.reduce((sum, d) => sum + d.rating, 0) / similarHours.length;
+            const avgTemp = similarHours.reduce((sum, d) => sum + d.temperature, 0) / similarHours.length;
+            const avgWind = similarHours.reduce((sum, d) => sum + d.windSpeed, 0) / similarHours.length;
+            
+            predictions.push({
+                hour: hourOfDay,
+                predictedRating: avgRating.toFixed(2),
+                predictedTemp: avgTemp.toFixed(1),
+                predictedWind: avgWind.toFixed(1),
+                confidence: Math.min(similarHours.length / 3, 1) // Higher confidence with more data points
+            });
+        }
+    }
+    
+    return predictions;
+}
+
+/**
+ * ⏰ Find Optimal Time Windows
+ */
+function findOptimalTimeWindows(timeSeriesData) {
+    const windows = [];
+    
+    // Find 4-hour windows with consistently high ratings
+    for (let i = 0; i <= timeSeriesData.length - 4; i++) {
+        const window = timeSeriesData.slice(i, i + 4);
+        const avgRating = window.reduce((sum, d) => sum + d.rating, 0) / window.length;
+        const hasWarnings = window.some(d => d.warnings.length > 0);
+        
+        if (avgRating >= 3.5 && !hasWarnings) {
+            windows.push({
+                start: window[0].timestamp,
+                end: window[3].timestamp,
+                avgRating: avgRating.toFixed(2),
+                safe: !hasWarnings,
+                duration: '4 hours'
+            });
+        }
+    }
+    
+    return windows.sort((a, b) => parseFloat(b.avgRating) - parseFloat(a.avgRating)).slice(0, 5);
+}
+
+/**
+ * 🎯 Analyze Patterns
+ */
+function analyzePatterns(timeSeriesData) {
+    const hourlyPatterns = {};
+    const dailyPatterns = {};
+    
+    // Analyze by hour of day
+    timeSeriesData.forEach(data => {
+        if (!hourlyPatterns[data.hour]) {
+            hourlyPatterns[data.hour] = [];
+        }
+        hourlyPatterns[data.hour].push(data.rating);
+    });
+    
+    // Calculate hourly averages
+    const hourlyAvg = {};
+    Object.keys(hourlyPatterns).forEach(hour => {
+        const ratings = hourlyPatterns[hour];
+        hourlyAvg[hour] = (ratings.reduce((a, b) => a + b, 0) / ratings.length).toFixed(2);
+    });
+    
+    // Find peak hours
+    const bestHours = Object.entries(hourlyAvg)
+        .sort(([,a], [,b]) => parseFloat(b) - parseFloat(a))
+        .slice(0, 6)
+        .map(([hour, avg]) => ({ hour: parseInt(hour), avgRating: avg }));
+    
+    return {
+        hourlyAverages: hourlyAvg,
+        bestHours: bestHours,
+        peakPeriod: identifyPeakPeriod(bestHours)
+    };
+}
+
+/**
+ * 🏔️ Identify Peak Period
+ */
+function identifyPeakPeriod(bestHours) {
+    if (bestHours.length === 0) return 'Unknown';
+    
+    const avgHour = bestHours.reduce((sum, h) => sum + h.hour, 0) / bestHours.length;
+    
+    if (avgHour >= 6 && avgHour < 12) return 'Morning (6-12)';
+    if (avgHour >= 12 && avgHour < 18) return 'Afternoon (12-18)';
+    if (avgHour >= 18 && avgHour < 24) return 'Evening (18-24)';
+    return 'Night/Early Morning (0-6)';
+}
+
+/**
+ * ⚠️ Calculate Risk Assessment
+ */
+function calculateRiskMetrics(timeSeriesData) {
+    const totalHours = timeSeriesData.length;
+    const dangerousHours = timeSeriesData.filter(d => 
+        d.warnings.some(w => w.toLowerCase().includes('danger')) || d.rating < 2
+    ).length;
+    
+    const moderateRiskHours = timeSeriesData.filter(d => 
+        d.rating >= 2 && d.rating < 3.5 && d.warnings.length > 0
+    ).length;
+    
+    const lowRiskHours = timeSeriesData.filter(d => 
+        d.rating >= 3.5 && d.warnings.length === 0
+    ).length;
+    
+    return {
+        riskLevel: dangerousHours > totalHours * 0.3 ? 'HIGH' : 
+                  moderateRiskHours > totalHours * 0.4 ? 'MODERATE' : 'LOW',
+        dangerousHours,
+        moderateRiskHours,
+        lowRiskHours,
+        saftyScore: ((lowRiskHours / totalHours) * 100).toFixed(1),
+        riskPercentage: ((dangerousHours / totalHours) * 100).toFixed(1)
+    };
+}
+
+/**
+ * 📊 Calculate Prediction Confidence
+ */
+function calculatePredictionConfidence(timeSeriesData) {
+    const variance = calculateVariance(timeSeriesData.map(d => d.rating));
+    const dataPoints = timeSeriesData.length;
+    
+    // Higher confidence with more data points and lower variance
+    const confidenceScore = Math.min((dataPoints / 72) * (1 - variance / 5), 1);
+    
+    return {
+        score: (confidenceScore * 100).toFixed(1),
+        level: confidenceScore > 0.8 ? 'HIGH' : confidenceScore > 0.6 ? 'MEDIUM' : 'LOW',
+        dataPoints: dataPoints
+    };
+}
+
+/**
+ * 📈 Calculate Variance
+ */
+function calculateVariance(values) {
+    const mean = values.reduce((a, b) => a + b, 0) / values.length;
+    const squaredDiffs = values.map(value => Math.pow(value - mean, 2));
+    return squaredDiffs.reduce((a, b) => a + b, 0) / values.length;
 }
 
 /**
@@ -363,64 +679,109 @@ function generateComparativeAnalysis(allAnalysis) {
 }
 
 /**
- * 📄 Generate HTML Report
+ * 📄 Generate Advanced HTML Report with Charts and Predictions
  */
 function generateHTMLReport(allAnalysis) {
     if (!CONFIG.OUTPUT.generateHTML) return;
     
     const timestamp = new Date().toISOString();
+    
+    // Generate chart data for each location
+    const chartData = allAnalysis.map(analysis => {
+        const ratingData = analysis.timeSeries.map(d => d.rating);
+        const tempData = analysis.timeSeries.map(d => d.temperature);
+        const windData = analysis.timeSeries.map(d => d.windSpeed);
+        const labels = analysis.timeSeries.map(d => d.timestamp.split(' ')[1]);
+        
+        return {
+            locationName: analysis.location.name,
+            ratingData: ratingData,
+            tempData: tempData,
+            windData: windData,
+            labels: labels,
+            predictions: analysis.predictions,
+            patterns: analysis.patterns,
+            riskAssessment: analysis.riskAssessment
+        };
+    });
+    
     const html = `
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kaayko Multi-Location Forecast Heatmap</title>
+    <title>Kaayko Advanced Multi-Location Forecast Analysis</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
     <style>
-        body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
-        .container { max-width: 1200px; margin: 0 auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-        .header { text-align: center; color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 20px; margin-bottom: 30px; }
-        .location-card { background: #ffffff; border: 1px solid #ddd; border-radius: 8px; margin: 20px 0; padding: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-        .location-header { background: linear-gradient(135deg, #3498db, #2980b9); color: white; padding: 15px; border-radius: 8px 8px 0 0; margin: -20px -20px 20px -20px; }
-        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin: 20px 0; }
-        .stat-box { background: #f8f9fa; padding: 15px; border-radius: 6px; text-align: center; border-left: 4px solid #3498db; }
-        .heatmap-grid { display: grid; grid-template-columns: repeat(24, 1fr); gap: 2px; margin: 15px 0; }
+        body { font-family: 'Segoe UI', Arial, sans-serif; margin: 0; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #333; }
+        .container { max-width: 1400px; margin: 0 auto; background: white; min-height: 100vh; }
+        .header { background: linear-gradient(135deg, #2c3e50, #3498db); color: white; padding: 30px; text-align: center; }
+        .header h1 { margin: 0; font-size: 2.5em; text-shadow: 2px 2px 4px rgba(0,0,0,0.3); }
+        .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; padding: 30px; }
+        .summary-card { background: linear-gradient(135deg, #f8f9fa, #e9ecef); border-radius: 15px; padding: 25px; box-shadow: 0 8px 25px rgba(0,0,0,0.1); border-left: 5px solid #3498db; }
+        .location-section { margin: 30px; background: #fff; border-radius: 15px; box-shadow: 0 8px 25px rgba(0,0,0,0.1); overflow: hidden; }
+        .location-header { background: linear-gradient(135deg, #2980b9, #27ae60); color: white; padding: 25px; }
+        .location-content { padding: 30px; }
+        .chart-container { width: 100%; height: 400px; margin: 30px 0; position: relative; }
+        .prediction-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; margin: 30px 0; }
+        .prediction-card { background: #f8f9fa; border-radius: 10px; padding: 20px; border-left: 4px solid #e74c3c; }
+        .risk-indicator { display: inline-block; padding: 8px 15px; border-radius: 20px; font-weight: bold; color: white; }
+        .risk-high { background: #e74c3c; } .risk-moderate { background: #f39c12; } .risk-low { background: #27ae60; }
+        .trend-indicator { font-size: 1.2em; font-weight: bold; }
+        .trend-up { color: #27ae60; } .trend-down { color: #e74c3c; } .trend-stable { color: #f39c12; }
+        .stats-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+        .stats-table th { background: #3498db; color: white; padding: 12px; text-align: left; }
+        .stats-table td { padding: 12px; border-bottom: 1px solid #ddd; }
+        .optimal-window { background: #d5f4e6; border-left: 4px solid #27ae60; padding: 15px; margin: 10px 0; border-radius: 5px; }
+        .heatmap-grid { display: grid; grid-template-columns: repeat(24, 1fr); gap: 2px; margin: 20px 0; }
         .hour-cell { aspect-ratio: 1; border-radius: 3px; display: flex; align-items: center; justify-content: center; font-size: 10px; color: white; font-weight: bold; }
         .rating-5 { background: #27ae60; } .rating-4 { background: #f39c12; } .rating-3 { background: #e67e22; } .rating-2 { background: #e74c3c; }
-        .comparison-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
-        .comparison-table th, .comparison-table td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
-        .comparison-table th { background: #3498db; color: white; }
-        .timestamp { text-align: center; color: #7f8c8d; font-size: 12px; margin-top: 30px; }
+        .nav-tabs { display: flex; background: #ecf0f1; border-radius: 10px 10px 0 0; }
+        .nav-tab { padding: 15px 25px; cursor: pointer; background: none; border: none; font-size: 16px; color: #7f8c8d; }
+        .nav-tab.active { background: #3498db; color: white; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>🗺️ Kaayko Multi-Location Forecast Heatmap</h1>
-            <p>Comprehensive paddling conditions analysis across ${allAnalysis.length} locations</p>
+            <h1>🗺️ Kaayko Advanced Multi-Location Forecast Analysis</h1>
+            <p>AI-Powered Predictions & Risk Assessment across ${allAnalysis.length} Paddling Locations</p>
+            <p>Generated: ${new Date().toLocaleDateString()} | Processing Time: ${GLOBAL_STATS.processingTime}ms</p>
         </div>
         
-        <div class="summary">
-            <h2>📊 Summary</h2>
-            <div class="stats-grid">
-                <div class="stat-box">
-                    <h3>🏆 Best Location</h3>
-                    <p>${GLOBAL_STATS.bestLocation.location.name}<br>Rating: ${GLOBAL_STATS.bestLocation.stats.averageRating}/5.0</p>
+        <div class="summary-grid">
+            <div class="summary-card">
+                <h3>🏆 Best Location</h3>
+                <h2>${GLOBAL_STATS.bestLocation.location.name}</h2>
+                <p><strong>Rating:</strong> ${GLOBAL_STATS.bestLocation.stats.averageRating}/5.0</p>
+                <p><strong>Peak Hours:</strong> ${GLOBAL_STATS.bestLocation.stats.peakHours} (${GLOBAL_STATS.bestLocation.stats.peakPercentage}%)</p>
+                <div class="risk-indicator risk-${GLOBAL_STATS.bestLocation.riskAssessment.riskLevel.toLowerCase()}">
+                    Risk: ${GLOBAL_STATS.bestLocation.riskAssessment.riskLevel}
                 </div>
-                <div class="stat-box">
-                    <h3>📍 Locations Analyzed</h3>
-                    <p>${allAnalysis.length} locations<br>Average: ${GLOBAL_STATS.averageRating}/5.0</p>
-                </div>
-                <div class="stat-box">
-                    <h3>⏱️ Processing Time</h3>
-                    <p>${GLOBAL_STATS.processingTime}ms<br>Multi-location analysis</p>
-                </div>
+            </div>
+            
+            <div class="summary-card">
+                <h3>📊 Analysis Overview</h3>
+                <p><strong>Locations Analyzed:</strong> ${allAnalysis.length}</p>
+                <p><strong>Failed Requests:</strong> ${GLOBAL_STATS.failedLocations}</p>
+                <p><strong>Overall Average:</strong> ${GLOBAL_STATS.averageRating}/5.0</p>
+                <p><strong>Total Data Points:</strong> ${allAnalysis.reduce((sum, a) => sum + a.timeSeries.length, 0)}</p>
+            </div>
+            
+            <div class="summary-card">
+                <h3>🔮 Prediction Summary</h3>
+                <p><strong>High Confidence:</strong> ${allAnalysis.filter(a => a.predictions.confidence.level === 'HIGH').length} locations</p>
+                <p><strong>Low Risk:</strong> ${allAnalysis.filter(a => a.riskAssessment.riskLevel === 'LOW').length} locations</p>
+                <p><strong>Optimal Windows:</strong> ${allAnalysis.reduce((sum, a) => sum + a.predictions.optimalWindows.length, 0)} identified</p>
             </div>
         </div>
 
-        ${allAnalysis.map(analysis => {
-            const loc = analysis.location;
-            const stats = analysis.stats;
+        ${allAnalysis.map((analysis, index) => {
+            const charts = chartData[index];
             let heatmapCells = '';
             
             analysis.forecast.forEach(day => {
@@ -440,54 +801,243 @@ function generateHTMLReport(allAnalysis) {
                 }
             });
             
+            const trendIcon = analysis.predictions.trends.rating > 0.1 ? '📈' : 
+                            analysis.predictions.trends.rating < -0.1 ? '📉' : '➡️';
+            const trendClass = analysis.predictions.trends.rating > 0.1 ? 'trend-up' : 
+                             analysis.predictions.trends.rating < -0.1 ? 'trend-down' : 'trend-stable';
+            
             return `
-                <div class="location-card">
+                <div class="location-section">
                     <div class="location-header">
-                        <h2>📍 ${loc.name}</h2>
-                        <p>Coordinates: ${loc.coordinates.lat}, ${loc.coordinates.lng}</p>
-                    </div>
-                    
-                    <div class="stats-grid">
-                        <div class="stat-box">
-                            <h4>⭐ Average Rating</h4>
-                            <p>${stats.averageRating}/5.0</p>
-                        </div>
-                        <div class="stat-box">
-                            <h4>⚡ Peak Hours</h4>
-                            <p>${stats.peakHours} (${stats.peakPercentage}%)</p>
-                        </div>
-                        <div class="stat-box">
-                            <h4>🛡️ Safe Hours</h4>
-                            <p>${stats.safeHours} (${stats.safePercentage}%)</p>
-                        </div>
-                        <div class="stat-box">
-                            <h4>🌡️ Temperature</h4>
-                            <p>${stats.avgTemperature}°C avg</p>
+                        <h2>📍 ${analysis.location.name}</h2>
+                        <p>Coordinates: ${analysis.location.coordinates.lat}, ${analysis.location.coordinates.lng}</p>
+                        <div class="risk-indicator risk-${analysis.riskAssessment.riskLevel.toLowerCase()}">
+                            Risk Level: ${analysis.riskAssessment.riskLevel} (${analysis.riskAssessment.riskPercentage}%)
                         </div>
                     </div>
                     
-                    <h4>📊 72-Hour Forecast Heatmap</h4>
-                    <div class="heatmap-grid">
-                        ${heatmapCells}
+                    <div class="location-content">
+                        <div class="nav-tabs">
+                            <button class="nav-tab active" onclick="showTab('overview-${index}')">📊 Overview</button>
+                            <button class="nav-tab" onclick="showTab('charts-${index}')">📈 Charts</button>
+                            <button class="nav-tab" onclick="showTab('predictions-${index}')">🔮 Predictions</button>
+                            <button class="nav-tab" onclick="showTab('patterns-${index}')">🎯 Patterns</button>
+                        </div>
+                        
+                        <div id="overview-${index}" class="tab-content active">
+                            <div class="prediction-grid">
+                                <div class="prediction-card">
+                                    <h4>⭐ Current Rating</h4>
+                                    <h2>${analysis.stats.averageRating}/5.0</h2>
+                                    <p class="trend-indicator ${trendClass}">${trendIcon} Trend: ${analysis.predictions.trends.rating > 0 ? '+' : ''}${analysis.predictions.trends.rating.toFixed(3)}</p>
+                                </div>
+                                
+                                <div class="prediction-card">
+                                    <h4>⚡ Peak Conditions</h4>
+                                    <h2>${analysis.stats.peakHours} hours (${analysis.stats.peakPercentage}%)</h2>
+                                    <p><strong>Best:</strong> ${analysis.stats.bestHour} (${analysis.stats.bestRating}/5.0)</p>
+                                </div>
+                                
+                                <div class="prediction-card">
+                                    <h4>🛡️ Safety Score</h4>
+                                    <h2>${analysis.riskAssessment.saftyScore}%</h2>
+                                    <p><strong>Safe Hours:</strong> ${analysis.stats.safeHours}/${analysis.stats.totalHours}</p>
+                                </div>
+                                
+                                <div class="prediction-card">
+                                    <h4>🔮 Prediction Confidence</h4>
+                                    <h2>${analysis.predictions.confidence.score}%</h2>
+                                    <p><strong>Level:</strong> ${analysis.predictions.confidence.level}</p>
+                                </div>
+                            </div>
+                            
+                            <h4>📊 72-Hour Forecast Heatmap</h4>
+                            <div class="heatmap-grid">
+                                ${heatmapCells}
+                            </div>
+                        </div>
+                        
+                        <div id="charts-${index}" class="tab-content">
+                            <div class="chart-container">
+                                <canvas id="ratingChart-${index}"></canvas>
+                            </div>
+                            <div class="chart-container">
+                                <canvas id="weatherChart-${index}"></canvas>
+                            </div>
+                        </div>
+                        
+                        <div id="predictions-${index}" class="tab-content">
+                            <h4>🔮 Next 24-Hour Predictions</h4>
+                            <table class="stats-table">
+                                <thead>
+                                    <tr><th>Hour</th><th>Predicted Rating</th><th>Temperature</th><th>Wind Speed</th><th>Confidence</th></tr>
+                                </thead>
+                                <tbody>
+                                    ${analysis.predictions.nextDayForecast.slice(0, 12).map(pred => `
+                                        <tr>
+                                            <td>${pred.hour}:00</td>
+                                            <td>${pred.predictedRating}/5.0</td>
+                                            <td>${pred.predictedTemp}°C</td>
+                                            <td>${pred.predictedWind} km/h</td>
+                                            <td>${(pred.confidence * 100).toFixed(0)}%</td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                            
+                            <h4>⏰ Optimal Time Windows</h4>
+                            ${analysis.predictions.optimalWindows.map(window => `
+                                <div class="optimal-window">
+                                    <strong>${window.start} - ${window.end}</strong><br>
+                                    Average Rating: ${window.avgRating}/5.0 | Duration: ${window.duration}
+                                </div>
+                            `).join('')}
+                        </div>
+                        
+                        <div id="patterns-${index}" class="tab-content">
+                            <h4>🎯 Daily Patterns</h4>
+                            <p><strong>Peak Period:</strong> ${analysis.patterns.peakPeriod}</p>
+                            
+                            <h4>🏆 Best Hours of Day</h4>
+                            <table class="stats-table">
+                                <thead>
+                                    <tr><th>Hour</th><th>Average Rating</th></tr>
+                                </thead>
+                                <tbody>
+                                    ${analysis.patterns.bestHours.map(hour => `
+                                        <tr>
+                                            <td>${hour.hour}:00</td>
+                                            <td>${hour.avgRating}/5.0</td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
-                    
-                    <p><strong>🏆 Best:</strong> ${stats.bestHour} (${stats.bestRating}/5.0)</p>
-                    <p><strong>⚠️ Worst:</strong> ${stats.worstHour} (${stats.worstRating}/5.0)</p>
                 </div>
             `;
         }).join('')}
         
-        <div class="timestamp">
-            Generated: ${timestamp}<br>
-            Data source: Kaayko API (${CONFIG.BASE_URL})
+        <div style="text-align: center; padding: 30px; color: #7f8c8d;">
+            <p>Generated by Kaayko Advanced Forecast Analyzer | Data: ${CONFIG.BASE_URL}</p>
+            <p>Locations processed: ${GLOBAL_STATS.analyzedLocations} | Failed: ${GLOBAL_STATS.failedLocations} | Processing time: ${GLOBAL_STATS.processingTime}ms</p>
         </div>
     </div>
+
+    <script>
+        // Tab switching functionality
+        function showTab(tabId) {
+            const allTabs = document.querySelectorAll('.tab-content');
+            const allButtons = document.querySelectorAll('.nav-tab');
+            
+            allTabs.forEach(tab => tab.classList.remove('active'));
+            allButtons.forEach(btn => btn.classList.remove('active'));
+            
+            document.getElementById(tabId).classList.add('active');
+            event.target.classList.add('active');
+        }
+
+        // Initialize charts after page load
+        window.addEventListener('load', function() {
+            const chartData = ${JSON.stringify(chartData)};
+            
+            chartData.forEach((data, index) => {
+                // Rating trend chart
+                const ratingCtx = document.getElementById('ratingChart-' + index).getContext('2d');
+                new Chart(ratingCtx, {
+                    type: 'line',
+                    data: {
+                        labels: data.labels,
+                        datasets: [{
+                            label: 'Paddling Conditions Rating',
+                            data: data.ratingData,
+                            borderColor: '#3498db',
+                            backgroundColor: 'rgba(52, 152, 219, 0.1)',
+                            borderWidth: 3,
+                            fill: true,
+                            tension: 0.4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: '72-Hour Paddling Conditions Forecast',
+                                font: { size: 16 }
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                max: 5,
+                                title: { display: true, text: 'Rating (0-5)' }
+                            },
+                            x: {
+                                title: { display: true, text: 'Time (Hours)' }
+                            }
+                        }
+                    }
+                });
+
+                // Weather parameters chart
+                const weatherCtx = document.getElementById('weatherChart-' + index).getContext('2d');
+                new Chart(weatherCtx, {
+                    type: 'line',
+                    data: {
+                        labels: data.labels,
+                        datasets: [{
+                            label: 'Temperature (°C)',
+                            data: data.tempData,
+                            borderColor: '#e74c3c',
+                            backgroundColor: 'rgba(231, 76, 60, 0.1)',
+                            yAxisID: 'y'
+                        }, {
+                            label: 'Wind Speed (km/h)',
+                            data: data.windData,
+                            borderColor: '#f39c12',
+                            backgroundColor: 'rgba(243, 156, 18, 0.1)',
+                            yAxisID: 'y1'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: 'Weather Parameters Forecast',
+                                font: { size: 16 }
+                            }
+                        },
+                        scales: {
+                            y: {
+                                type: 'linear',
+                                display: true,
+                                position: 'left',
+                                title: { display: true, text: 'Temperature (°C)' }
+                            },
+                            y1: {
+                                type: 'linear',
+                                display: true,
+                                position: 'right',
+                                title: { display: true, text: 'Wind Speed (km/h)' },
+                                grid: { drawOnChartArea: false }
+                            }
+                        }
+                    }
+                });
+            });
+        });
+    </script>
 </body>
 </html>`;
     
-    const filename = `multi_location_heatmap_${Date.now()}.html`;
+    const filename = `advanced_multi_location_analysis_${Date.now()}.html`;
     fs.writeFileSync(filename, html);
-    console.log(`\n📄 HTML report saved: ${filename}`);
+    console.log(`\n📄 Advanced HTML report with charts and predictions saved: ${filename}`);
+    console.log(`📊 Report includes: Interactive charts, AI predictions, risk assessment, pattern analysis`);
 }
 
 /**
@@ -510,21 +1060,42 @@ async function runMultiLocationAnalysis() {
         }
         
         console.log(`\n${ICONS.forecast} Fetching forecasts for ${locations.length} locations...`);
+        console.log(`⚙️ Using batched processing with ${CONFIG.PERFORMANCE.batchSize} locations per batch`);
+        console.log(`⏱️ Delay between requests: ${CONFIG.PERFORMANCE.delayBetweenRequests}ms`);
         
-        // 2. Fetch forecasts (with concurrency control)
+        // 2. Fetch forecasts with improved threading and rate limiting
         const allForecasts = [];
         const batches = [];
-        for (let i = 0; i < locations.length; i += CONFIG.PERFORMANCE.concurrent) {
-            batches.push(locations.slice(i, i + CONFIG.PERFORMANCE.concurrent));
+        
+        // Create smaller batches to handle rate limiting better
+        for (let i = 0; i < locations.length; i += CONFIG.PERFORMANCE.batchSize) {
+            batches.push(locations.slice(i, i + CONFIG.PERFORMANCE.batchSize));
         }
         
-        for (const batch of batches) {
-            const batchPromises = batch.map(location => fetchLocationForecast(location));
+        console.log(`📦 Processing ${batches.length} batches...`);
+        
+        for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
+            const batch = batches[batchIndex];
+            console.log(`\n📦 Processing batch ${batchIndex + 1}/${batches.length} (${batch.length} locations)`);
+            
+            // Process batch with staggered requests
+            const batchPromises = batch.map((location, locationIndex) => 
+                fetchLocationForecast(location, batchIndex * CONFIG.PERFORMANCE.batchSize + locationIndex)
+            );
+            
             const batchResults = await Promise.all(batchPromises);
             allForecasts.push(...batchResults);
             
             // Progress update
-            console.log(`📊 Progress: ${allForecasts.length}/${locations.length} locations processed`);
+            const processed = allForecasts.length;
+            const successCount = allForecasts.filter(f => f !== null).length;
+            console.log(`📊 Progress: ${processed}/${locations.length} processed (${successCount} successful)`);
+            
+            // Add delay between batches to prevent overwhelming the API
+            if (batchIndex < batches.length - 1) {
+                console.log(`⏳ Waiting ${CONFIG.PERFORMANCE.delayBetweenRequests * 2}ms before next batch...`);
+                await sleep(CONFIG.PERFORMANCE.delayBetweenRequests * 2);
+            }
         }
         
         // 3. Filter successful forecasts and analyze
