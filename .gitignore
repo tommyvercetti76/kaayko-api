@@ -22,6 +22,9 @@ build/
 ml-service/cleaned_weather_data.csv
 ml-service/kaayko_production_model.pkl
 
+# Frontend (has its own repo)
+kaayko-frontend/
+
 # IDE
 .vscode/
 .idea/
