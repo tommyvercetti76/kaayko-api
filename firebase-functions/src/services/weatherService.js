@@ -21,7 +21,7 @@ async function fetchAndCacheWeather(query) {
   
   try {
     // Fetch current + 3-day forecast (simpler and more reliable)
-    const forecastUrl = `${WEATHER_CONFIG.BASE_URL}/forecast.json?key=${WEATHER_CONFIG.API_KEY}&q=${encodeURIComponent(query)}&days=3&aqi=yes&alerts=yes`;
+  const forecastUrl = `${WEATHER_CONFIG.BASE_URL}/forecast.json?key=${WEATHER_CONFIG.API_KEY.value()}&q=${encodeURIComponent(query)}&days=3&aqi=yes&alerts=yes`;
     
     const forecastData = await fetchWeatherData(forecastUrl);
 
@@ -109,7 +109,7 @@ function calculateVariance(values) {
  * Fetch basic weather data (fallback)
  */
 async function fetchBasicWeatherData(query) {
-  const url = `${WEATHER_CONFIG.CURRENT_URL}?key=${WEATHER_CONFIG.API_KEY}&q=${encodeURIComponent(query)}&aqi=yes`;
+  const url = `${WEATHER_CONFIG.CURRENT_URL}?key=${WEATHER_CONFIG.API_KEY.value()}&q=${encodeURIComponent(query)}&aqi=yes`;
   return await fetchWeatherData(url);
 }
 

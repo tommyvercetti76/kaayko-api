@@ -21,6 +21,17 @@ router.get("/health", (req, res) => {
   });
 });
 
+// Default route to show API info
+router.get("/", (req, res) => {
+  res.json({
+    service: "Images API",
+    status: "running",
+    usage: "GET /api/images/:productId/:fileName",
+    health: "GET /api/images/health",
+    timestamp: new Date().toISOString()
+  });
+});
+
 // uses default bucket from initializeApp()
 const bucket = admin.storage().bucket();
 

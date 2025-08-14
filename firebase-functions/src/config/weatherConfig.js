@@ -1,10 +1,15 @@
-// File: functions/src/config/weatherConfig.js
+// File: functions/src/config/weatherConfig.js - Firebase Functions v2 Compatible
 
-const functions = require('firebase-functions');
+const { defineString } = require('firebase-functions/params');
+
+// Define environment parameter for v2
+const weatherApiKey = defineString('WEATHER_API_KEY', {
+  default: '26fbd83a03c945c9b34190954253107'
+});
 
 module.exports = {
   WEATHER_CONFIG: {
-    API_KEY: functions.config().weather?.api_key || process.env.WEATHER_API_KEY || '26fbd83a03c945c9b34190954253107',
+    API_KEY: weatherApiKey, // Don't call .value() during deployment
     BASE_URL: 'https://api.weatherapi.com/v1',
     CURRENT_URL: 'https://api.weatherapi.com/v1/current.json',
     MARINE_URL: 'https://api.weatherapi.com/v1/marine.json',

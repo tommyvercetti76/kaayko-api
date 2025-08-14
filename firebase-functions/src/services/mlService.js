@@ -2,11 +2,9 @@
 
 const axios = require('axios');
 
-// Cloud Run ML service URL - Updated for production
-// For local testing, use localhost. For production, use Cloud Run URL
-const ML_SERVICE_URL = process.env.ML_SERVICE_URL || (process.env.FUNCTIONS_EMULATOR 
-  ? 'http://127.0.0.1:8080'
-  : 'https://kaayko-ml-service-87383373015.us-central1.run.app');
+// Cloud Run ML service URL - Always use production ML service
+// The ML model is deployed and working in production, no need for local ML service
+const ML_SERVICE_URL = process.env.ML_SERVICE_URL || 'https://kaayko-ml-service-87383373015.us-central1.run.app';
 
 /**
  * Get ML prediction using Cloud Run ML service

@@ -21,23 +21,17 @@ const bucket = admin.storage().bucket();
 async function fetchSpotImages(spotId) {
     const prefix = `images/paddling_out/`;
     try {
-      // grab *everything* under /images/paddling_out
+      // List all files in the paddling_out folder
       const [files] = await bucket.getFiles({ prefix });
-  
-      // filter only the ones for this spotId
+      // Filter only images for this spotId
       const matching = files.filter((file) => {
-        // file.name looks like 'images/paddling_out/lewisville1.png'
         const fileName = file.name.split('/').pop() || '';
         return fileName.toLowerCase().startsWith(spotId.toLowerCase());
       });
-  
-      // Create public URLs instead of signed URLs
       const urls = matching.map((file) => {
-        // Create public URL format: https://firebasestorage.googleapis.com/v0/b/BUCKET_NAME/o/PATH?alt=media
         const encodedPath = encodeURIComponent(file.name);
         return `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodedPath}?alt=media`;
       });
-  
       console.log(`Found ${urls.length} images for spot ${spotId}:`, urls);
       return urls;
     } catch (err) {
@@ -53,6 +47,7 @@ async function fetchSpotImages(spotId) {
  * each including a fresh set of signed image URLs.
  */
 router.get('/', async (req, res) => {
+  console.log('🏄 paddlingOut GET / route hit!');
   try {
     console.log('Attempting to fetch paddlingSpots collection...');
     const snapshot = await db.collection('paddlingSpots').get();

@@ -123,11 +123,11 @@ function setCachedResponse(cacheKey, response) {
  */
 async function fetchCompleteWeatherData(query) {
   const queries = [
-    `${WEATHER_CONFIG.CURRENT_URL}?key=${WEATHER_CONFIG.API_KEY}&q=${encodeURIComponent(query)}&aqi=yes`,
-    `${WEATHER_CONFIG.MARINE_URL}?key=${WEATHER_CONFIG.API_KEY}&q=${encodeURIComponent(query)}&days=1&tides=yes`
+    `${WEATHER_CONFIG.CURRENT_URL}?key=${WEATHER_CONFIG.API_KEY.value()}&q=${encodeURIComponent(query)}&aqi=yes`,
+    `${WEATHER_CONFIG.MARINE_URL}?key=${WEATHER_CONFIG.API_KEY.value()}&q=${encodeURIComponent(query)}&days=1&tides=yes`
   ];
 
-  console.log('Weather API Key being used:', WEATHER_CONFIG.API_KEY ? WEATHER_CONFIG.API_KEY.substring(0, 8) + '...' : 'UNDEFINED');
+  console.log('Weather API Key being used:', WEATHER_CONFIG.API_KEY.value() ? WEATHER_CONFIG.API_KEY.value().substring(0, 8) + '...' : 'UNDEFINED');
   console.log('Weather URLs:', queries);
 
   const results = await Promise.allSettled(

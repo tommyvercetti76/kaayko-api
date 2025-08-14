@@ -10,6 +10,9 @@
   "scripts": {
     "serve": "firebase emulators:start --only functions,firestore,storage",
     "deploy": "firebase deploy --only functions",
+    "deploy:fast": "firebase deploy --only functions:fastForecast,functions:cacheManager",
+    "deploy:scheduled": "firebase deploy --only functions:precomputeForecasts,functions:cleanupCache",
+    "test:performance": "node ../tests/firebase_performance_test.js",
     "install-python": "pip3 install -r requirements.txt",
     "postinstall": "pip3 install -r requirements.txt || echo 'Python dependencies installation failed, will fallback to JS'"
   },
