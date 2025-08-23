@@ -9,24 +9,25 @@ const weatherApiKey = defineString('WEATHER_API_KEY', {
 
 // Helper function to get API key (works both locally and deployed)
 function getApiKey() {
-  // For local testing, always use the hardcoded key
-  if (process.env.NODE_ENV !== 'production') {
-    const localKey = '26fbd83a03c945c9b34190954253107';
-    console.log(`Using local API key: ${localKey.substring(0, 8)}...`);
-    return localKey;
-  }
-  
-  try {
-    // Try to get from Firebase Functions parameter first (production)
+    // For production, use Firebase Functions config
+    // For local development, use environment variable
+    const localKey = process.env.WEATHER_API_KEY || 'YOUR_API_KEY_HERE';
+    
+    // If we're in Firebase Functions environment
+    if (typeof process !== 'undefined' && process.env) {
+        return process.env.WEATHER_API_KEY || localKey;
+    }
+    
+    // If we're using Firebase Functions v2 with defineString
     if (typeof weatherApiKey.value === 'function') {
       return weatherApiKey.value();
+    } else if (weatherApiKey.value) {
+      return weatherApiKey.value;
     }
-  } catch (error) {
-    console.log('Firebase parameter not available, using fallback');
-  }
-  
-  // Fallback
-  return process.env.WEATHER_API_KEY || '26fbd83a03c945c9b34190954253107';
+    
+    // Fallback - should be set in environment
+    console.warn('⚠️  WEATHER_API_KEY not found in environment variables');
+  return process.env.WEATHER_API_KEY || 'YOUR_API_KEY_HERE';
 }
 
 module.exports = {
