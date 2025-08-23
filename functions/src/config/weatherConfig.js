@@ -4,7 +4,7 @@ const { defineString } = require('firebase-functions/params');
 
 // Define environment parameter for v2
 const weatherApiKey = defineString('WEATHER_API_KEY', {
-  default: '26fbd83a03c945c9b34190954253107'
+  default: 'YOUR_API_KEY_HERE'  // Never hardcode real keys!
 });
 
 // Helper function to get API key (works both locally and deployed)
