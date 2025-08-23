@@ -189,6 +189,35 @@ def model_info():
             'timestamp': datetime.now().isoformat()
         }), 500
 
+@app.route('/download-model', methods=['GET'])
+def download_model():
+    """Download the trained model file"""
+    try:
+        import os
+        from flask import send_file
+        
+        model_path = os.path.join(os.path.dirname(__file__), 'kaayko_production_model.pkl')
+        
+        if os.path.exists(model_path):
+            return send_file(
+                model_path,
+                as_attachment=True,
+                download_name='kaayko_production_model.pkl',
+                mimetype='application/octet-stream'
+            )
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Model file not found',
+                'path': model_path
+            }), 404
+            
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8080))
     app.run(host='0.0.0.0', port=port, debug=False)

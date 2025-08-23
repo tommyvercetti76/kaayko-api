@@ -1,127 +1,243 @@
-const { onRequest } = require('firebase-functions/v2/https');
+// File: functions/src/api/fastForecast.js
+//
+// ⚡ FAST FORECAST API - Cached 3-Day Weather Forecasts
+//
+// Ultra-fast cached weather forecasts with ML paddle predictions
+// Serves pre-computed or rapidly generated forecasts for frontend
+
+const express = require('express');
+const router = express.Router();
+const admin = require('firebase-admin');
 const { logger } = require('firebase-functions');
 const ForecastCache = require('../cache/forecastCache');
-const { fetchAndCacheWeather } = require('../services/weatherService');
-const { makeRequest } = require('../utils/httpUtils');
+const UnifiedWeatherService = require('../services/unifiedWeatherService');
+const mlService = require('../services/mlService');
+const { applyEnhancedPenalties } = require('../utils/paddlePenalties');
+const { standardizeForMLModel, standardizeForPenalties, calculateBeaufortFromKph } = require('../utils/dataStandardization');
+const { createInputMiddleware } = require('../utils/inputStandardization');
 
-// Use the main API URL for internal calls
-const API_BASE_URL = 'https://us-central1-kaaykostore.cloudfunctions.net/api';
+const db = admin.firestore();
 
 /**
- * Ultra-fast forecast API with Firebase cache
- * GET /api/forecast/fast/:locationId - Get cached forecast for known location
- * GET /api/forecast/fast?lat=X&lng=Y - Get forecast for custom coordinates
+ * Transform weather data to match production fastForecast format
  */
-exports.fastForecast = onRequest({
-    cors: true,
-    invoker: "public"
-}, async (req, res) => {
+async function transformToFastForecastFormat(weatherData, locationQuery) {
+    const { current, location, forecast } = weatherData;
+    
+    if (!forecast || !Array.isArray(forecast)) {
+        throw new Error('No forecast data available');
+    }
+    
+    // Get marine data for consistent penalty application
+    let marineData = null;
+    try {
+        const weatherService = new UnifiedWeatherService();
+        marineData = await weatherService.getMarineData(locationQuery);
+        console.log('🌊 Marine data for fastForecast:', marineData ? 'Available' : 'Not available');
+    } catch (error) {
+        console.log('ℹ️ Marine data not available for fastForecast');
+    }
+    
+    // Group forecast by days (24 hours each)
+    const forecastByDays = [];
+    
+    for (const dayData of forecast.slice(0, 3)) { // Max 3 days
+        const forecastDay = {
+            date: dayData.date,
+            hourly: {}
+        };
+        
+        if (!dayData.hourly || !Array.isArray(dayData.hourly)) {
+            continue;
+        }
+        
+        for (const hourData of dayData.hourly) {
+            // Parse the hour from the time string (format: "2025-08-18 14:00")
+            const timeParts = hourData.time.split(' ');
+            if (timeParts.length !== 2) continue;
+            
+            const hourStr = timeParts[1].split(':')[0];
+            const hour = parseInt(hourStr, 10);
+            
+            if (isNaN(hour) || hour < 0 || hour > 23) continue;
+            
+            // Standardize weather data for consistent ML model input
+            const standardizedData = standardizeForMLModel({
+                temperatureC: hourData.tempC,
+                windSpeedKph: hourData.windKPH,
+                windDirection: hourData.windDir,
+                humidity: hourData.humidity,
+                cloudCover: hourData.cloudCover,
+                uvIndex: hourData.uvIndex,
+                visibility: 10 // Default visibility
+            }, marineData);
+            
+            // Get ML prediction for this hour with standardized data
+            const rawPrediction = await mlService.getPrediction(standardizedData);
+            
+            // Apply enhanced penalties with standardized data
+            const prediction = applyEnhancedPenalties(rawPrediction, standardizedData, marineData?.forecast?.forecastday?.[0]?.hour?.[0]);
+            
+            // Transform to production format with enhanced details
+            forecastDay.hourly[hour] = {
+                temperature: hourData.tempC,
+                windSpeed: hourData.windKPH,
+                windDirection: hourData.windDir,
+                gustSpeed: standardizedData.gustSpeed / 0.621371, // Convert back to KPH for display
+                humidity: hourData.humidity,
+                cloudCover: hourData.cloudCover,
+                uvIndex: hourData.uvIndex,
+                visibility: 10, // Default visibility
+                hasWarnings: prediction.warnings && prediction.warnings.length > 0,
+                warnings: prediction.warnings || [],
+                beaufortScale: calculateBeaufortFromKph(hourData.windKPH),
+                // Enhanced marine data
+                waveHeight: standardizedData.waveHeight,
+                waterTemp: standardizedData.waterTemp,
+                marineDataAvailable: !!marineData,
+                prediction: {
+                    rating: prediction.rating,
+                    originalRating: prediction.originalRating,
+                    penaltiesApplied: prediction.penaltiesApplied,
+                    totalPenalty: prediction.totalPenalty,
+                    roundedTo05Increments: prediction.roundedTo05Increments,
+                    safetyDeduction: prediction.totalPenalty || 0, // Backward compatibility
+                    mlModelUsed: prediction.mlModelUsed,
+                    predictionSource: prediction.predictionSource
+                },
+                // Duplicate fields for compatibility
+                originalRating: prediction.originalRating,
+                safetyDeduction: prediction.totalPenalty || 0,
+                apiRating: prediction.rating,
+                rating: prediction.rating,
+                mlModelUsed: prediction.mlModelUsed,
+                predictionSource: prediction.predictionSource,
+                // New penalty fields
+                penaltiesApplied: prediction.penaltiesApplied,
+                totalPenalty: prediction.totalPenalty,
+                roundedTo05Increments: prediction.roundedTo05Increments
+            };
+        }
+        
+        forecastByDays.push(forecastDay);
+    }
+    
+    return {
+        success: true,
+        location: {
+            name: location.name,
+            region: location.region,
+            country: location.country,
+            coordinates: {
+                latitude: location.coordinates.latitude,
+                longitude: location.coordinates.longitude
+            }
+        },
+        forecast: forecastByDays,
+        metadata: {
+            cached: false,
+            processingTimeMs: 0, // Will be set by caller
+            mlServiceUrl: 'https://kaayko-ml-service-87383373015.us-central1.run.app',
+            apiVersion: '2.0',
+            cacheAge: 0,
+            cacheTime: new Date().toISOString(),
+            responseTime: '0ms', // Will be set by caller
+            source: 'unified_weather_service',
+            fastAPI: true,
+            timestamp: new Date().toISOString()
+        }
+    };
+}
+
+/**
+ * Calculate Beaufort scale from wind speed (km/h)
+ */
+/**
+ * ⚡ GET /fastForecast
+ * Ultra-fast forecast API with Firebase cache
+ * 
+ * Standardized Input Parameters:
+ * - lat & lng: Separate latitude/longitude coordinates  
+ * - location: Combined "lat,lng" coordinates
+ * - spotId: Known paddling spot ID (for fastest response)
+ * 
+ * Examples:
+ * - /fastForecast?lat=42.3601&lng=-71.0589
+ * - /fastForecast?location=42.3601,-71.0589
+ * - /fastForecast?spotId=merrimack
+ */
+router.get('/', createInputMiddleware('fastForecast'), async (req, res) => {
     const startTime = Date.now();
     const cache = new ForecastCache();
 
     try {
-        // Set CORS headers
-        res.set('Access-Control-Allow-Origin', '*');
-        res.set('Access-Control-Allow-Methods', 'GET, OPTIONS');
-        res.set('Access-Control-Allow-Headers', 'Content-Type');
-        
-        if (req.method === 'OPTIONS') {
-            res.status(204).send('');
-            return;
+        const { latitude, longitude, spotId } = req.standardizedInputs;
+
+        let locationQuery;
+        let locationName;
+
+        // Determine location source  
+        if (spotId) {
+            // Handle spotId if needed (implement spot lookup)
+            locationQuery = spotId; // This would need spot lookup implementation
+            locationName = spotId;
+        } else {
+            locationQuery = `${latitude},${longitude}`;
+            locationName = `${latitude},${longitude}`;
         }
 
-        if (req.method !== 'GET') {
-            res.status(405).json({
-                success: false,
-                error: 'Method not allowed',
-                allowedMethods: ['GET']
-            });
-            return;
-        }
-
-        const { lat, lng } = req.query;
-        const locationId = req.params[0]; // Extract from path
+        console.log(`⚡ FastForecast: ${locationQuery}`);
 
         let forecast = null;
         let source = 'unknown';
 
-        // Case 1: Known location ID (e.g. /api/forecast/fast/merrimack)
-        if (locationId && !lat && !lng) {
-            forecast = await cache.getCachedForecast(locationId);
-            source = 'location_cache';
-            
-            if (!forecast) {
-                res.status(404).json({
-                    success: false,
-                    error: `No cached forecast found for location: ${locationId}`,
-                    suggestion: 'Try using lat/lng parameters or wait for next cache refresh',
-                    cacheTTL: '2 hours'
-                });
-                return;
-            }
-        }
-        // Case 2: Custom coordinates (e.g. /api/forecast/fast?lat=38.781063&lng=-106.277812)
-        else if (lat && lng) {
-            const latitude = parseFloat(lat);
-            const longitude = parseFloat(lng);
+        // Check cache for custom coordinates
+        forecast = await cache.getCachedCustomForecast(latitude, longitude);
+        source = 'coordinate_cache';
 
-            if (isNaN(latitude) || isNaN(longitude)) {
-                res.status(400).json({
-                    success: false,
-                    error: 'Invalid coordinates',
-                    details: 'lat and lng must be valid numbers'
-                });
-                return;
-            }
+        if (!forecast) {
+            // Cache miss - generate fresh forecast using UnifiedWeatherService
+            try {
+                logger.info(`Cache miss for coordinates ${latitude},${longitude} - generating forecast`);
+                
+                const weatherService = new UnifiedWeatherService();
+                const weatherData = await weatherService.getWeatherData(
+                    { lat: latitude, lng: longitude }, 
+                    { includeForecast: true }
+                );
 
-            // Check cache for custom coordinates
-            forecast = await cache.getCachedCustomForecast(latitude, longitude);
-            source = 'coordinate_cache';
+                if (!weatherData || !weatherData.current || !weatherData.location) {
+                    throw new Error('Invalid weather data - missing current conditions or location');
+                }
 
-            if (!forecast) {
-                // Cache miss - fetch from API and cache it
-                try {
-                    logger.info(`Cache miss for coordinates ${latitude},${longitude} - fetching from API`);
-                    const url = `${API_BASE_URL}/paddlePredict/forecast?lat=${latitude}&lng=${longitude}`;
-                    forecast = await makeRequest(url, {}, 15000); // 15 second timeout for fast API
+                // Transform to the same format as production API
+                forecast = await transformToFastForecastFormat(weatherData);
+                
+                if (forecast.success) {
+                    // Update processing time
+                    const processingTime = Date.now() - startTime;
+                    forecast.metadata.processingTimeMs = processingTime;
+                    forecast.metadata.responseTime = `${processingTime}ms`;
                     
-                    if (forecast.success) {
-                        // Store in cache for future requests
-                        await cache.storeCustomForecast(latitude, longitude, forecast);
-                        source = 'api_fresh';
-                        
-                        // Add cache metadata
-                        forecast.metadata = forecast.metadata || {};
-                        forecast.metadata.cached = false;
-                        forecast.metadata.source = 'live_api';
-                    }
-                } catch (error) {
-                    logger.error(`Failed to fetch forecast from API: ${error.message}`);
-                    res.status(503).json({
-                        success: false,
-                        error: 'Forecast service unavailable',
-                        details: error.message,
-                        suggestion: 'Try again in a few minutes'
-                    });
-                    return;
+                    // Store in cache for future requests
+                    await cache.storeCustomForecast(latitude, longitude, forecast);
+                    source = 'api_fresh';
+                    
+                    // Add cache metadata
+                    forecast.metadata = forecast.metadata || {};
+                    forecast.metadata.cached = false;
+                    forecast.metadata.source = 'live_api';
                 }
+            } catch (error) {
+                logger.error(`Failed to generate forecast: ${error.message}`);
+                res.status(503).json({
+                    success: false,
+                    error: 'Forecast service unavailable',
+                    details: error.message,
+                    suggestion: 'Try again in a few minutes'
+                });
+                return;
             }
-        }
-        // Case 3: Invalid request
-        else {
-            res.status(400).json({
-                success: false,
-                error: 'Invalid request',
-                usage: {
-                    knownLocation: '/api/forecast/fast/{locationId}',
-                    customCoordinates: '/api/forecast/fast?lat={latitude}&lng={longitude}',
-                    examples: [
-                        '/api/forecast/fast/merrimack',
-                        '/api/forecast/fast?lat=38.781063&lng=-106.277812'
-                    ]
-                }
-            });
-            return;
         }
 
         const responseTime = Date.now() - startTime;
@@ -151,126 +267,22 @@ exports.fastForecast = onRequest({
 });
 
 /**
- * Cache management API
- * GET /api/cache/stats - Get cache statistics
- * POST /api/cache/refresh - Manually refresh cache for a location
- * DELETE /api/cache/clear - Clear expired cache entries
+ * GET /fastForecast/cache/stats - Get cache statistics
  */
-exports.cacheManager = onRequest({
-    cors: true,
-    invoker: "public"
-}, async (req, res) => {
-    const cache = new ForecastCache();
-
+router.get('/cache/stats', async (req, res) => {
     try {
-        res.set('Access-Control-Allow-Origin', '*');
-        res.set('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
-        res.set('Access-Control-Allow-Headers', 'Content-Type');
+        const cache = new ForecastCache();
+        const stats = await cache.getCacheStats();
+        const allForecasts = await cache.getAllCachedForecasts();
         
-        if (req.method === 'OPTIONS') {
-            res.status(204).send('');
-            return;
-        }
-
-        // GET /api/cache/stats
-        if (req.method === 'GET' && req.path.includes('/stats')) {
-            const stats = await cache.getCacheStats();
-            const allForecasts = await cache.getAllCachedForecasts();
-            
-            res.status(200).json({
-                success: true,
-                stats,
-                cachedLocations: Object.keys(allForecasts),
-                timestamp: new Date().toISOString()
-            });
-            return;
-        }
-
-        // DELETE /api/cache/clear
-        if (req.method === 'DELETE' && req.path.includes('/clear')) {
-            const expiredCount = await cache.clearExpiredCache();
-            const stats = await cache.getCacheStats();
-            
-            res.status(200).json({
-                success: true,
-                message: `Cleared ${expiredCount} expired cache entries`,
-                expiredCount,
-                stats,
-                timestamp: new Date().toISOString()
-            });
-            return;
-        }
-
-        // POST /api/cache/refresh
-        if (req.method === 'POST' && req.path.includes('/refresh')) {
-            const { locationId, lat, lng } = req.body;
-            
-            if (!locationId && (!lat || !lng)) {
-                res.status(400).json({
-                    success: false,
-                    error: 'Must provide either locationId or lat/lng coordinates'
-                });
-                return;
-            }
-
-            try {
-                let url;
-                let cacheKey;
-                
-                if (locationId) {
-                    // For known locations, we need to get coordinates first
-                    // This would require a lookup table or API call
-                    res.status(400).json({
-                        success: false,
-                        error: 'Location refresh not implemented yet',
-                        suggestion: 'Use lat/lng coordinates instead'
-                    });
-                    return;
-                } else {
-                    url = `${API_BASE_URL}/paddlePredict/forecast?lat=${lat}&lng=${lng}`;
-                    cacheKey = `custom_${cache.generateLocationHash(lat, lng)}`;
-                }
-
-                const forecast = await makeRequest(url, {}, 15000); // 15 second timeout for cache refresh
-                
-                if (forecast.success) {
-                    await cache.storeForecast(cacheKey, forecast);
-                    
-                    res.status(200).json({
-                        success: true,
-                        message: 'Cache refreshed successfully',
-                        cacheKey,
-                        timestamp: new Date().toISOString()
-                    });
-                } else {
-                    res.status(502).json({
-                        success: false,
-                        error: 'Failed to fetch fresh forecast',
-                        details: forecast
-                    });
-                }
-            } catch (error) {
-                res.status(503).json({
-                    success: false,
-                    error: 'Failed to refresh cache',
-                    details: error.message
-                });
-            }
-            return;
-        }
-
-        res.status(404).json({
-            success: false,
-            error: 'Endpoint not found',
-            availableEndpoints: [
-                'GET /api/cache/stats',
-                'POST /api/cache/refresh',
-                'DELETE /api/cache/clear'
-            ]
+        res.status(200).json({
+            success: true,
+            stats,
+            cachedLocations: Object.keys(allForecasts),
+            timestamp: new Date().toISOString()
         });
-
     } catch (error) {
-        logger.error(`Cache manager error: ${error.message}`);
+        logger.error(`Cache stats error: ${error.message}`);
         res.status(500).json({
             success: false,
             error: 'Internal server error',
@@ -278,3 +290,5 @@ exports.cacheManager = onRequest({
         });
     }
 });
+
+module.exports = router;

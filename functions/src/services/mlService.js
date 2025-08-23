@@ -12,7 +12,9 @@ const ML_SERVICE_URL = process.env.ML_SERVICE_URL || 'https://kaayko-ml-service-
  * @returns {Promise<object>} result object with { success, rating, mlModelUsed, predictionSource }
  */
 async function getPrediction(features) {
-  console.log('🤖 Getting ML prediction from Cloud Run service for features:', features);
+  console.log('🤖 Getting ML prediction from Cloud Run service for features:', JSON.stringify(features, null, 2));
+  console.log('🌡️ Temperature being sent to ML model:', features.temperature, '°C');
+  console.log('💨 Wind speed being sent to ML model:', features.windSpeed, 'mph');
   
   try {
     // Make HTTP request to Cloud Run ML service
@@ -24,7 +26,12 @@ async function getPrediction(features) {
     });
 
     const result = response.data;
-    console.log('✅ ML prediction successful:', result);
+    console.log('✅ ML prediction successful - FULL RESPONSE:', JSON.stringify(result, null, 2));
+    console.log('🎯 ML Model returned rating:', result.rating);
+    console.log('🧠 Model type used:', result.modelType);
+    console.log('📊 ML model used:', result.mlModelUsed);
+    console.log('🔍 Prediction source:', result.predictionSource);
+    console.log('🎪 Confidence level:', result.confidence);
 
     return {
       success: true,
@@ -32,7 +39,10 @@ async function getPrediction(features) {
       mlModelUsed: result.mlModelUsed,
       predictionSource: result.predictionSource || 'ml-model',
       modelType: result.modelType || 'GradientBoostingRegressor',
-      confidence: result.confidence || 0.99
+      confidence: result.confidence || 0.99,
+      // Pass through any additional fields from ML service
+      featuresUsed: result.featuresUsed,
+      rawMLResponse: result // Keep full response for debugging
     };
 
   } catch (error) {

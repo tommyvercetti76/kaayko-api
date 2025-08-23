@@ -1,40 +1,138 @@
-# Kaayko Stable Deployment
+# 🏄‍♂️ Kaayko API
 
-## 🚀 Complete Production Setup
+**Fast paddling weather forecasts with ML-powered ratings for kayakers and paddlers**
 
-This directory contains the **exact stable code** that's running in production with **mlModelUsed: true**.
+## 🚀 Production APIs
 
-### 📁 Structure
+### **FastForecast** - `/api/fastForecast` 
+**Public API for frontend - Super fast cached responses**
+
+- **Purpose**: Serves pre-computed weather forecasts to frontend users
+- **Speed**: ~192ms (cache-first architecture)
+- **Rate Limit**: 60 requests/minute
+- **Usage**: 
+  - `GET /api/fastForecast?location=Malibu,CA`
+  - `GET /api/fastForecast?spotId=malibu_surfrider`
+- **Returns**: Weather + ML paddle ratings (1-5 scale) + safety levels
+
+### **Forecast** - `/api/forecast`
+**Internal API for scheduled jobs and premium users**
+
+- **Purpose**: Generates comprehensive real-time forecasts with full ML predictions
+- **Speed**: ~2-5 seconds (real-time generation)
+- **Rate Limit**: 10 requests/minute (internal use)
+- **Usage**: 
+  - `GET /api/forecast?location=Lake Tahoe`
+  - `POST /api/forecast/batch` (processes all paddling spots)
+- **Returns**: Deep weather analysis + ML ratings + caches results for FastForecast
+
+### **NearbyWater** - `/api/nearbyWater` 
+**Find nearby lakes and rivers for paddling using OpenStreetMap**
+
+- **Purpose**: Discover real water bodies (lakes, rivers, reservoirs) near any location
+- **Speed**: ~2-4 seconds (Overpass API query)
+- **Rate Limit**: 60 requests/minute
+- **Usage**: 
+  - `GET /api/nearbyWater?lat=32.7767&lng=-96.7970&radius=20`
+  - `GET /api/nearbyWater?lat=33.1487&lng=-96.7005&radius=50&publicOnly=true`
+- **Returns**: Real water bodies with coordinates, type (Lake/River/Reservoir), distance
+
+---
+
+## 📍 Location APIs
+
+### **PaddlingOut** - `/api/paddlingOut`
+**Paddling spots directory with images and details**
+
+- **Purpose**: Manages paddling location database
+- **Usage**: 
+  - `GET /api/paddlingOut` → List all paddling spots
+  - `GET /api/paddlingOut/:id` → Get spot details + images
+- **Returns**: Spot info, amenities (parking/restrooms), coordinates, YouTube videos, photos
+
+### **DeepLink** - `/api/l`
+**Universal link routing with context preservation**
+
+- **Purpose**: Smart app/web routing with location context
+- **Usage**: 
+  - `GET /api/l/:id` → Redirect with preserved context (e.g., `/api/l/antero456`)
+  - `GET /api/resolve` → Restore context after app install
+- **Features**: Platform detection, app store redirects, context cookies
+
+---
+
+## 🛍️ Store APIs
+
+### **Products** - `/api/products`
+**E-commerce for Kaayko merchandise**
+
+- **Purpose**: Kaayko store product catalog
+- **Usage**: 
+  - `GET /api/products` → List all products with images
+  - `GET /api/products/:id` → Product details
+  - `POST /api/products/:id/vote` → Vote on products
+- **Returns**: T-shirts, gear with images, pricing, availability, voting
+
+### **Images** - `/api/images`
+**Secure image proxy for store products**
+
+- **Purpose**: Proxies product images from Cloud Storage
+- **Usage**: `GET /api/images/:productId/:fileName`
+- **Features**: Referer checking, caching, secure image delivery
+
+---
+
+## 🏗️ Project Structure
 
 ```
-kaayko-stable/
-├── firebase-functions/     # Node.js Firebase Functions API
-│   ├── package.json       # Dependencies (axios, express, etc.)
-│   └── src/               # API source code
-├── ml-service/            # Python ML Service (Cloud Run)
-│   ├── main.py           # Flask API server
-│   ├── predict_konditions.py  # ML prediction logic
-│   └── kaayko_production_model.pkl  # 7.8MB trained model
-├── tests/                 # Comprehensive test suite
-│   ├── enhanced_test_suite.js     # Detailed API testing
-│   ├── interactive_test_suite.js  # Interactive testing tool
-│   ├── production_test_suite.js   # Production environment tests
-│   └── test_config.json          # Test configuration
-└── README.md             # This file
+kaayko-api/
+├── functions/                    # 🎯 Core Firebase Functions
+│   ├── src/
+│   │   ├── api/                  # API endpoints
+│   │   ├── services/             # Business logic
+│   │   ├── scheduled/            # Scheduled functions
+│   │   ├── middleware/           # Request middleware
+│   │   ├── utils/                # Utilities
+│   │   ├── config/               # Configuration
+│   │   └── cache/                # Caching logic
+│   └── package.json              # Dependencies
+├── ml-service/                   # 🧠 ML Prediction Service
+├── docs/                         # � Documentation
+│   ├── API-QUICK-REFERENCE-v2.1.0.md
+│   ├── DEPLOYMENT_GUIDE.md
+│   └── kaayko-paddling-api-swagger.yaml
+└── archive/                      # 📦 Archived/obsolete files
 ```
 
-### 🎯 What's Working
+---
 
-- ✅ Firebase Functions API: Node.js service handling HTTP requests
-- ✅ Cloud Run ML Service: Python Flask API with trained model  
-- ✅ Trained Model: GradientBoostingRegressor with 99.56% accuracy
-- ✅ Large Dataset: 2.36 million training samples from 17 locations
-- ✅ API Integration: Functions call Cloud Run for ML predictions
-- ✅ Response Format: {"mlModelUsed": true, "predictionSource": "ml-model"}
+## �🔧 Architecture
 
-### 🔄 Current Live URLs
+**Two-Tier Weather System:**
+- **FastForecast**: Public → Cache → 192ms responses
+- **Forecast**: Internal → Real-time ML → Caches for FastForecast
 
-- Firebase API: https://api-vwcc5j4qda-uc.a.run.app/paddlePredict
-- ML Service: https://kaayko-ml-service-87383373015.us-central1.run.app/predict
+**Scheduled Jobs** (6am, 12pm, 6pm, 10pm):
+- Pre-compute all paddling locations using `/forecast/batch`
+- Store results in Firestore cache
+- FastForecast serves cached data instantly
 
-Status: ✅ STABLE - This is the exact code running in production
+**ML Service**: Cloud Run deployment provides dynamic paddle ratings (1-5 scale) based on weather conditions
+
+**Water Discovery**: Overpass API integration finds real lakes/rivers using OpenStreetMap data
+
+---
+
+## 📊 Quick Reference
+
+| API | Purpose | Speed | Usage |
+|-----|---------|-------|-------|
+| `/api/fastForecast` | Public weather | 192ms | Frontend |
+| `/api/forecast` | Real-time ML | 2-5s | Scheduled jobs |
+| `/api/nearbyWater` | Find lakes/rivers | 2-4s | Water discovery |
+| `/api/paddlingOut` | Location data | Fast | Spot directory |
+| `/api/l/:id` | Smart routing | Instant | Deep links |
+| `/api/products` | Store catalog | Fast | E-commerce |
+| `/api/images` | Image proxy | Fast | Secure delivery |
+
+**Production**: Firebase Functions + Cloud Run ML Service + Firestore caching + Cloud Storage + OpenStreetMap

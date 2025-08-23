@@ -1,0 +1,2393 @@
+openapi: 3.0.3
+info:
+  title: Kaayko Paddling Intelligence APIs
+  version: "2.1.0"
+  description: |
+    # Kaayko Paddling Intelligence APIs v2.1.0
+    
+    **Enterprise-grade paddling condition intelligence powered by machine learning and real-time marine data integration**
+    
+    ---
+    
+    ## 🎯 Executive Summary
+    
+    The Kaayko Paddling Intelligence APIs provide ultra-fast, machine learning-powered paddling condition assessments with comprehensive safety analysis. Our platform processes real-time weather, marine, and environmental data to deliver actionable insights for paddlers across 18+ premium locations.
+    
+    ### Core Capabilities
+    
+    | API Endpoint | Purpose | Response Time | Key Features |
+    |--------------|---------|---------------|--------------|
+    | `paddlingOut` | Location Discovery | ~100ms | Comprehensive location database with amenities |
+    | `paddleScore` | Real-time Conditions | ~250ms | Current conditions with ML-powered safety ratings |
+    | `fastForecast` | 3-Day Predictions | <4s fresh / <1s cached | Hourly forecasts with penalty breakdown |
+    | `forecast` | Premium Analytics | Variable | Advanced analytics for professional use |
+    
+    ### 🚀 Version 2.1.0 Enhancements
+    
+    - **🎯 Precision Rating System**: 0.5-increment ratings (1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0)
+    - **🌊 Marine Data Integration**: Real-time wave height and water temperature analysis
+    - **🔄 Cross-API Consistency**: Identical conditions produce identical ratings across all endpoints
+    - **📊 Transparent Penalty System**: Detailed breakdown of all rating adjustments
+    - **⚡ Performance Optimization**: 67% improvement in forecast generation (3.8s vs 11.6s)
+    - **🛡️ Enhanced Safety**: Proactive warnings for extreme conditions
+    
+    ## 🧠 Machine Learning Intelligence
+    
+    ### Rating Scale & Interpretation
+    ```
+    5.0 │ Perfect      │ Ideal conditions for all skill levels
+    4.5 │ Excellent    │ Outstanding conditions, minimal concerns
+    4.0 │ Very Good    │ Great conditions with minor considerations
+    3.5 │ Good         │ Favorable conditions for most paddlers
+    3.0 │ Fair         │ Moderate conditions, some caution advised
+    2.5 │ Below Avg    │ Challenging conditions for beginners
+    2.0 │ Poor         │ Difficult conditions, experienced only
+    1.5 │ Difficult    │ Hazardous conditions, high skill required
+    1.0 │ Dangerous    │ Avoid - unsafe for recreational paddling
+    ```
+    
+    ### Intelligent Penalty System
+    ```yaml
+    Temperature Penalties:
+      High Heat (85-94°F):    -1.0 points
+      Extreme Heat (95°F+):   -1.5 points
+      
+    UV Index Penalties:
+      Moderate (5-8):         -0.5 points
+      High (9-10):           -0.5 points  
+      Dangerous (11+):       -1.0 points
+      
+    Wind Penalties:
+      Strong Winds (25+ mph): -2.0 points
+      
+    Marine Integration:
+      Wave height and water temperature factored into base ML prediction
+    ```
+    
+    ## 🌍 Production Test Locations
+    
+    > **⚠️ CRITICAL**: Always use coordinates from the `paddlingOut` endpoint for accurate marine data integration
+    
+    ### 📍 Regional Coverage
+    
+    #### 🌡️ Texas (Extreme Heat Testing)
+    - **Trinity River, Irving**: `32.881187,-96.929937` *(Primary extreme heat validation)*
+    - **White Rock Lake, Dallas**: `32.833188,-96.729687` *(Urban paddling dynamics)*
+    - **Lewisville Lake**: `33.156487,-96.949953` *(Large surface area wind effects)*
+    
+    #### 🏔️ Colorado (High Altitude Validation)
+    - **Cottonwood Lake, Buena Vista**: `38.781063,-106.277812` *(10,000+ ft elevation)*
+    - **Antero Reservoir**: `38.982687,-105.896563` *(Alpine conditions)*
+    - **Taylor Park Reservoir**: `38.823442,-106.579883` *(Mountain weather patterns)*
+    
+    #### 🏞️ Pacific Northwest (Marine Integration)
+    - **Lake Crescent, Olympic NP**: `48.052813,-123.870438` *(Coastal influence)*
+    - **Diablo Lake, North Cascades**: `48.690938,-121.097188` *(Mountain lake dynamics)*
+    - **Lake Union, Seattle**: `47.627413,-122.338984` *(Urban marine environment)*
+    
+    #### 🦬 Rocky Mountain Region (National Parks)
+    - **Jenny Lake, Grand Teton NP**: `43.749638,-110.729578` *(Alpine lake conditions)*
+    - **Jackson Lake, Wyoming**: `43.845863,-110.600359` *(Large mountain reservoir)*
+    - **Lake McDonald, Glacier NP**: `48.52838,-113.992351` *(Glacial lake environment)*
+    
+  termsOfService: https://kaayko.com/terms
+  contact:
+    name: Kaayko Engineering Team
+    url: https://kaayko.com/support
+    email: api-support@kaayko.com
+  license:
+    name: MIT License
+    url: https://opensource.org/licenses/MIT
+  x-logo:
+    url: "https://kaayko.com/assets/api-logo.png"
+    altText: "Kaayko Paddling Intelligence APIs"
+
+servers:
+  - url: https://us-central1-kaaykostore.cloudfunctions.net/api
+    description: Production Environment (US-Central1)
+    variables:
+      version:
+        default: v2.1.0
+        description: API version
+  - url: http://127.0.0.1:5001/kaaykostore/us-central1/api  
+    description: Local Development Environment
+    variables:
+      port:
+        default: "5001"
+        description: Local Firebase Functions port
+
+security:
+  - ApiKeyAuth: []
+
+tags:
+  - name: Core APIs
+    description: Production-ready endpoints for paddling intelligence
+  - name: paddlingOut
+    description: 🏞️ Location Discovery & Database
+    externalDocs:
+      description: Location API Documentation
+      url: https://kaayko.com/docs/locations
+  - name: paddleScore  
+    description: 🏄 Real-time Condition Assessment
+    externalDocs:
+      description: Paddle Score Documentation
+      url: https://kaayko.com/docs/paddle-score
+  - name: fastForecast
+    description: ⚡ High-Performance Forecast Engine
+    externalDocs:
+      description: Fast Forecast Documentation
+      url: https://kaayko.com/docs/fast-forecast
+  - name: forecast
+    description: 📊 Premium Analytics & Insights
+    externalDocs:
+      description: Premium Forecast Documentation
+      url: https://kaayko.com/docs/premium-forecast
+
+x-tagGroups:
+  - name: Public APIs
+    tags:
+      - paddlingOut
+      - paddleScore
+      - fastForecast
+  - name: Premium APIs
+    tags:
+      - forecast
+
+paths:
+  /paddlingOut:
+    get:
+      tags:
+        - paddlingOut
+      operationId: getPaddlingLocations
+      summary: Retrieve all paddling locations
+      description: |
+        **Comprehensive paddling location database with amenities and coordinates**
+        
+        This endpoint provides access to our curated database of premium paddling locations across North America. Each location includes precise coordinates, detailed amenities information, and multimedia resources.
+        
+        ### Key Features
+        - ✅ **18+ Premium Locations** - Hand-selected paddling destinations
+        - 🎯 **Precise Coordinates** - GPS coordinates for navigation systems
+        - 🅿️ **Amenity Details** - Parking, restrooms, and facility information
+        - 📸 **Rich Media** - Photos and instructional videos
+        - 🏞️ **Location Context** - Difficulty ratings and paddling tips
+        
+        ### Use Case
+        Use the coordinates from this endpoint for all subsequent API calls (`paddleScore`, `fastForecast`, `forecast`) to ensure marine data accuracy and optimal predictions.
+        
+        ### Response Time
+        **~100ms** - Optimized for mobile and web applications
+        
+      responses:
+        '200':
+          description: Successfully retrieved paddling locations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PaddlingLocation'
+              examples:
+                complete_response:
+                  summary: Complete locations response
+                  description: Array of paddling locations with full details
+                  value:
+                    - id: "trinity_river"
+                      lakeName: "Trinity River"
+                      title: "Trinity River"
+                      subtitle: "Irving, Texas"
+                      text: "Solitude, birds and a good workout with consistent flow"
+                      location:
+                        latitude: 32.881187
+                        longitude: -96.929937
+                      parkingAvl: "Y"
+                      restroomsAvl: "Y"
+                      youtubeURL: "https://youtube.com/watch?v=trinity_river_guide"
+                      imgSrc: 
+                        - "https://firebasestorage.googleapis.com/v0/b/kaaykostore.appspot.com/o/images%2Fpaddling_out%2Ftrinity_river_1.jpg?alt=media"
+                        - "https://firebasestorage.googleapis.com/v0/b/kaaykostore.appspot.com/o/images%2Fpaddling_out%2Ftrinity_river_2.jpg?alt=media"
+                    - id: "cottonwood_lake"
+                      lakeName: "Cottonwood Lake"
+                      title: "Cottonwood Lake"
+                      subtitle: "Buena Vista, Colorado"
+                      text: "High altitude alpine paddling with stunning mountain views"
+                      location:
+                        latitude: 38.781063
+                        longitude: -106.277812
+                      parkingAvl: "Y"
+                      restroomsAvl: "N"
+                      youtubeURL: ""
+                      imgSrc: 
+                        - "https://firebasestorage.googleapis.com/v0/b/kaaykostore.appspot.com/o/images%2Fpaddling_out%2Fcottonwood_lake_1.jpg?alt=media"
+                    - id: "lake_crescent"
+                      lakeName: "Lake Crescent"
+                      title: "Lake Crescent"
+                      subtitle: "Olympic National Park, Washington"
+                      text: "Crystal clear glacial lake surrounded by old-growth forest"
+                      location:
+                        latitude: 48.052813
+                        longitude: -123.870438
+                      parkingAvl: "Y"
+                      restroomsAvl: "Y"
+                      youtubeURL: ""
+                      imgSrc:
+                        - "https://firebasestorage.googleapis.com/v0/b/kaaykostore.appspot.com/o/images%2Fpaddling_out%2Flake_crescent_1.jpg?alt=media"
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Server error"
+                details: "Database connection failed"
+                timestamp: "2025-08-23T10:30:00Z"
+
+  /fastForecast:
+    get:
+      tags:
+        - fastForecast
+      operationId: getFastForecast
+      summary: Get 3-day weather forecast with ML-powered paddle predictions
+      description: |
+        **Ultra-fast 72-hour forecast with machine learning paddle intelligence and marine data integration**
+        
+        This high-performance endpoint delivers comprehensive 3-day hourly forecasts with ML-generated paddle ratings, safety warnings, and detailed penalty analysis.
+        
+        ### 🚀 Performance Characteristics
+        - **Fresh Data**: <4 seconds (67% faster than v2.0)
+        - **Cached Data**: <1 second (sub-second for repeated requests)
+        - **Production ML**: Powered by kaayko-ml-service-87383373015.us-central1.run.app
+        
+        ### 🧠 Advanced ML Features
+        - **72-Hour Predictions**: Hourly paddle ratings for full 3 days
+        - **Marine Integration**: Wave height and water temperature when available
+        - **Penalty Transparency**: Detailed breakdown of all rating adjustments
+        - **Safety Warnings**: Proactive alerts for dangerous conditions
+        - **Beaufort Scale**: Professional wind analysis (0-12 scale)
+        - **UV Analysis**: Comprehensive sun exposure assessment
+        
+        ### 📊 Enhanced Penalty System
+        ```yaml
+        Temperature Penalties:
+          High Heat (85-94°F):    -1.0 rating points
+          Extreme Heat (95°F+):   -1.5 rating points
+          
+        UV Index Penalties:
+          Moderate (5-8):         -0.5 rating points
+          High (9-10):           -0.5 rating points  
+          Dangerous (11+):       -1.0 rating points
+          
+        Wind Penalties:
+          Strong Winds (25+ mph): -2.0 rating points
+        ```
+        
+        ### 🔄 Cross-API Consistency
+        Identical weather conditions will produce identical paddle ratings across `paddleScore` and `fastForecast` endpoints, ensuring reliable decision-making.
+        
+        ### ⚠️ Marine Data Requirement
+        **Always use coordinates from `paddlingOut` endpoint** to ensure marine data availability and prediction accuracy.
+        
+      parameters:
+        - name: lat
+          in: query
+          required: true
+          schema:
+            type: number
+            format: double
+            minimum: -90.0
+            maximum: 90.0
+            example: 32.881187
+          description: |
+            **Latitude coordinate in decimal degrees**
+            
+            Must be a valid latitude between -90.0 and 90.0. 
+            
+            **Example**: `32.881187` (Trinity River, Texas)
+        - name: lng
+          in: query
+          required: true
+          schema:
+            type: number
+            format: double
+            minimum: -180.0
+            maximum: 180.0
+            example: -96.929937
+          description: |
+            **Longitude coordinate in decimal degrees**
+            
+            Must be a valid longitude between -180.0 and 180.0.
+            
+            **Example**: `-96.929937` (Trinity River, Texas)
+      responses:
+        '200':
+          description: Successfully retrieved 3-day forecast with ML predictions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FastForecastResponse'
+              examples:
+                perfect_mountain_conditions:
+                  summary: Perfect Mountain Conditions - Colorado
+                  description: High altitude location with excellent paddling conditions and no penalties
+                  value:
+                    success: true
+                    location:
+                      name: "Buena Vista"
+                      region: "Colorado"
+                      country: "United States of America"
+                      coordinates:
+                        latitude: 38.781063
+                        longitude: -106.277812
+                    forecast:
+                      - date: "2025-08-23"
+                        hourly:
+                          8:
+                            temperature: 65.8
+                            windSpeed: 4.2
+                            windDirection: "SW"
+                            gustSpeed: 5.5
+                            humidity: 35
+                            cloudCover: 10
+                            uvIndex: 3.2
+                            visibility: 25
+                            hasWarnings: false
+                            warnings: []
+                            beaufortScale: 2
+                            waveHeight: null
+                            waterTemp: null
+                            marineDataAvailable: false
+                            prediction:
+                              rating: 5.0
+                              originalRating: 5.0
+                              penaltiesApplied: []
+                              totalPenalty: 0.0
+                              roundedTo05Increments: true
+                              mlModelUsed: true
+                              predictionSource: "ml-model"
+                            rating: 5.0
+                            mlModelUsed: true
+                            predictionSource: "ml-model"
+                          15:
+                            temperature: 78.2
+                            windSpeed: 8.1
+                            windDirection: "W"
+                            gustSpeed: 10.5
+                            humidity: 28
+                            cloudCover: 5
+                            uvIndex: 8.1
+                            visibility: 25
+                            hasWarnings: false
+                            warnings: []
+                            beaufortScale: 3
+                            waveHeight: null
+                            waterTemp: null
+                            marineDataAvailable: false
+                            prediction:
+                              rating: 4.5
+                              originalRating: 4.5
+                              penaltiesApplied: []
+                              totalPenalty: 0.0
+                              roundedTo05Increments: true
+                              mlModelUsed: true
+                              predictionSource: "ml-model"
+                            rating: 4.5
+                            mlModelUsed: true
+                            predictionSource: "ml-model"
+                    metadata:
+                      processingTimeMs: 3247
+                      responseTime: "3.25s"
+                      cached: false
+                      mlServiceUrl: "https://kaayko-ml-service-87383373015.us-central1.run.app"
+                      source: "coordinate_cache"
+                      fastAPI: true
+                      timestamp: "2025-08-23T15:45:22.120Z"
+                
+                extreme_heat_warnings:
+                  summary: Extreme Heat with Multiple Penalties - Texas Summer
+                  description: Shows multiple penalty system in action with detailed breakdown
+                  value:
+                    success: true
+                    location:
+                      name: "Irving"
+                      region: "Texas"
+                      country: "United States of America"
+                      coordinates:
+                        latitude: 32.881187
+                        longitude: -96.929937
+                    forecast:
+                      - date: "2025-08-23"
+                        hourly:
+                          15:
+                            temperature: 99.2
+                            windSpeed: 1.8
+                            windDirection: "S"
+                            gustSpeed: 2.3
+                            humidity: 38
+                            cloudCover: 15
+                            uvIndex: 9.8
+                            visibility: 18
+                            hasWarnings: true
+                            warnings: [
+                              "DANGER: Extreme heat (99°F) - high risk of heat exhaustion",
+                              "DANGER: Very high UV (9.8) - severe burn risk"
+                            ]
+                            beaufortScale: 1
+                            waveHeight: 0.1
+                            waterTemp: 29.8
+                            marineDataAvailable: true
+                            prediction:
+                              rating: 2.0
+                              originalRating: 4.0
+                              penaltiesApplied: [
+                                "Extreme heat (99.2°F): -1.5",
+                                "High UV (9.8): -0.5"
+                              ]
+                              totalPenalty: 2.0
+                              roundedTo05Increments: true
+                              mlModelUsed: true
+                              predictionSource: "ml-model"
+                            rating: 2.0
+                            mlModelUsed: true
+                            predictionSource: "ml-model"
+                    metadata:
+                      processingTimeMs: 3891
+                      responseTime: "3.89s"
+                      cached: false
+                      mlServiceUrl: "https://kaayko-ml-service-87383373015.us-central1.run.app"
+                      source: "api_fresh"
+                      fastAPI: true
+                      timestamp: "2025-08-23T15:45:22.120Z"
+                
+                cached_response:
+                  summary: Cached Response - Sub-second Performance
+                  description: Example of cached response showing sub-second performance
+                  value:
+                    success: true
+                    location:
+                      name: "Port Angeles"
+                      region: "Washington"
+                      country: "United States of America"
+                      coordinates:
+                        latitude: 48.052813
+                        longitude: -123.870438
+                    forecast:
+                      - date: "2025-08-23"
+                        hourly:
+                          12:
+                            temperature: 70.1
+                            windSpeed: 8.2
+                            beaufortScale: 3
+                            uvIndex: 5.1
+                            prediction:
+                              rating: 4.5
+                              originalRating: 4.5
+                              penaltiesApplied: []
+                              totalPenalty: 0.0
+                              roundedTo05Increments: true
+                              mlModelUsed: true
+                              predictionSource: "ml-model"
+                            rating: 4.5
+                            mlModelUsed: true
+                            predictionSource: "ml-model"
+                    metadata:
+                      processingTimeMs: 847
+                      responseTime: "0.85s"
+                      cached: true
+                      source: "coordinate_cache"
+                      fastAPI: true
+                      timestamp: "2025-08-23T15:45:22.120Z"
+        '400':
+          description: Invalid request parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                missing_location:
+                  summary: Missing location parameters
+                  value:
+                    success: false
+                    error: "Invalid input parameters"
+                    details: ["Location required: provide coordinates (lat,lng) or spotId"]
+                    usage:
+                      endpoint: "/fastForecast"
+                      parameters:
+                        location_methods: [
+                          "lat=32.881187&lng=-96.929937 (separate coordinates)",
+                          "location=32.881187,-96.929937 (combined coordinates)",
+                          "spotId=trinity_river (known spot ID)"
+                        ]
+                      examples:
+                        coordinates: "/fastForecast?lat=32.881187&lng=-96.929937"
+                        location_string: "/fastForecast?location=32.881187,-96.929937"
+                        spot_id: "/fastForecast?spotId=trinity_river"
+                invalid_latitude:
+                  summary: Invalid latitude parameter
+                  value:
+                    success: false
+                    error: "Invalid input parameters"
+                    details: ["Latitude must be between -90 and 90"]
+                    usage:
+                      endpoint: "/fastForecast"
+                      examples:
+                        valid_coordinates: "/fastForecast?lat=32.881187&lng=-96.929937"
+        '503':
+          description: Service temporarily unavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                error: "Forecast service unavailable"
+                details: "Weather data source temporarily unavailable"
+                suggestion: "Try again in a few minutes"
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /paddleScore:
+    get:
+      tags:
+        - paddleScore
+      operationId: getCurrentPaddleScore
+      summary: Get real-time paddle conditions with ML-powered safety rating
+      description: |
+        **Real-time paddling condition assessment with machine learning intelligence**
+        
+        This endpoint analyzes current weather, marine, and environmental conditions to provide an actionable paddle safety rating with detailed condition breakdown.
+        
+        ### 🧠 Machine Learning Features
+        - **Production ML Model**: GradientBoostingRegressor trained on 50,000+ condition combinations
+        - **Marine Data Integration**: Real-time wave height and water temperature when available
+        - **Smart Penalty System**: Transparent adjustments for extreme conditions
+        - **0.5 Precision Ratings**: Only 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0 ratings
+        
+        ### 📊 Response Content
+        - Current weather conditions with marine data
+        - ML-generated paddle rating with confidence level  
+        - Detailed penalty breakdown and justification
+        - Safety warnings and actionable recommendations
+        - Beaufort wind scale analysis
+        
+        ### ⚡ Performance
+        **~250ms average response time** - Optimized for real-time mobile applications
+        
+        ### 🔄 Consistency Guarantee
+        Identical conditions will produce identical ratings across `paddleScore` and `fastForecast` endpoints
+        
+      parameters:
+        - name: lat
+          in: query
+          required: false
+          schema:
+            type: number
+            format: double
+            minimum: -90.0
+            maximum: 90.0
+            example: 32.881187
+          description: |
+            **Latitude coordinate in decimal degrees**
+            
+            Use with `lng` parameter for coordinate-based lookup. Use precise coordinates from the `paddlingOut` endpoint to ensure marine data accuracy.
+        - name: lng
+          in: query
+          required: false
+          schema:
+            type: number
+            format: double
+            minimum: -180.0
+            maximum: 180.0
+            example: -96.929937
+          description: |
+            **Longitude coordinate in decimal degrees**
+            
+            Use with `lat` parameter for coordinate-based lookup. Use precise coordinates from the `paddlingOut` endpoint to ensure marine data accuracy.
+        - name: location
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: '^-?\d+(\.\d+)?,-?\d+(\.\d+)?$'
+            example: "32.881187,-96.929937"
+          description: |
+            **GPS coordinates in "latitude,longitude" format**
+            
+            Alternative to separate lat/lng parameters. Use precise coordinates from the `paddlingOut` endpoint to ensure marine data accuracy.
+            
+            **Format**: `lat,lng` (comma-separated, no spaces)
+            **Example**: `32.881187,-96.929937`
+        - name: spotId
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: ["trinity_river", "cottonwood_lake", "lake_crescent", "jenny_lake", "lake_mcdonald", "white_rock_lake", "lewisville_lake", "merrimack_river", "lake_union", "antero_reservoir", "lake_powell", "jackson_lake", "diablo_lake", "taylor_park", "kens_lake", "colorado_river", "ambazari_lake"]
+            example: "trinity_river"
+          description: |
+            **Pre-configured location identifier for fastest lookup**
+            
+            Using `spotId` provides fastest response times (~150ms) as location data is pre-cached. Get valid `spotId` values from the `paddlingOut` endpoint.
+            
+            **Note**: Provide either coordinates (lat+lng OR location) OR spotId, but not both.
+      responses:
+        '200':
+          description: Successfully retrieved current paddle conditions and rating
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaddleScoreResponse'
+              examples:
+                perfect_conditions:
+                  summary: Perfect Conditions - Colorado High Altitude
+                  description: Example of 5.0 rating with no penalties at high altitude location
+                  value:
+                    success: true
+                    location:
+                      name: "Buena Vista"
+                      coordinates:
+                        latitude: 38.781063
+                        longitude: -106.277812
+                      region: "Colorado"
+                      country: "United States of America"
+                    paddleScore:
+                      rating: 5.0
+                      interpretation: "Excellent - Perfect paddling conditions"
+                      confidence: "high"
+                      mlModelUsed: true
+                      predictionSource: "ml-model"
+                      modelType: "GradientBoostingRegressor"
+                      originalRating: 5.0
+                      penalties: []
+                      totalPenalty: 0.0
+                      roundedTo05Increments: true
+                    conditions:
+                      temperature: 75.2
+                      windSpeed: 5.2
+                      beaufortScale: 2
+                      uvIndex: 6.2
+                      visibility: 18.5
+                      humidity: 42
+                      cloudCover: 15
+                      hasWarnings: false
+                      waveHeight: null
+                      waterTemp: null
+                      marineDataAvailable: false
+                    metadata:
+                      source: "ml-model"
+                      modelType: "GradientBoostingRegressor"
+                      timestamp: "2025-08-23T15:45:22.120Z"
+                      response_time_ms: 247
+                
+                extreme_heat_penalty:
+                  summary: Extreme Heat Penalty - Texas Summer
+                  description: Example showing -1.5 penalty for extreme heat conditions
+                  value:
+                    success: true
+                    location:
+                      name: "Location 32.881187, -96.929937"
+                      coordinates:
+                        latitude: 32.881187
+                        longitude: -96.929937
+                      region: "Texas"
+                      country: "United States of America"
+                    paddleScore:
+                      rating: 2.0
+                      interpretation: "Poor - Difficult conditions"
+                      confidence: "high"
+                      mlModelUsed: true
+                      predictionSource: "ml-model"
+                      modelType: "GradientBoostingRegressor"
+                      originalRating: 3.5
+                      penalties: ["Extreme heat (99.0°F): -1.5"]
+                      totalPenalty: 1.5
+                      roundedTo05Increments: true
+                    conditions:
+                      temperature: 99.0
+                      windSpeed: 2.2
+                      beaufortScale: 1
+                      uvIndex: 9.8
+                      visibility: 21.0
+                      humidity: 33
+                      cloudCover: 25
+                      hasWarnings: true
+                      waveHeight: 0.2
+                      waterTemp: 31.4
+                      marineDataAvailable: true
+                    metadata:
+                      source: "ml-model"
+                      modelType: "GradientBoostingRegressor"
+                      timestamp: "2025-08-23T15:45:22.120Z"
+                      response_time_ms: 252
+                
+                spot_id_lookup:
+                  summary: SpotId Lookup - Fast Cached Response
+                  description: Example using spotId for fastest response
+                  value:
+                    success: true
+                    location:
+                      name: "Trinity River"
+                      coordinates:
+                        latitude: 32.881187
+                        longitude: -96.929937
+                      region: "Texas"
+                      country: "United States of America"
+                    paddleScore:
+                      rating: 3.5
+                      interpretation: "Good - Favorable conditions"
+                      confidence: "high"
+                      mlModelUsed: true
+                      predictionSource: "ml-model"
+                      modelType: "GradientBoostingRegressor"
+                      originalRating: 4.0
+                      penalties: ["High heat (87.0°F): -0.5"]
+                      totalPenalty: 0.5
+                      roundedTo05Increments: true
+                    conditions:
+                      temperature: 87.0
+                      windSpeed: 8.2
+                      beaufortScale: 3
+                      uvIndex: 7.1
+                      marineDataAvailable: true
+                    metadata:
+                      source: "ml-model"
+                      response_time_ms: 158
+        '400':
+          description: Invalid request parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                missing_location:
+                  summary: Missing location parameters
+                  value:
+                    success: false
+                    error: "Invalid input parameters"
+                    details: ["Location required: provide coordinates (lat,lng) or spotId"]
+                    usage:
+                      endpoint: "/paddleScore"
+                      parameters:
+                        location_methods: [
+                          "lat=32.881187&lng=-96.929937 (separate coordinates)",
+                          "location=32.881187,-96.929937 (combined coordinates)",
+                          "spotId=trinity_river (known spot ID)"
+                        ]
+                      examples:
+                        coordinates: "/paddleScore?lat=32.881187&lng=-96.929937"
+                        location_string: "/paddleScore?location=32.881187,-96.929937"
+                        spot_id: "/paddleScore?spotId=trinity_river"
+                invalid_coordinates:
+                  summary: Invalid coordinate values
+                  value:
+                    success: false
+                    error: "Invalid input parameters"
+                    details: ["Latitude must be between -90 and 90"]
+                    usage:
+                      endpoint: "/paddleScore"
+                      examples:
+                        valid_coordinates: "/paddleScore?lat=32.881187&lng=-96.929937"
+        '404':
+          description: SpotId not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                error: "Paddling spot not found"
+                spotId: "invalid_spot"
+                available_via: "/paddlingOut"
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /forecast:
+    get:
+      tags:
+        - forecast
+      operationId: getForecast
+      summary: Generate comprehensive weather forecast with ML predictions (Premium)
+      description: |
+        **🔒 PREMIUM FORECAST API - Advanced comprehensive weather analysis with ML intelligence**
+        
+        This premium endpoint generates comprehensive weather forecasts with ML predictions, used by scheduled jobs and premium users. Results are automatically cached for the `fastForecast` API to serve to frontend applications.
+        
+        ### � Advanced Features
+        - **Comprehensive Analysis**: Detailed weather data with ML-powered paddle predictions
+        - **Auto-Caching**: Results cached for 2 hours to optimize `fastForecast` performance
+        - **Safety Analysis**: Professional safety level assessments with color-coded warnings
+        - **Batch Processing**: Supports scheduled background processing for multiple locations
+        - **Premium Access**: Rate-limited for internal and premium users only
+        
+        ### 🎯 Use Cases
+        - **Scheduled Jobs**: Background forecast generation for popular paddling spots
+        - **Premium Users**: Advanced forecast analysis with detailed ML insights
+        - **Data Pipeline**: Source data for high-performance `fastForecast` endpoint
+        - **Research**: Comprehensive weather-to-paddle correlations
+        
+        ### ⚡ Performance Characteristics
+        - **Rate Limit**: 10 requests per minute (premium tier)
+        - **Processing**: 3-5 seconds for fresh data generation
+        - **Caching**: 2-hour cache lifetime in Firestore
+        - **ML Integration**: Full ML service pipeline with penalty analysis
+        
+        ### 🔄 Relationship to fastForecast
+        This endpoint generates the comprehensive data that powers the ultra-fast `fastForecast` API. Use `forecast` for data generation and analysis, use `fastForecast` for high-performance frontend delivery.
+      parameters:
+        - name: lat
+          in: query
+          required: true
+          schema:
+            type: number
+            format: double
+            minimum: -90.0
+            maximum: 90.0
+            example: 32.881187
+          description: |
+            **Latitude coordinate in decimal degrees**
+            
+            Must be a valid latitude between -90.0 and 90.0.
+            
+            **Example**: `32.881187` (Trinity River, Texas)
+        - name: lng
+          in: query
+          required: true
+          schema:
+            type: number
+            format: double
+            minimum: -180.0
+            maximum: 180.0
+            example: -96.929937
+          description: |
+            **Longitude coordinate in decimal degrees**
+            
+            Must be a valid longitude between -180.0 and 180.0.
+            
+            **Example**: `-96.929937` (Trinity River, Texas)
+      responses:
+        '200':
+          description: Successfully retrieved premium forecast analytics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ForecastResponse'
+              examples:
+                premium_analytics:
+                  summary: Premium Analytics Response - Colorado High Altitude
+                  description: Comprehensive analytics with extended data and marine integration
+                  value:
+                    success: true
+                    data:
+                      location: "38.781063,-106.277812"
+                      locationDetails:
+                        name: "Cottonwood Lake"
+                        region: "Buena Vista, Colorado"
+                        elevation: 10040
+                        timezone: "America/Denver"
+                        coordinates:
+                          latitude: 38.781063
+                          longitude: -106.277812
+                      current:
+                        temperature: 68.2
+                        windSpeed: 6.8
+                        conditions: "Partly Cloudy"
+                        marine:
+                          waveHeight: null
+                          waterTemp: null
+                          available: false
+                        paddleAnalysis:
+                          rating: 4.5
+                          interpretation: "Excellent conditions with minor considerations"
+                          confidence: "high"
+                          factors: ["Optimal temperature", "Light winds", "Good visibility"]
+                      forecast:
+                        - date: "2025-08-23"
+                          summary:
+                            maxTemp: 75.8
+                            minTemp: 52.1
+                            avgWindSpeed: 6.2
+                            precipitation: 0.0
+                            paddleWindow: "Excellent all day"
+                            bestRating: 5.0
+                            avgRating: 4.6
+                            conditions: "Mostly sunny"
+                          hourly:
+                            - hour: "08:00"
+                              temperature: 62.1
+                              windSpeed: 4.2
+                              windDirection: "SW"
+                              humidity: 35
+                              cloudCover: 15
+                              uvIndex: 2.8
+                              visibility: 25
+                              beaufortScale: 2
+                              prediction:
+                                rating: 4.5
+                                originalRating: 4.5
+                                penaltiesApplied: []
+                                totalPenalty: 0.0
+                                mlModelUsed: true
+                      analytics:
+                        historicalComparison:
+                          avgRatingThisTimeLastYear: 4.2
+                          temperatureTrend: "2.3°F above average"
+                          windTrend: "15% calmer than typical"
+                        seasonalContext:
+                          season: "Late Summer"
+                          optimalMonths: ["June", "July", "August", "September"]
+                          currentRanking: "Excellent (top 15%)"
+                        riskAssessment:
+                          overallRisk: "Low"
+                          primaryConcerns: []
+                          recommendations: ["Ideal conditions for all skill levels"]
+                    metadata:
+                      generated: "2025-08-23T15:45:22.120Z"
+                      cached_until: "2025-08-23T16:45:22.120Z"
+                      source: "premium-forecast-v2.1"
+                      processingTimeMs: 2847
+                      dataFreshness: "live"
+                      modelVersion: "enterprise-ml-v2.1.0"
+                      billingTier: "premium"
+        '401':
+          description: Authentication required or invalid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                missing_api_key:
+                  summary: Missing API Key
+                  value:
+                    success: false
+                    error: "Authentication required"
+                    code: "MISSING_API_KEY"
+                    details: "X-API-Key header is required for premium endpoints"
+                    suggestion: "Contact api-support@kaayko.com for enterprise access"
+                    timestamp: "2025-08-23T15:45:22.120Z"
+                invalid_api_key:
+                  summary: Invalid API Key
+                  value:
+                    success: false
+                    error: "Invalid authentication"
+                    code: "INVALID_API_KEY"
+                    details: "The provided API key is invalid or expired"
+                    suggestion: "Verify your API key or contact support for renewal"
+                    timestamp: "2025-08-23T15:45:22.120Z"
+        '403':
+          description: Access forbidden - insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                error: "Access forbidden"
+                code: "INSUFFICIENT_PERMISSIONS"
+                details: "Your account does not have access to premium endpoints"
+                suggestion: "Upgrade to enterprise plan for premium API access"
+                timestamp: "2025-08-23T15:45:22.120Z"
+        '429':
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                error: "Rate limit exceeded"
+                code: "PREMIUM_RATE_LIMIT_EXCEEDED"
+                details: "Premium tier allows 100 requests per hour"
+                retryAfter: 1247
+                timestamp: "2025-08-23T15:45:22.120Z"
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: |
+        **Enterprise API Key Authentication**
+        
+        Contact api-support@kaayko.com for enterprise access and API key provisioning.
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        **OAuth 2.0 Bearer Token Authentication**
+        
+        For service-to-service authentication and enterprise integrations.
+
+  parameters:
+    LatitudeParam:
+      name: lat
+      in: query
+      required: true
+      schema:
+        type: number
+        format: double
+        minimum: -90.0
+        maximum: 90.0
+      description: Latitude coordinate in decimal degrees
+      example: 32.881187
+    
+    LongitudeParam:
+      name: lng
+      in: query
+      required: true
+      schema:
+        type: number
+        format: double
+        minimum: -180.0
+        maximum: 180.0
+      description: Longitude coordinate in decimal degrees
+      example: -96.929937
+
+  schemas:
+    PaddlingLocation:
+      type: object
+      title: Paddling Location Details
+      description: Complete information about a paddling location including coordinates, amenities, and media
+      required:
+        - id
+        - title
+        - location
+      properties:
+        id:
+          type: string
+          description: Unique location identifier for API references
+          pattern: '^[a-z0-9_]+$'
+          example: "trinity_river"
+        title:
+          type: string
+          description: Human-readable location name
+          minLength: 3
+          maxLength: 100
+          example: "Trinity River"
+        subtitle:
+          type: string
+          description: Location context and geographical details
+          maxLength: 200
+          example: "Irving, Texas"
+        text:
+          type: string
+          description: Paddling description, tips, and local insights
+          maxLength: 500
+          example: "Solitude, birds and a good workout with consistent flow year-round"
+        location:
+          type: object
+          title: GPS Coordinates
+          description: Precise GPS coordinates for navigation and API calls
+          required:
+            - latitude
+            - longitude
+          properties:
+            latitude:
+              type: number
+              format: double
+              minimum: -90.0
+              maximum: 90.0
+              description: Latitude in decimal degrees (WGS84)
+              example: 32.881187
+            longitude:
+              type: number
+              format: double  
+              minimum: -180.0
+              maximum: 180.0
+              description: Longitude in decimal degrees (WGS84)
+              example: -96.929937
+        difficulty:
+          type: string
+          description: Paddling difficulty assessment
+          enum: ["Easy", "Easy to Moderate", "Moderate", "Moderate to Advanced", "Advanced", "Expert"]
+          example: "Easy to Moderate"
+        elevation:
+          type: integer
+          description: Elevation above sea level in feet
+          minimum: -100
+          maximum: 15000
+          example: 450
+        features:
+          type: array
+          description: Key location features and characteristics
+          items:
+            type: string
+          maxItems: 10
+          example: ["Urban wildlife", "Year-round access", "Calm waters", "Scenic views"]
+        parkingAvl:
+          type: boolean
+          description: Parking facilities available
+          example: true
+        restroomsAvl:
+          type: boolean
+          description: Restroom facilities available
+          example: true
+        permits_required:
+          type: boolean
+          description: Whether permits or fees are required
+          default: false
+          example: false
+        youtubeURL:
+          type: string
+          format: uri
+          description: Instructional or promotional YouTube video URL
+          pattern: '^https://(www\.)?youtube\.com/watch\?v=.+$'
+          example: "https://youtube.com/watch?v=trinity_river_guide"
+        imgSrc:
+          type: array
+          description: High-resolution location images
+          items:
+            type: string
+            format: uri
+            description: Direct URL to location image
+          maxItems: 5
+          example: 
+            - "https://kaayko.com/images/trinity_river_aerial.jpg"
+            - "https://kaayko.com/images/trinity_river_launch.jpg"
+        amenities:
+          type: object
+          description: Additional amenity details
+          properties:
+            picnicTables:
+              type: boolean
+              example: true
+            grillsAvailable:
+              type: boolean
+              example: false
+            shadedAreas:
+              type: boolean
+              example: true
+            rentalEquipment:
+              type: boolean
+              example: false
+
+    FastForecastResponse:
+      type: object
+      title: Fast Forecast Response
+      description: High-performance 3-day forecast with ML paddle predictions and marine data
+      required:
+        - success
+        - location
+        - forecast
+        - metadata
+      properties:
+        success:
+          type: boolean
+          description: Request success indicator
+          example: true
+        location:
+          type: object
+          title: Location Information
+          description: Detailed location context and geographical information
+          required:
+            - name
+            - region
+            - country
+            - coordinates
+          properties:
+            name:
+              type: string
+              description: City or locality name
+              example: "Irving"
+            region:
+              type: string
+              description: State or province
+              example: "Texas"
+            country:
+              type: string
+              description: Country name
+              example: "United States of America"
+            coordinates:
+              type: object
+              description: Exact coordinates used for forecast
+              required:
+                - latitude
+                - longitude
+              properties:
+                latitude:
+                  type: number
+                  format: double
+                  description: Latitude in decimal degrees
+                  example: 32.881187
+                longitude:
+                  type: number
+                  format: double
+                  description: Longitude in decimal degrees
+                  example: -96.929937
+            elevation:
+              type: integer
+              description: Elevation above sea level in feet
+              example: 450
+            timezone:
+              type: string
+              description: IANA timezone identifier
+              example: "America/Chicago"
+        forecast:
+          type: array
+          description: 3 days of comprehensive hourly forecasts with ML predictions
+          minItems: 1
+          maxItems: 3
+          items:
+            type: object
+            title: Daily Forecast
+            description: Complete daily forecast with hourly breakdown and summary
+            required:
+              - date
+              - hourly
+            properties:
+              date:
+                type: string
+                format: date
+                description: Forecast date in YYYY-MM-DD format
+                example: "2025-08-23"
+              summary:
+                type: object
+                title: Daily Summary
+                description: Daily aggregated forecast metrics and insights
+                properties:
+                  maxTemp:
+                    type: number
+                    format: float
+                    description: Maximum temperature for the day
+                    example: 95.2
+                  minTemp:
+                    type: number
+                    format: float
+                    description: Minimum temperature for the day
+                    example: 78.8
+                  avgWindSpeed:
+                    type: number
+                    format: float
+                    description: Average wind speed for the day
+                    example: 6.8
+                  precipitation:
+                    type: number
+                    format: float
+                    description: Total precipitation in inches
+                    example: 0.0
+                  paddleWindow:
+                    type: string
+                    description: Recommended paddling time window
+                    example: "Early morning (6-9 AM) and evening (5-7 PM)"
+                  bestRating:
+                    type: number
+                    format: float
+                    multipleOf: 0.5
+                    minimum: 1.0
+                    maximum: 5.0
+                    description: Highest paddle rating for the day
+                    example: 4.0
+                  avgRating:
+                    type: number
+                    format: float
+                    description: Average paddle rating for the day
+                    example: 3.2
+                  conditions:
+                    type: string
+                    description: General weather conditions summary
+                    example: "Hot and sunny with light winds"
+              hourly:
+                type: object
+                description: Hourly forecast data keyed by hour (00-23)
+                additionalProperties:
+                  $ref: '#/components/schemas/HourlyForecast'
+                example:
+                  "08":
+                    temperature: 82.4
+                    windSpeed: 4.2
+                    rating: 4.0
+                  "15":
+                    temperature: 99.2
+                    windSpeed: 1.8
+                    rating: 2.0
+        metadata:
+          type: object
+          title: Response Metadata
+          description: Processing information and API performance metrics
+          required:
+            - processingTimeMs
+            - responseTime
+            - cached
+          properties:
+            processingTimeMs:
+              type: integer
+              description: Total processing time in milliseconds
+              minimum: 0
+              example: 3833
+            responseTime:
+              type: string
+              description: Human-readable response time
+              pattern: '^\d+(\.\d+)?(ms|s)$'
+              example: "3.83s"
+            cached:
+              type: boolean
+              description: Whether response was served from cache
+              example: false
+            cacheAge:
+              type: string
+              description: Age of cached data (if applicable)
+              example: "14 minutes"
+            mlServiceUrl:
+              type: string
+              format: uri
+              description: Production ML service endpoint used
+              example: "https://kaayko-ml-service-87383373015.us-central1.run.app"
+            dataFreshness:
+              type: string
+              description: Data freshness indicator
+              enum: ["live", "cached", "stale"]
+              example: "live"
+            totalHours:
+              type: integer
+              description: Total hours of forecast data provided
+              example: 72
+            apiVersion:
+              type: string
+              description: API version used for processing
+              example: "2.1.0"
+
+    HourlyForecast:
+      type: object
+      title: Hourly Forecast Data
+      description: Comprehensive hourly weather conditions with ML paddle predictions and safety analysis
+      required:
+        - temperature
+        - windSpeed
+        - rating
+        - prediction
+      properties:
+        # Core Weather Conditions
+        temperature:
+          type: number
+          format: float
+          description: Temperature in specified units (Fahrenheit default)
+          example: 36.2
+        temperatureUnit:
+          type: string
+          description: Temperature unit
+          enum: ["fahrenheit", "celsius"]
+          default: "fahrenheit"
+          example: "fahrenheit"
+        windSpeed:
+          type: number
+          format: float
+          description: Wind speed in specified units (MPH default)
+          minimum: 0
+          example: 1.9
+        windSpeedUnit:
+          type: string
+          description: Wind speed unit
+          enum: ["mph", "kph", "knots"]
+          default: "mph"
+          example: "mph"
+        windDirection:
+          type: string
+          description: Wind direction (cardinal/intercardinal)
+          pattern: '^(N|NE|E|SE|S|SW|W|NW|NNE|ENE|ESE|SSE|SSW|WSW|WNW|NNW)$'
+          example: "E"
+        gustSpeed:
+          type: number
+          format: float
+          description: Wind gust speed in specified units
+          minimum: 0
+          example: 2.47
+        
+        # Atmospheric Conditions
+        humidity:
+          type: integer
+          description: Relative humidity percentage
+          minimum: 0
+          maximum: 100
+          example: 39
+        cloudCover:
+          type: integer
+          description: Cloud cover percentage
+          minimum: 0
+          maximum: 100
+          example: 73
+        uvIndex:
+          type: number
+          format: float
+          description: UV index (0-16 scale)
+          minimum: 0
+          maximum: 16
+          example: 8.3
+        uvCategory:
+          type: string
+          description: UV risk category
+          enum: ["Low", "Moderate", "High", "Very High", "Extreme"]
+          example: "Very High"
+        visibility:
+          type: number
+          format: float
+          description: Visibility in specified units (miles default)
+          minimum: 0
+          example: 10.0
+        visibilityUnit:
+          type: string
+          enum: ["miles", "kilometers"]
+          default: "miles"
+          example: "miles"
+        
+        # Safety and Warnings
+        hasWarnings:
+          type: boolean
+          description: Whether any safety warnings are present
+          example: true
+        warnings:
+          type: array
+          description: Safety warnings based on current conditions
+          items:
+            type: string
+            description: Specific safety warning message
+          maxItems: 10
+          example: 
+            - "DANGER: High UV (8.3) - seek shade/shelter"
+            - "CAUTION: Minimal wind - poor cooling effect"
+        
+        # Wind Analysis
+        beaufortScale:
+          type: integer
+          description: Beaufort wind scale (0-12)
+          minimum: 0
+          maximum: 12
+          example: 0
+        beaufortDescription:
+          type: string
+          description: Beaufort scale description
+          enum: ["Calm", "Light air", "Light breeze", "Gentle breeze", "Moderate breeze", "Fresh breeze", "Strong breeze", "High wind", "Gale", "Severe gale", "Storm", "Violent storm", "Hurricane"]
+          example: "Calm"
+        
+        # Marine Data
+        waveHeight:
+          type: number
+          format: float
+          description: Wave height in meters (from marine data sources)
+          minimum: 0
+          nullable: true
+          example: 0.1
+        waterTemp:
+          type: number
+          format: float
+          description: Water temperature in Celsius (from marine data)
+          nullable: true
+          example: 28.2
+        marineDataAvailable:
+          type: boolean
+          description: Whether real marine data was available for this forecast
+          example: true
+        tidalInfo:
+          type: object
+          description: Tidal information (when available)
+          nullable: true
+          properties:
+            currentTide:
+              type: string
+              enum: ["rising", "falling", "high", "low"]
+              example: "rising"
+            nextTideTime:
+              type: string
+              format: time
+              example: "14:30"
+            nextTideType:
+              type: string
+              enum: ["high", "low"]
+              example: "high"
+        
+        # ML Prediction and Rating
+        prediction:
+          $ref: '#/components/schemas/EnhancedMLPrediction'
+        rating:
+          type: number
+          format: float
+          description: Overall paddle rating (1.0-5.0, 0.5 increments only)
+          minimum: 1.0
+          maximum: 5.0
+          multipleOf: 0.5
+          example: 3.0
+        
+        # Model Information
+        mlModelUsed:
+          type: boolean
+          description: Whether the production ML model was successfully used
+          example: true
+        predictionSource:
+          type: string
+          description: Source of the prediction
+          enum: ["ml-model", "fallback", "cached", "interpolated"]
+          example: "ml-model"
+        
+        # Timing Information  
+        localTime:
+          type: string
+          format: time
+          description: Local time for this forecast hour
+          example: "21:00"
+        utcTime:
+          type: string
+          format: date-time
+          description: UTC timestamp for this forecast hour
+          example: "2025-08-23T02:00:00Z"
+
+    EnhancedMLPrediction:
+      type: object
+      title: Enhanced ML Prediction Analysis
+      description: Comprehensive machine learning prediction with transparent penalty system and confidence metrics
+      required:
+        - rating
+        - originalRating
+        - penaltiesApplied
+        - totalPenalty
+        - mlModelUsed
+        - predictionSource
+      properties:
+        rating:
+          type: number
+          format: float
+          minimum: 1.0
+          maximum: 5.0
+          multipleOf: 0.5
+          description: |
+            **Final ML-predicted paddle rating (0.5 increments only)**
+            
+            This is the final rating after applying all penalties and rounding to 0.5 increments. 
+            Possible values: 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0
+          example: 3.0
+        originalRating:
+          type: number
+          format: float
+          minimum: 1.0
+          maximum: 5.0
+          description: |
+            **Base ML rating before penalty system application**
+            
+            Raw machine learning model output before safety penalties and adjustments.
+          example: 5.0
+        penaltiesApplied:
+          type: array
+          description: |
+            **Detailed breakdown of all penalties applied to the original rating**
+            
+            Each penalty includes the condition that triggered it and the exact point deduction.
+          items:
+            type: string
+            description: Human-readable penalty description with specific values and deduction
+            pattern: '^.+: -\d+(\.\d+)?$'
+          maxItems: 10
+          example: 
+            - "Extreme heat (97.2°F): -1.5"
+            - "High UV (8.3): -0.5"
+        totalPenalty:
+          type: number
+          format: float
+          minimum: 0.0
+          description: |
+            **Total penalty points deducted from original rating**
+            
+            Sum of all individual penalties applied to the base ML prediction.
+          example: 2.0
+        penaltyBreakdown:
+          type: object
+          description: Structured breakdown of penalty categories
+          properties:
+            temperaturePenalty:
+              type: number
+              format: float
+              minimum: 0.0
+              description: Penalty applied for temperature extremes
+              example: 1.5
+            uvPenalty:
+              type: number
+              format: float
+              minimum: 0.0
+              description: Penalty applied for high UV index
+              example: 0.5
+            windPenalty:
+              type: number
+              format: float
+              minimum: 0.0
+              description: Penalty applied for strong winds
+              example: 0.0
+            visibilityPenalty:
+              type: number
+              format: float
+              minimum: 0.0
+              description: Penalty applied for poor visibility
+              example: 0.0
+        roundedTo05Increments:
+          type: boolean
+          description: |
+            **Confirms rating was forced to 0.5 increments**
+            
+            Always true - ensures API consumers that ratings follow the 0.5 increment rule.
+          example: true
+        mlModelUsed:
+          type: boolean
+          description: |
+            **Whether the production ML model was successfully used**
+            
+            False indicates fallback to rule-based system due to ML service unavailability.
+          example: true
+        predictionSource:
+          type: string
+          description: |
+            **Source system that generated this prediction**
+            
+            Helps track prediction quality and debugging when needed.
+          enum: ["ml-model", "fallback", "cached", "interpolated"]
+          example: "ml-model"
+        confidence:
+          type: object
+          description: Prediction confidence metrics
+          properties:
+            level:
+              type: string
+              enum: ["low", "medium", "high"]
+              description: Overall confidence in the prediction
+              example: "high"
+            score:
+              type: number
+              format: float
+              minimum: 0.0
+              maximum: 1.0
+              description: Numerical confidence score (0.0-1.0)
+              example: 0.92
+            factors:
+              type: array
+              items:
+                type: string
+              description: Factors contributing to confidence level
+              example: ["Complete weather data", "Marine data available", "Historical validation"]
+        modelMetadata:
+          type: object
+          description: ML model information and performance metrics
+          properties:
+            modelVersion:
+              type: string
+              description: Version of the ML model used
+              example: "GradientBoostingRegressor-v2.1.0"
+            trainingDate:
+              type: string
+              format: date
+              description: Date the model was last trained
+              example: "2025-08-15"
+            features:
+              type: array
+              items:
+                type: string
+              description: Features used by the ML model
+              example: ["temperature", "windSpeed", "uvIndex", "visibility", "humidity", "waveHeight", "waterTemp"]
+            predictionTime:
+              type: number
+              format: float
+              description: Time taken to generate prediction in milliseconds
+              example: 23.7
+
+    PaddleScoreResponse:
+      type: object
+      title: Paddle Score Response
+      description: Real-time paddle condition assessment with ML-powered safety rating and comprehensive environmental analysis
+      required:
+        - success
+        - location
+        - paddleScore
+        - conditions
+        - metadata
+      properties:
+        success:
+          type: boolean
+          description: Request success indicator
+          example: true
+        location:
+          type: object
+          title: Location Context
+          description: Detailed location information and geographical context
+          required:
+            - name
+            - coordinates
+          properties:
+            name:
+              type: string
+              description: City or locality name
+              maxLength: 100
+              example: "Irving"
+            coordinates:
+              type: object
+              description: Exact coordinates used for assessment
+              required:
+                - latitude
+                - longitude
+              properties:
+                latitude:
+                  type: number
+                  format: double
+                  description: Latitude in decimal degrees (WGS84)
+                  example: 32.881187
+                longitude:
+                  type: number
+                  format: double
+                  description: Longitude in decimal degrees (WGS84)
+                  example: -96.929937
+            region:
+              type: string
+              description: State, province, or administrative region
+              example: "Texas"
+            country:
+              type: string
+              description: Country name
+              example: "United States of America"
+            elevation:
+              type: integer
+              description: Elevation above sea level in feet
+              example: 450
+            timezone:
+              type: string
+              description: IANA timezone identifier
+              example: "America/Chicago"
+        paddleScore:
+          type: object
+          title: ML Paddle Assessment
+          description: Machine learning-powered paddle safety assessment with detailed analysis
+          required:
+            - rating
+            - interpretation
+            - confidence
+          properties:
+            rating:
+              type: number
+              format: float
+              minimum: 1.0
+              maximum: 5.0
+              multipleOf: 0.5
+              description: |
+                **Final ML paddle rating (0.5 increments only)**
+                
+                Scale: 1.0=Dangerous, 1.5=Difficult, 2.0=Poor, 2.5=Below Average, 3.0=Fair, 
+                3.5=Good, 4.0=Very Good, 4.5=Excellent, 5.0=Perfect
+              example: 2.0
+            interpretation:
+              type: string
+              description: Human-readable rating interpretation with skill level guidance
+              maxLength: 200
+              example: "Poor - Difficult conditions, experienced paddlers only"
+            confidence:
+              type: string
+              description: Confidence level in the ML prediction
+              enum: ["low", "medium", "high"]
+              example: "high"
+            modelUsed:
+              type: string
+              description: ML model identifier used for prediction
+              example: "production-ml-v2.1"
+            originalRating:
+              type: number
+              format: float
+              description: Base ML rating before penalty system application
+              minimum: 1.0
+              maximum: 5.0
+              example: 3.5
+            penaltiesApplied:
+              type: array
+              description: Detailed breakdown of all penalties applied
+              items:
+                type: string
+                pattern: '^.+: -\d+(\.\d+)?$'
+              example: ["Extreme heat (99.0°F): -1.5"]
+            totalPenalty:
+              type: number
+              format: float
+              minimum: 0.0
+              description: Total penalty points deducted from original rating
+              example: 1.5
+            roundedTo05Increments:
+              type: boolean
+              description: Confirms rating follows 0.5 increment rule
+              example: true
+        conditions:
+          type: object
+          title: Current Environmental Conditions
+          description: Comprehensive current weather and marine conditions with safety analysis
+          required:
+            - temperature
+            - windSpeed
+            - hasWarnings
+          properties:
+            # Temperature
+            temperature:
+              type: number
+              format: float
+              description: Current temperature in specified units
+              example: 99.0
+            temperatureUnit:
+              type: string
+              enum: ["fahrenheit", "celsius"]
+              default: "fahrenheit"
+              example: "fahrenheit"
+            feelsLike:
+              type: number
+              format: float
+              description: Apparent temperature accounting for humidity and wind
+              example: 105.2
+            
+            # Wind Conditions
+            windSpeed:
+              type: number
+              format: float
+              minimum: 0
+              description: Current wind speed in specified units
+              example: 2.2
+            windSpeedUnit:
+              type: string
+              enum: ["mph", "kph", "knots"]
+              default: "mph"
+              example: "mph"
+            windDirection:
+              type: string
+              description: Wind direction (cardinal/intercardinal)
+              example: "S"
+            gustSpeed:
+              type: number
+              format: float
+              minimum: 0
+              description: Wind gust speed in specified units
+              example: 4.1
+            beaufortScale:
+              type: integer
+              minimum: 0
+              maximum: 12
+              description: Beaufort wind scale rating
+              example: 1
+            beaufortDescription:
+              type: string
+              description: Beaufort scale interpretation
+              example: "Light air"
+            
+            # Atmospheric Conditions
+            uvIndex:
+              type: number
+              format: float
+              minimum: 0
+              maximum: 16
+              description: Current UV index
+              example: 9.8
+            uvCategory:
+              type: string
+              enum: ["Low", "Moderate", "High", "Very High", "Extreme"]
+              example: "Very High"
+            visibility:
+              type: number
+              format: float
+              minimum: 0
+              description: Visibility distance in specified units
+              example: 21.0
+            visibilityUnit:
+              type: string
+              enum: ["miles", "kilometers"]
+              default: "miles"
+              example: "miles"
+            humidity:
+              type: integer
+              minimum: 0
+              maximum: 100
+              description: Relative humidity percentage
+              example: 33
+            cloudCover:
+              type: integer
+              minimum: 0
+              maximum: 100
+              description: Cloud cover percentage
+              example: 25
+            
+            # Safety Warnings
+            hasWarnings:
+              type: boolean
+              description: Whether any safety warnings are active
+              example: true
+            warnings:
+              type: array
+              description: Active safety warnings and advisories
+              items:
+                type: string
+                description: Specific safety warning message
+              example: 
+                - "DANGER: Extreme heat (99°F) - high risk of heat exhaustion"
+                - "CAUTION: Very high UV (9.8) - use maximum sun protection"
+            
+            # Marine Data
+            waveHeight:
+              type: number
+              format: float
+              minimum: 0
+              description: Current wave height in meters (from marine data)
+              nullable: true
+              example: 0.2
+            waterTemp:
+              type: number
+              format: float
+              description: Water temperature in Celsius (from marine data)
+              nullable: true
+              example: 31.4
+            marineDataAvailable:
+              type: boolean
+              description: Whether real marine data was used
+              example: true
+            
+            # Additional Metrics
+            dewPoint:
+              type: number
+              format: float
+              description: Dew point temperature
+              example: 72.1
+            pressure:
+              type: number
+              format: float
+              description: Atmospheric pressure in inches of mercury
+              example: 29.92
+            pressureUnit:
+              type: string
+              enum: ["inHg", "hPa", "mmHg"]
+              default: "inHg"
+              example: "inHg"
+        metadata:
+          type: object
+          title: Response Metadata
+          description: Processing information, model details, and performance metrics
+          required:
+            - timestamp
+            - source
+            - responseTimeMs
+          properties:
+            source:
+              type: string
+              description: Prediction data source
+              enum: ["ml-model", "fallback", "cached"]
+              example: "ml-model"
+            modelType:
+              type: string
+              description: ML model algorithm used
+              example: "GradientBoostingRegressor"
+            modelVersion:
+              type: string
+              description: Specific model version identifier
+              example: "v2.1.0-production"
+            timestamp:
+              type: string
+              format: date-time
+              description: UTC timestamp when assessment was generated
+              example: "2025-08-23T15:45:22.120Z"
+            responseTimeMs:
+              type: integer
+              minimum: 0
+              description: Total processing time in milliseconds
+              example: 247
+            cacheHit:
+              type: boolean
+              description: Whether response was served from cache
+              example: false
+            dataAge:
+              type: string
+              description: Age of the weather data used
+              example: "5 minutes"
+            mlServiceHealth:
+              type: string
+              enum: ["healthy", "degraded", "offline"]
+              description: Status of the ML prediction service
+              example: "healthy"
+
+    ForecastResponse:
+      type: object
+      description: Premium comprehensive forecast response
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            location:
+              type: string
+              example: "38.781063,-106.277812"  
+            current:
+              type: object
+              description: Current conditions with paddle analysis
+              properties:
+                temperature:
+                  type: number
+                  description: Current temperature
+                windSpeed:
+                  type: number
+                  description: Current wind speed
+                conditions:
+                  type: string
+                  description: Weather conditions
+                paddleAnalysis:
+                  type: object
+                  description: Paddle condition analysis
+                  properties:
+                    rating:
+                      type: number
+                      minimum: 1
+                      maximum: 5
+                      multipleOf: 0.5
+                    interpretation:
+                      type: string
+            forecast:
+              type: array
+              description: Extended forecast with detailed analysis
+              items:
+                type: object
+                properties:
+                  date:
+                    type: string
+                    format: date
+                  summary:
+                    type: object
+                    properties:
+                      maxTemp:
+                        type: number
+                      minTemp:
+                        type: number
+                      avgWindSpeed:
+                        type: number
+                      precipitation:
+                        type: number
+                      paddleWindow:
+                        type: string
+                      bestRating:
+                        type: number
+                      avgRating:
+                        type: number
+                  hourly:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/HourlyForecast'
+        metadata:
+          type: object
+          properties:
+            generated:
+              type: string
+              format: date-time
+            cached_until:
+              type: string
+              format: date-time
+            source:
+              type: string
+              example: "scheduled-forecast"
+
+    PaddleSummary:
+      type: object
+      title: ML Paddle Prediction Summary
+      description: Comprehensive paddle condition analysis from ML service
+      required:
+        - score
+        - mlRating
+        - interpretation
+        - wind_mph
+        - temp_f
+        - factors
+        - mlModelUsed
+        - predictionSource
+      properties:
+        score:
+          type: number
+          format: double
+          minimum: 0.0
+          maximum: 1.0
+          description: Normalized paddle score (0-1 scale for UI compatibility)
+          example: 0.85
+        mlRating:
+          type: number
+          format: double
+          minimum: 1.0
+          maximum: 5.0
+          description: Original ML rating on 1-5 scale with 0.5 increments
+          example: 4.5
+        interpretation:
+          type: string
+          enum: ["excellent", "good", "fair", "poor"]
+          description: Human-readable interpretation of paddle conditions
+          example: "excellent"
+        wind_mph:
+          type: number
+          format: double
+          minimum: 0.0
+          description: Wind speed in miles per hour
+          example: 8.2
+        temp_f:
+          type: number
+          format: double
+          description: Temperature in Fahrenheit
+          example: 78.4
+        factors:
+          type: object
+          description: Categorized environmental factors
+          required: ["wind", "temperature", "weather"]
+          properties:
+            wind:
+              type: string
+              enum: ["low", "moderate", "high"]
+              example: "moderate"
+            temperature:
+              type: string
+              enum: ["cold", "comfortable", "warm"]
+              example: "warm"
+            weather:
+              type: string
+              description: Current weather conditions text
+              example: "Partly cloudy"
+        mlModelUsed:
+          type: boolean
+          description: Whether ML model was successfully used for prediction
+          example: true
+        predictionSource:
+          type: string
+          enum: ["ml-model", "fallback-rules"]
+          description: Source of the prediction (ML model or fallback rules)
+          example: "ml-model"
+        confidence:
+          type: number
+          format: double
+          minimum: 0.0
+          maximum: 1.0
+          description: Prediction confidence level (0-1 scale)
+          example: 0.92
+
+    SafetyLevel:
+      type: object
+      title: Safety Level Assessment
+      description: Professional safety level analysis with color-coded warnings
+      required:
+        - level
+        - color
+        - warning
+      properties:
+        level:
+          type: string
+          enum: ["excellent", "moderate", "caution", "dangerous"]
+          description: Overall safety level classification
+          example: "excellent"
+        color:
+          type: string
+          pattern: '^#[0-9a-fA-F]{6}$'
+          description: Hex color code for UI display
+          example: "#44ff44"
+        warning:
+          type: string
+          maxLength: 200
+          description: Safety warning or condition description
+          example: "Perfect for paddling"
+
+    ErrorResponse:
+      type: object
+      title: Error Response
+      description: Standardized error response format with detailed debugging information
+      required:
+        - success
+        - error
+        - code
+        - timestamp
+      properties:
+        success:
+          type: boolean
+          description: Request success indicator (always false for errors)
+          example: false
+        error:
+          type: string
+          description: Human-readable error message
+          maxLength: 200
+          example: "Invalid coordinates"
+        code:
+          type: string
+          description: Machine-readable error code for programmatic handling
+          pattern: '^[A-Z_]+$'
+          example: "INVALID_COORDINATES"
+        details:
+          type: string
+          description: Additional technical details about the error
+          maxLength: 500
+          example: "Latitude must be between -90.0 and 90.0, longitude must be between -180.0 and 180.0"
+        suggestion:
+          type: string
+          description: Helpful suggestion for resolving the error
+          maxLength: 300
+          example: "Use coordinates from paddlingOut API for accurate marine data"
+        timestamp:
+          type: string
+          format: date-time
+          description: UTC timestamp when error occurred
+          example: "2025-08-23T15:45:22.120Z"
+        requestId:
+          type: string
+          description: Unique identifier for this request (for support purposes)
+          pattern: '^[a-f0-9-]+$'
+          example: "req_8f9e2d1a-4b5c-6789-01ef-234567890abc"
+        retryAfter:
+          type: integer
+          minimum: 0
+          description: Seconds to wait before retrying (for rate limit errors)
+          example: 60
+        supportUrl:
+          type: string
+          format: uri
+          description: URL for additional support or documentation
+          example: "https://kaayko.com/docs/api/errors#invalid-coordinates"
+
+  examples:
+    # Perfect Conditions Examples
+    PerfectConditionsColorado:
+      summary: Perfect Conditions - High Altitude Colorado
+      description: Example of ideal paddling conditions with 5.0 rating
+      value:
+        success: true
+        location:
+          name: "Buena Vista"
+          coordinates:
+            latitude: 38.781063
+            longitude: -106.277812
+          region: "Colorado"
+          elevation: 10040
+        paddleScore:
+          rating: 5.0
+          interpretation: "Perfect - Ideal conditions for all skill levels"
+          originalRating: 5.0
+          penaltiesApplied: []
+          totalPenalty: 0.0
+        conditions:
+          temperature: 75.2
+          windSpeed: 5.2
+          beaufortScale: 2
+          uvIndex: 6.2
+          hasWarnings: false
+          marineDataAvailable: false
+
+    # Extreme Heat Examples
+    ExtremeHeatTexas:
+      summary: Extreme Heat Penalties - Texas Summer
+      description: Shows -1.5 penalty for extreme heat conditions
+      value:
+        success: true
+        location:
+          name: "Irving"
+          coordinates:
+            latitude: 32.881187
+            longitude: -96.929937
+          region: "Texas"
+        paddleScore:
+          rating: 2.0
+          interpretation: "Poor - Difficult conditions, experienced paddlers only"
+          originalRating: 3.5
+          penaltiesApplied: ["Extreme heat (99.0°F): -1.5"]
+          totalPenalty: 1.5
+        conditions:
+          temperature: 99.0
+          windSpeed: 2.2
+          hasWarnings: true
+          warnings: ["DANGER: Extreme heat (99°F) - high risk of heat exhaustion"]
+          waveHeight: 0.2
+          waterTemp: 31.4
+          marineDataAvailable: true
+
+    # Multiple Penalties Example
+    MultiplePenaltiesDesert:
+      summary: Multiple Penalties - Desert Conditions
+      description: Combined heat, UV, and wind penalties
+      value:
+        success: true
+        location:
+          name: "Page"
+          coordinates:
+            latitude: 37.01513
+            longitude: -111.536362
+          region: "Utah"
+        paddleScore:
+          rating: 1.5
+          interpretation: "Difficult - Hazardous conditions, high skill required"
+          originalRating: 4.0
+          penaltiesApplied: [
+            "Extreme heat (102.0°F): -1.5",
+            "Dangerous UV (11.0): -1.0"
+          ]
+          totalPenalty: 2.5
+        conditions:
+          temperature: 102.0
+          windSpeed: 28.5
+          beaufortScale: 6
+          uvIndex: 11.0
+          hasWarnings: true
+          warnings: [
+            "DANGER: Extreme heat (102°F) - heat stroke risk",
+            "DANGER: Extreme UV (11.0) - severe burn risk in minutes"
+          ]
+
+    # Fast Forecast Examples  
+    FastForecastPerfect:
+      summary: Fast Forecast - Perfect Mountain Conditions
+      description: 3-day forecast with excellent conditions
+      value:
+        success: true
+        location:
+          name: "Buena Vista"
+          region: "Colorado"
+          coordinates:
+            latitude: 38.781063
+            longitude: -106.277812
+        forecast:
+          - date: "2025-08-23"
+            summary:
+              maxTemp: 78.2
+              minTemp: 52.1
+              avgWindSpeed: 6.8
+              paddleWindow: "Excellent all day"
+              bestRating: 5.0
+              avgRating: 4.7
+            hourly:
+              "08":
+                temperature: 65.8
+                windSpeed: 4.2
+                uvIndex: 3.2
+                rating: 5.0
+                prediction:
+                  rating: 5.0
+                  originalRating: 5.0
+                  penaltiesApplied: []
+                  totalPenalty: 0.0
+        metadata:
+          processingTimeMs: 3247
+          cached: false
+          mlServiceUrl: "https://kaayko-ml-service-87383373015.us-central1.run.app"
+
+    # Error Examples
+    InvalidCoordinates:
+      summary: Invalid Coordinates Error
+      value:
+        success: false
+        error: "Invalid coordinates"
+        code: "INVALID_COORDINATES"
+        details: "Latitude must be between -90.0 and 90.0"
+        suggestion: "Use coordinates from paddlingOut API"
+        timestamp: "2025-08-23T15:45:22.120Z"
+
+    RateLimitExceeded:
+      summary: Rate Limit Error
+      value:
+        success: false
+        error: "Rate limit exceeded"
+        code: "RATE_LIMIT_EXCEEDED"
+        details: "Maximum 10 requests per minute exceeded"
+        retryAfter: 45
+        timestamp: "2025-08-23T15:45:22.120Z"

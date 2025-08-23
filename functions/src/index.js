@@ -17,20 +17,45 @@ apiApp.use("/images", require("./api/images"));
 apiApp.get("/helloWorld", (_r, res) => res.send("OK"));
 apiApp.use("/products", require("./api/products"));
 apiApp.use("/paddlingOut", require("./api/paddlingout"));
-apiApp.use("/paddleConditions", require("./api/paddleConditions"));
-apiApp.use("/paddlingReport", require("./api/paddlingReport"));
-apiApp.use("/paddlePredict", require("./api/paddlePredict"));
+
+// 📚 API DOCUMENTATION
+apiApp.use("/docs", require("./api/docs"));
+
+// 🌍 LOCATION SERVICES
+apiApp.use("/nearbyWater", require("./api/nearbyWater")); // Find nearby lakes/rivers for custom locations
+
+// 🌟 STREAMLINED WEATHER APIs
+apiApp.use("/paddleScore", require("./api/paddleScore"));     // ML-POWERED: Paddle condition rating with ML model
+apiApp.use("/fastForecast", require("./api/fastForecast"));   // PUBLIC: Fast cached forecasts for frontend
+apiApp.use("/forecast", require("./api/forecast").router);    // PREMIUM: On-demand forecasts (requires $$ token)
+
+// Legacy deeplink routes
 apiApp.use("/", require("./api/deeplinkRoutes"));
 
-// Export main API function directly without nested /api mounting
+// Export main API function
 exports.api = onRequest({
   cors: true,
-  invoker: "public"  // Allow public access without authentication
+  invoker: "public"
 }, apiApp);
 
-// Export additional HTTP functions
-const { fastForecast, cacheManager } = require("./api/fastForecast");
-exports.fastForecast = fastForecast;
-exports.cacheManager = cacheManager;
+// ===========================
+// 🕒 SCHEDULED FUNCTIONS
+// ===========================
+const {
+  morningForecastWarming,
+  middayForecastUpdate,
+  eveningForecastUpdate,
+  nightForecastMaintenance,
+  emergencyForecastRefresh,
+  forecastSchedulerHealth
+} = require('./scheduled/forecastScheduler');
 
-console.log("✅ Kaayko API restored with all endpoints + fastForecast + cacheManager - Firebase Functions v2");
+// Export scheduled forecast functions
+exports.morningForecastWarming = morningForecastWarming;
+exports.middayForecastUpdate = middayForecastUpdate;
+exports.eveningForecastUpdate = eveningForecastUpdate;
+exports.nightForecastMaintenance = nightForecastMaintenance;
+exports.emergencyForecastRefresh = emergencyForecastRefresh;
+exports.forecastSchedulerHealth = forecastSchedulerHealth;
+
+console.log("✅ Kaayko API v2 - PUBLIC: fastForecast + paddlingOut | PREMIUM: forecast ($$) | SCHEDULED: forecast pre-computation");
