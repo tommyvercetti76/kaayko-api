@@ -308,7 +308,7 @@ def predict_paddle_rating(temperature, windSpeed, hasWarnings, beaufortScale,
                     'rating': ml_result['rating'],
                     'mlModelUsed': True,
                     'predictionSource': 'ml-model',
-                    'modelType': ml_result.get('model_type', 'GradientBoostingRegressor'),
+                    'modelType': ml_result.get('model_type', 'RandomForestRegressor'),
                     'confidence': 'high',
                     'featuresUsed': ml_result.get('features_used', 31)
                 }
