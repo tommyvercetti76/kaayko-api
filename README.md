@@ -2,6 +2,27 @@
 
 **Fast paddling weather forecasts with ML-powered ratings for kayakers and paddlers**
 
+## 📁 Directory Structure
+
+```
+api/
+├── functions/        # ☁️ Firebase Cloud Functions
+│   └── api/         # � API endpoints (7 modules, 33 endpoints documented)
+├── ml-service/      # 🧠 ML inference service (Cloud Run)
+├── docs/            # � Technical documentation & OpenAPI spec
+├── deployment/      # � Production deployment scripts
+├── local-dev/       # 🛠️ Local development tools & scripts
+├── archive/         # 📦 Archived/legacy code (if exists)
+└── README.md        # 📘 This file
+```
+
+**Quick Navigation:**
+- **API Endpoints** → [`functions/api/README.md`](./functions/api/README.md) (7 comprehensive READMEs)
+- **API Reference** → [`docs/API-QUICK-REFERENCE-v2.1.0.md`](./docs/API-QUICK-REFERENCE-v2.1.0.md)
+- **ML Implementation** → [`docs/GOLD_STANDARD_IMPLEMENTATION.md`](./docs/GOLD_STANDARD_IMPLEMENTATION.md)
+- **Deployment Guide** → [`deployment/README.md`](./deployment/README.md)
+- **Documentation Index** → [`DOCUMENTATION_INDEX.md`](./DOCUMENTATION_INDEX.md)
+
 ## 🚀 Production APIs
 
 ### **FastForecast** - `/api/fastForecast` 
@@ -97,11 +118,14 @@ kaayko-api/
 │   │   └── cache/                # Caching logic
 │   └── package.json              # Dependencies
 ├── ml-service/                   # 🧠 ML Prediction Service
-├── docs/                         # � Documentation
+├── docs/                         # 📚 Technical Documentation
 │   ├── API-QUICK-REFERENCE-v2.1.0.md
-│   ├── DEPLOYMENT_GUIDE.md
-│   └── kaayko-paddling-api-swagger.yaml
-└── archive/                      # 📦 Archived/obsolete files
+│   ├── GOLD_STANDARD_IMPLEMENTATION.md
+│   ├── HOW_SCHEDULED_FUNCTIONS_WORK.md
+│   ├── kaayko-paddling-api-swagger.yaml (2,392 lines)
+│   └── deployment/DEPLOYMENT_GUIDE.md
+├── deployment/                   # 🚀 Production Deployment Scripts
+└── local-dev/                    # �️ Local Development Tools
 ```
 
 ---
@@ -125,14 +149,15 @@ kaayko-api/
 
 ## 📊 Quick Reference
 
-| API | Purpose | Speed | Usage |
-|-----|---------|-------|-------|
-| `/api/fastForecast` | Public weather | 192ms | Frontend |
-| `/api/forecast` | Real-time ML | 2-5s | Scheduled jobs |
-| `/api/nearbyWater` | Find lakes/rivers | 2-4s | Water discovery |
-| `/api/paddlingOut` | Location data | Fast | Spot directory |
-| `/api/l/:id` | Smart routing | Instant | Deep links |
-| `/api/products` | Store catalog | Fast | E-commerce |
-| `/api/images` | Image proxy | Fast | Secure delivery |
+**33 endpoints across 6 modules** - Full docs in [`functions/api/README.md`](./functions/api/README.md)
+
+| Module | Endpoints | Documentation | Key Features |
+|--------|-----------|---------------|--------------|
+| **Weather** | 5 APIs | [`weather/README.md`](./functions/api/weather/README.md) | ML ratings, forecasts, locations |
+| **Smart Links** | 12 APIs | [`smartLinks/README.md`](./functions/api/smartLinks/README.md) | Link management, analytics |
+| **AI/Chat** | 7 APIs | [`ai/README.md`](./functions/api/ai/README.md) | PaddleBot, GPT integration |
+| **Products** | 3 APIs | [`products/README.md`](./functions/api/products/README.md) | E-commerce catalog |
+| **Deep Links** | 3 APIs | [`deepLinks/README.md`](./functions/api/deepLinks/README.md) | Universal links (iOS) |
+| **Core** | 3 APIs | [`core/README.md`](./functions/api/core/README.md) | API documentation |
 
 **Production**: Firebase Functions + Cloud Run ML Service + Firestore caching + Cloud Storage + OpenStreetMap

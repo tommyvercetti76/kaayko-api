@@ -56,7 +56,7 @@ def load_production_model():
     
     try:
         # Try to load the production model
-        model_path = os.path.join(os.path.dirname(__file__), 'kaayko_production_model.pkl')
+        model_path = 'kaayko_production_model_compat.pkl'
         
         if not os.path.exists(model_path):
             raise FileNotFoundError(f"Production model not found at {model_path}")
@@ -64,19 +64,127 @@ def load_production_model():
         print(f"🚀 Loading production model from {model_path}")
         model_data = joblib.load(model_path)
         
-        # Validate model structure
-        required_keys = ['model', 'scaler', 'label_encoders', 'feature_names']
-        for key in required_keys:
-            if key not in model_data:
-                raise ValueError(f"Model file missing required component: {key}")
+        # UNIVERSAL MODEL FORMAT HANDLER - Handle ALL possible formats
+        print(f"🔍 Model format detection: {type(model_data)}")
         
-        _model_cache = model_data
-        print(f"✅ Production model loaded successfully!")
-        print(f"📊 Model type: {type(model_data['model']).__name__}")
-        print(f"🎯 Features: {len(model_data['feature_names'])}")
-        print(f"📅 Timestamp: {model_data.get('timestamp', 'unknown')}")
+        # FORMAT 1: Pipeline format (sklearn Pipeline object)
+        if hasattr(model_data, 'predict') and hasattr(model_data, 'steps'):
+            print("📦 Format: sklearn Pipeline detected")
+            pipeline_model = model_data
+            
+            # Extract feature names if available
+            feature_names = None
+            if hasattr(pipeline_model, 'feature_names_in_'):
+                feature_names = pipeline_model.feature_names_in_
+            elif hasattr(pipeline_model, '_feature_names_in'):
+                feature_names = pipeline_model._feature_names_in
+            
+            _model_cache = {
+                'model': pipeline_model,
+                'scaler': None,  # Pipeline handles scaling internally
+                'label_encoders': {},  # Pipeline handles encoding internally  
+                'feature_names': feature_names,
+                'timestamp': 'pipeline-format',
+                'format': 'pipeline'
+            }
+            
+            print(f"✅ Pipeline model loaded successfully!")
+            print(f"📊 Model type: {type(pipeline_model).__name__}")
+            print(f"🎯 Features: {len(feature_names) if feature_names is not None else 'unknown'}")
+            
+            return _model_cache
         
-        return _model_cache
+        # FORMAT 2: Direct model object (any sklearn estimator)
+        elif hasattr(model_data, 'predict') and not hasattr(model_data, 'steps'):
+            print("🤖 Format: Direct sklearn estimator detected")
+            
+            feature_names = None
+            if hasattr(model_data, 'feature_names_in_'):
+                feature_names = model_data.feature_names_in_
+            
+            _model_cache = {
+                'model': model_data,
+                'scaler': None,
+                'label_encoders': {},
+                'feature_names': feature_names,
+                'timestamp': 'direct-estimator',
+                'format': 'estimator'
+            }
+            
+            print(f"✅ Direct estimator loaded successfully!")
+            print(f"📊 Model type: {type(model_data).__name__}")
+            
+            return _model_cache
+        
+        # FORMAT 3: Dictionary format (structured training output)
+        elif isinstance(model_data, dict):
+            print("📁 Format: Dictionary structure detected")
+            
+            # Check for required keys
+            required_keys = ['model', 'scaler', 'label_encoders', 'feature_names']
+            has_all_keys = all(key in model_data for key in required_keys)
+            
+            if has_all_keys:
+                print("✅ Complete dictionary format with all components")
+                _model_cache = model_data
+                _model_cache['format'] = 'dict-complete'
+            else:
+                print("⚠️ Partial dictionary format - filling missing components")
+                
+                # Extract the model object
+                model_obj = None
+                if 'model' in model_data:
+                    model_obj = model_data['model']
+                elif 'estimator' in model_data:
+                    model_obj = model_data['estimator']
+                elif 'pipeline' in model_data:
+                    model_obj = model_data['pipeline']
+                else:
+                    # Try to find any object with predict method
+                    for key, value in model_data.items():
+                        if hasattr(value, 'predict'):
+                            model_obj = value
+                            break
+                
+                if model_obj is None:
+                    raise ValueError("No predictive model found in dictionary")
+                
+                _model_cache = {
+                    'model': model_obj,
+                    'scaler': model_data.get('scaler', None),
+                    'label_encoders': model_data.get('label_encoders', {}),
+                    'feature_names': model_data.get('feature_names', None),
+                    'timestamp': model_data.get('timestamp', 'dict-partial'),
+                    'format': 'dict-partial'
+                }
+            
+            print(f"✅ Dictionary model loaded successfully!")
+            print(f"📊 Model type: {type(_model_cache['model']).__name__}")
+            print(f"🎯 Features: {len(_model_cache['feature_names']) if _model_cache['feature_names'] else 'unknown'}")
+            
+            return _model_cache
+        
+        # FORMAT 4: Unknown format - try to make it work anyway
+        else:
+            print("❓ Format: Unknown - attempting generic handling")
+            
+            # If it has a predict method, treat it as a model
+            if hasattr(model_data, 'predict'):
+                _model_cache = {
+                    'model': model_data,
+                    'scaler': None,
+                    'label_encoders': {},
+                    'feature_names': None,
+                    'timestamp': 'unknown-format',
+                    'format': 'unknown'
+                }
+                
+                print(f"✅ Unknown format model loaded (has predict method)!")
+                print(f"📊 Model type: {type(model_data).__name__}")
+                
+                return _model_cache
+            else:
+                raise ValueError(f"Unsupported model format: {type(model_data)}. No predict method found.")
         
     except Exception as e:
         _model_error = str(e)

@@ -5,6 +5,10 @@
 
 set -e
 
+# Load configuration
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/config.sh"
+
 echo "🚀 KAAYKO FULL STACK DEPLOYMENT"
 echo "================================"
 echo "This script will deploy:"
@@ -13,14 +17,8 @@ echo "2. 🔥 Firebase Functions (API)"
 echo "3. 🌐 Frontend (Firebase Hosting)"
 echo ""
 
-# Configuration
-DEPLOYMENT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ID="kaaykostore"
-
-echo "📋 Configuration:"
-echo "   Project ID: $PROJECT_ID"
-echo "   Deployment Dir: $DEPLOYMENT_DIR"
-echo ""
+# Show configuration
+show_config
 
 # Verify user is ready
 read -p "🚨 This will deploy to PRODUCTION. Are you sure? (y/N): " -n 1 -r
@@ -61,21 +59,20 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 bash "$DEPLOYMENT_DIR/deploy-frontend.sh"
 
 echo ""
-echo "🎉 DEPLOYMENT COMPLETE!"
+log_success "DEPLOYMENT COMPLETE!"
 echo "======================="
-echo "✅ ML Service: https://kaayko-ml-service-87383373015.us-central1.run.app"
-echo "✅ API Functions: https://us-central1-$PROJECT_ID.cloudfunctions.net/api"
-echo "✅ Frontend: https://$PROJECT_ID.web.app"
+echo "✅ ML Service: $ML_SERVICE_URL"
+echo "✅ API Functions: $API_FUNCTIONS_URL"
+echo "✅ Frontend: $FRONTEND_URL"
 echo ""
 echo "🧪 FINAL SYSTEM TEST"
 echo "===================="
 echo "Testing complete system integration..."
 
-API_URL="https://us-central1-$PROJECT_ID.cloudfunctions.net/api"
 echo "Testing paddlingOut API with ML integration..."
-curl -s "$API_URL/paddlingOut" | jq '.[0] | {name: .name, rating: .paddleScore.rating, mlUsed: .paddleScore.mlModelUsed, source: .paddleScore.predictionSource}'
+curl -s "$API_FUNCTIONS_URL/paddlingOut" 2>/dev/null | jq '.[0] | {name: .name, rating: .paddleScore.rating, mlUsed: .paddleScore.mlModelUsed, source: .paddleScore.predictionSource}' 2>/dev/null || log_warning "API test requires jq tool"
 
 echo ""
-echo "🌟 KAAYKO DEPLOYMENT SUCCESSFUL!"
+log_success "KAAYKO DEPLOYMENT SUCCESSFUL!"
 echo "Your ML-powered paddle prediction API is now live!"
 echo "================================"

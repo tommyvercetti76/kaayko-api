@@ -1,0 +1,11 @@
+# Ignore files that can cause build issues
+*.log
+*.pyc
+__pycache__/
+.DS_Store
+.git/
+# Ignore old models but keep the compatibility model
+kaayko_production_model.pkl
+kaayko_working_model.pkl
+# Keep the working compatibility model
+!kaayko_production_model_compat.pkl

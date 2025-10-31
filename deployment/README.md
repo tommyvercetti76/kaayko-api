@@ -1,25 +1,67 @@
-# Kaayko Deployment Documentation
+# 🚀 Kaayko Deployment Documentation
 
-## Overview
-This directory contains comprehensive deployment scripts for the Kaayko platform, including ML service, API functions, and frontend.
+**Production deployment scripts for the Kaayko monorepo**
 
-## Components
-- **ML Service**: Google Cloud Run service hosting the trained RandomForest model
-- **Firebase Functions**: API endpoints for paddle predictions with weather integration  
-- **Frontend**: Static site hosted on Firebase Hosting
+---
 
-## Scripts
+## 📦 What's Here
 
-### Individual Deployment Scripts
-- `deploy-ml-service.sh` - Deploys the ML model to Cloud Run
-- `deploy-firebase-functions.sh` - Deploys API functions to Firebase
-- `deploy-frontend.sh` - Deploys frontend to Firebase Hosting
-- `rollback.sh` - Rollback utility for deployments
+This directory contains **PRODUCTION-ONLY** deployment scripts. For local development, see [`../../local-dev/`](../../local-dev/).
 
-### Full Stack Deployment
-- `deploy-full-stack.sh` - Orchestrates complete system deployment
+### Scripts
 
-## Prerequisites
+| Script | Purpose | Use Case |
+|--------|---------|----------|
+| **`config.sh`** | Shared configuration | Sourced by all deployment scripts |
+| **`deploy-full-stack.sh`** | Deploy everything | Complete production deployment |
+| **`deploy-ml-service.sh`** | ML service only | Update Cloud Run ML service |
+| **`deploy-firebase-functions.sh`** | API functions only | Update Firebase Functions |
+| **`deploy-frontend.sh`** | Frontend only | Update Firebase Hosting |
+| **`pre-deployment-check.sh`** | Pre-flight checks | Validate before deployment |
+| **`rollback.sh`** | Emergency rollback | Revert failed deployments |
+
+---
+
+## 🎯 Quick Start
+
+### Full Stack Deployment (Recommended)
+```bash
+cd api/deployment
+./deploy-full-stack.sh
+```
+
+### Individual Component Deployment
+```bash
+# Deploy ML service only
+./deploy-ml-service.sh
+
+# Deploy API functions only  
+./deploy-firebase-functions.sh
+
+# Deploy frontend only
+./deploy-frontend.sh
+```
+
+---
+
+## ⚙️ Configuration
+
+All configuration is centralized in **`config.sh`**:
+
+- ✅ **Auto-detects monorepo root** (no hardcoded paths!)
+- ✅ **Portable** - works on any machine
+- ✅ **Single source of truth** - edit once, applies everywhere
+
+### Key Configuration Variables:
+```bash
+PROJECT_ID="kaaykostore"
+REGION="us-central1"
+MONOREPO_ROOT="<auto-detected>"
+```
+
+---
+
+## 📊 Components
 
 ### Required Tools
 ```bash
@@ -32,36 +74,85 @@ gcloud config set project kaaykostore
 npm install -g firebase-tools
 firebase login
 
-# Install jq for JSON processing
+# Install jq for JSON processing (optional, for formatted output)
 brew install jq  # macOS
+apt-get install jq  # Linux
 ```
 
 ### Required Permissions
-- Google Cloud Project: `kaaykostore`
-- Cloud Run Admin
-- Cloud Build Editor
-- Firebase Admin
+- **Google Cloud Project:** `kaaykostore`
+- **Roles:** Cloud Run Admin, Cloud Build Editor, Firebase Admin
+- **APIs Enabled:** Cloud Run, Cloud Build, Firebase
 
-## Deployment Process
+### Required Files
+- ✅ `api/functions/.env.kaaykostore` - Production environment variables
+- ✅ `api/ml-service/kaayko_production_model_compat.pkl` - Trained ML model (83MB)
+- ✅ `frontend/src/` - Frontend source files
 
-### Option 1: Full Stack Deployment (Recommended)
-```bash
-cd /Users/Rohan/Desktop/Kaayko_v5/kaayko-api/deployment
-chmod +x *.sh
-./deploy-full-stack.sh
+## 🏗️ Architecture
+
+### Deployment Flow:
+```
+deploy-full-stack.sh
+├── 1. deploy-ml-service.sh
+│   ├── Validate model files
+│   ├── Build Docker container (Cloud Build)
+│   ├── Deploy to Cloud Run
+│   └── Test ML endpoints
+│
+├── 2. deploy-firebase-functions.sh
+│   ├── Validate environment config
+│   ├── Deploy Firebase Functions
+│   └── Test API endpoints
+│
+└── 3. deploy-frontend.sh
+    ├── Validate frontend files
+    ├── Deploy to Firebase Hosting
+    └── Test frontend accessibility
 ```
 
-### Option 2: Individual Component Deployment
+---
+
+## 📋 Pre-Deployment Checklist
+
+Run this before deploying:
 ```bash
-# Deploy ML service only
-./deploy-ml-service.sh
-
-# Deploy API functions only  
-./deploy-firebase-functions.sh
-
-# Deploy frontend only
-./deploy-frontend.sh
+./pre-deployment-check.sh
 ```
+
+**Checks:**
+- ✅ Model files exist
+- ✅ Environment variables configured
+- ✅ gcloud authenticated
+- ✅ Firebase authenticated
+- ✅ APIs enabled (Cloud Run, Cloud Build, Firebase)
+
+---
+
+## 🆚 Local vs Production
+
+| Environment | Scripts Location | Purpose |
+|-------------|-----------------|---------|
+| **Local** | `local-dev/scripts/` | Development & testing |
+| **Production** | `api/deployment/` | Production deployment |
+
+### Local Development:
+```bash
+cd local-dev/scripts
+./start-local.sh    # Start local backend + frontend
+./test-local.sh     # Test all APIs locally
+./stop-local.sh     # Stop everything
+```
+
+### Production Deployment:
+```bash
+cd api/deployment
+./deploy-full-stack.sh    # Deploy to production
+```
+
+---
+
+## 🔑 Prerequisites
 
 ## What Each Script Does
 
@@ -85,19 +176,38 @@ chmod +x *.sh
 3. 🚀 Deploys to Firebase Hosting
 4. 🧪 Tests frontend accessibility
 
-## Environment Configuration
+## 🔐 Environment Variables
 
-### Required Environment Files
-- `functions/.env.kaaykostore` - Production environment variables
-  ```bash
-  WEATHER_API_KEY=a0ede903980f45c4a27183708252308
-  TEST_MODE=false
-  ```
+### Production Environment File
+**Location:** `api/functions/.env.kaaykostore`
 
-### Model Files Required
-- `kaayko_randomforest_model.pkl` - Main trained model (99.28% accuracy)
-- `feature_names.pkl` - Feature name mappings
-- `additional_encoders.pkl` - Label encoders (if used)
+```bash
+WEATHER_API_KEY=<your_weatherapi_key_here>
+OPENAI_API_KEY=<your_openai_key_here>
+TEST_MODE=false
+NODE_ENV=production
+```
+
+**Security:** This file is git-ignored and should NEVER be committed!
+
+---
+## 🌐 Production URLs
+
+After successful deployment, your services will be available at:
+
+| Service | URL | Purpose |
+|---------|-----|---------|
+| **ML Service** | https://kaayko-ml-service-87383373015.us-central1.run.app | ML inference API |
+| **API Functions** | https://us-central1-kaaykostore.cloudfunctions.net/api | Main API (33 endpoints) |
+| **Frontend** | https://kaaykostore.web.app | Web application |
+
+### API Documentation:
+- **Swagger UI:** https://us-central1-kaaykostore.cloudfunctions.net/api/docs
+- **OpenAPI Spec:** See `docs/kaayko-paddling-api-swagger.yaml`
+- **Accuracy:** 99.98% R² on 13.6M samples
+- **Training Data:** 2,779 lakes across North America
+
+**Note:** Model must be trained first using `ml/` pipeline before deployment
 
 ## Production URLs
 
@@ -154,22 +264,40 @@ If deployment issues occur:
 
 This script provides options to rollback individual components.
 
-## Security Notes
+## 🎯 Design Principles
 
-- Environment variables are automatically secured
-- Cloud Run service is configured for production
-- API keys are not exposed in logs
-- Rate limiting is enforced at function level
+This deployment system is:
+- ✅ **Portable** - No hardcoded paths, works on any machine
+- ✅ **Modular** - Deploy components independently
+- ✅ **Validated** - Pre-flight checks before deployment
+- ✅ **Tested** - Each deployment includes health checks
+- ✅ **Rollback-ready** - Easy emergency rollback
+- ✅ **Monitored** - Comprehensive logging
 
-## Future Enhancements
+---
 
-This deployment system is designed to be:
-- ✅ **Universal**: Works for future model updates
-- ✅ **Modular**: Individual components can be deployed separately  
-- ✅ **Tested**: Each deployment includes verification
-- ✅ **Rollback-ready**: Easy to revert if issues occur
-- ✅ **Monitored**: Includes logging and health checks
+## 🔗 Related Documentation
 
+- **API Documentation:** [`../functions/api/README.md`](../functions/api/README.md)
+- **Local Development:** [`../../local-dev/README.md`](../../local-dev/README.md)
+- **Technical Docs:** [`../docs/`](../docs/)
+- **ML Training:** [`../../ml/README.md`](../../ml/README.md)
+
+---
+
+## 📞 Support
+
+For deployment issues:
+1. Check script output for specific errors
+2. Review logs: `gcloud logs tail --service kaayko-ml-service`
+3. Firebase logs: `firebase functions:log`
+4. Run pre-deployment check: `./pre-deployment-check.sh`
+5. See troubleshooting section above
+
+---
+
+**Last Updated:** October 31, 2025  
+**Status:** ✅ Production-ready with portable configuration
 ## Support
 
 For deployment issues, check:

@@ -5,19 +5,15 @@
 
 set -e
 
+# Load configuration
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/config.sh"
+
 echo "🌐 Kaayko Frontend Deployment"
 echo "=============================="
 
-# Configuration
-PROJECT_ID="kaaykostore"
-FRONTEND_PATH="/Users/Rohan/Desktop/kaayko-stable/kaayko-frontend"
-API_PATH="/Users/Rohan/Desktop/Kaayko_v5/kaayko-api"
-
-echo "📋 Deployment Configuration:"
-echo "   Project ID: $PROJECT_ID"
-echo "   Frontend Path: $FRONTEND_PATH"
-echo "   API Path: $API_PATH"
-echo ""
+# Show configuration
+show_config
 
 # Step 1: Verify frontend exists
 echo "🔍 Step 1: Verifying frontend..."
@@ -60,13 +56,17 @@ echo "✅ Frontend deployed successfully!"
 # Step 4: Test the deployment
 echo ""
 echo "🧪 Step 4: Testing deployment..."
-HOSTING_URL="https://$PROJECT_ID.web.app"
-echo "Frontend URL: $HOSTING_URL"
+echo "Frontend URL: $FRONTEND_URL"
 
 echo "Testing homepage..."
-curl -s -o /dev/null -w "%{http_code}" "$HOSTING_URL" | grep -q "200" && echo "✅ Homepage accessible" || echo "❌ Homepage test failed"
+HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$FRONTEND_URL")
+if [ "$HTTP_CODE" = "200" ]; then
+    log_success "Homepage accessible (HTTP $HTTP_CODE)"
+else
+    log_warning "Homepage returned HTTP $HTTP_CODE"
+fi
 
 echo ""
 echo "🎉 Frontend Deployment Complete!"
-echo "Frontend URL: $HOSTING_URL"
+echo "Frontend URL: $FRONTEND_URL"
 echo "=============================="

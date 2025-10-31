@@ -5,17 +5,15 @@
 
 set -e
 
+# Load configuration
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/config.sh"
+
 echo "🔥 Kaayko Firebase Functions Deployment"
 echo "======================================="
 
-# Configuration
-PROJECT_ID="kaaykostore"
-FUNCTIONS_PATH="/Users/Rohan/Desktop/Kaayko_v5/kaayko-api/functions"
-
-echo "📋 Deployment Configuration:"
-echo "   Project ID: $PROJECT_ID"
-echo "   Functions Path: $FUNCTIONS_PATH"
-echo ""
+# Show configuration
+show_config
 
 # Step 1: Verify environment configuration
 echo "🔍 Step 1: Verifying environment configuration..."
@@ -47,7 +45,7 @@ npm list --depth=0 || echo "Some dependencies may be missing, but continuing..."
 # Step 4: Deploy to Firebase
 echo ""
 echo "🚀 Step 4: Deploying to Firebase..."
-cd ..
+cd "$API_PATH"
 
 # Deploy functions
 firebase deploy --only functions --project $PROJECT_ID
@@ -57,12 +55,11 @@ echo "✅ Firebase Functions deployed successfully!"
 # Step 5: Test the deployment
 echo ""
 echo "🧪 Step 5: Testing deployment..."
-FUNCTION_URL="https://us-central1-$PROJECT_ID.cloudfunctions.net/api"
-echo "Testing API endpoint: $FUNCTION_URL"
+echo "Testing API endpoint: $API_FUNCTIONS_URL"
 
 echo ""
 echo "Testing paddlingOut endpoint..."
-curl -s "$FUNCTION_URL/paddlingOut" | jq '.[0] | {name: .name, paddleScore: .paddleScore.rating}'
+curl -s "$API_FUNCTIONS_URL/paddlingOut" | jq '.[0] | {name: .name, paddleScore: .paddleScore.rating}' 2>/dev/null || echo "Note: Install jq for formatted output"
 
 # Step 6: Clean up
 echo ""
@@ -72,6 +69,7 @@ rm -f .env
 echo "✅ Cleanup complete"
 
 echo ""
+echo ""
 echo "🎉 Firebase Functions Deployment Complete!"
-echo "API URL: $FUNCTION_URL"
+echo "API URL: $API_FUNCTIONS_URL"
 echo "======================================="

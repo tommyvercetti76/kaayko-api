@@ -4,7 +4,7 @@
     "runtime": "nodejs22"
   },
   "hosting": {
-    "public": "/Users/Rohan/Desktop/kaayko-stable/kaayko-frontend/src",
+    "public": "../frontend/src",
     "ignore": [
       "firebase.json",
       "**/.*",

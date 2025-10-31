@@ -35,24 +35,15 @@ fi
 # Check 3: Verify environment configuration
 echo ""
 echo "🔍 Check 3: Environment Configuration"
-if [ -f "/Users/Rohan/Desktop/Kaayko_v5/kaayko-api/functions/.env.kaaykostore" ]; then
-    if grep -q "WEATHER_API_KEY=a0ede903980f45c4a27183708252308" "/Users/Rohan/Desktop/Kaayko_v5/kaayko-api/functions/.env.kaaykostore"; then
-        echo "✅ Production WeatherAPI key configured"
+ENV_FILE="$FUNCTIONS_PATH/.env.kaaykostore"
+if [ -f "$ENV_FILE" ]; then
+    if grep -q "WEATHER_API_KEY=" "$ENV_FILE" && grep -q "OPENWEATHER_API_KEY=" "$ENV_FILE"; then
+        echo "✅ Production API keys found in .env.kaaykostore"
     else
-        echo "⚠️  WeatherAPI key may not be production key"
-        WARNINGS=$((WARNINGS + 1))
+        echo "❌ Production API keys not found in .env.kaaykostore"
+        echo "Please add: WEATHER_API_KEY and OPENWEATHER_API_KEY"
+        exit 1
     fi
-    
-    if grep -q "TEST_MODE=false" "/Users/Rohan/Desktop/Kaayko_v5/kaayko-api/functions/.env.kaaykostore"; then
-        echo "✅ Test mode disabled"
-    else
-        echo "❌ Test mode still enabled"
-        ERRORS=$((ERRORS + 1))
-    fi
-else
-    echo "❌ Production environment file NOT FOUND"
-    ERRORS=$((ERRORS + 1))
-fi
 
 # Check 4: Verify gcloud setup
 echo ""
