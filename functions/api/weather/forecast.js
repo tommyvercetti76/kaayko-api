@@ -23,7 +23,7 @@ router.use(rateLimit(10, 60_000));
  * Core function used by scheduled jobs
  */
 async function generateComprehensiveForecast(location) {
-  console.log(`🔮 Generating forecast for ${location} (scheduled)`);
+  console.log(`Generating forecast for ${location} (scheduled)`);
   
   try {
     const weatherService = new UnifiedWeatherService();
@@ -58,15 +58,15 @@ async function generateComprehensiveForecast(location) {
       }
     };
 
-    // Cache the result in Firestore for fastForecast API
+    // Cache the result in Firestore for fastForecast and paddleScore APIs
     const cacheKey = `forecast_${location.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
-    await db.collection('forecastCache').doc(cacheKey).set({
+    await db.collection('forecast_cache').doc(cacheKey).set({
       ...result.data,
       cached_at: new Date(),
       expires_at: new Date(Date.now() + (2 * 60 * 60 * 1000))
     });
 
-    console.log(`💾 Cached forecast: ${cacheKey}`);
+    console.log(`Cached forecast: ${cacheKey}`);
     return result;
 
   } catch (error) {
@@ -86,7 +86,7 @@ async function generateComprehensiveForecast(location) {
  */
 async function batchGenerateForecasts(locations, batchSize = 3) {
   const startTime = Date.now();
-  console.log(`🔄 Starting batch forecast for ${locations.length} locations`);
+  console.log(`Starting batch forecast for ${locations.length} locations`);
 
   try {
     const results = [];
@@ -107,7 +107,7 @@ async function batchGenerateForecasts(locations, batchSize = 3) {
         
         if (result.success) {
           successful++;
-          console.log(`✅ Forecast generated for ${loc.name || loc.id} in ${Date.now() - startTime}ms`);
+          console.log(`Forecast generated for ${loc.name || loc.id} in ${Date.now() - startTime}ms`);
         } else {
           failed++;
         }
@@ -142,7 +142,7 @@ async function batchGenerateForecasts(locations, batchSize = 3) {
       }))
     };
     
-    console.log(`✅ Batch complete: ${successful}/${results.length} successful in ${Date.now() - startTime}ms`);
+    console.log(`Batch complete: ${successful}/${results.length} successful in ${Date.now() - startTime}ms`);
     
     return summary;
     
@@ -193,7 +193,7 @@ async function getPaddlingLocations() {
       }
     });
     
-    console.log(`📍 Found ${locations.length} paddling locations`);
+    console.log(`Found ${locations.length} paddling locations`);
     return locations;
     
   } catch (error) {

@@ -14,6 +14,7 @@ const { standardizeForMLModel, standardizeForPenalties } = require('./dataStanda
 const { createInputMiddleware } = require('./inputStandardization');
 const { calibrateModelPrediction } = require('./modelCalibration');
 const { getSmartWarnings } = require('./smartWarnings');
+const ForecastCache = require('../../cache/forecastCache');
 
 const db = admin.firestore();
 
@@ -64,13 +65,29 @@ router.get('/', createInputMiddleware('paddleScore'), async (req, res) => {
       };
     }
 
-    console.log(`🏄 PaddleScore: ${locationQuery}`);
+    console.log(`PaddleScore request: ${locationQuery}`);
 
-    // Get current weather AND marine data
+    // Check cache first for known locations (from scheduled jobs)
+    const cache = new ForecastCache();
+    const cacheKey = `current_${locationQuery.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
+    const cachedConditions = await cache.getCachedCurrentConditions(cacheKey);
+    
+    if (cachedConditions) {
+      console.log(`Cache hit - returning cached current conditions (${cachedConditions.metadata.cacheAgeMinutes.toFixed(1)} min old)`);
+      return res.json({
+        success: true,
+        ...cachedConditions,
+        location: locationData,
+        response_time_ms: Date.now() - startTime
+      });
+    }
+
+    // Cache miss - fetch fresh data
+    console.log(`Cache miss - fetching fresh current conditions`);
     const weatherService = new UnifiedWeatherService();
     const weatherData = await weatherService.getWeatherData(locationQuery, {
       includeForecast: false,
-      useCache: true
+      useCache: false // Don't use weather service cache, we have our own
     });
     
     // Get marine data for wave height (critical for paddle conditions)
@@ -242,6 +259,11 @@ router.get('/', createInputMiddleware('paddleScore'), async (req, res) => {
         response_time_ms: Date.now() - startTime
       }
     };
+
+    // Cache the response for 20 minutes (fire and forget)
+    cache.storeCurrentConditions(cacheKey, response).catch(err => 
+      console.warn(`Failed to cache current conditions: ${err.message}`)
+    );
 
     res.json(response);
     

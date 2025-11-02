@@ -215,6 +215,71 @@ class ForecastCache {
             };
         }
     }
+
+    /**
+     * Get cached current conditions (short TTL for real-time feel)
+     * TTL: 20 minutes for current conditions
+     */
+    async getCachedCurrentConditions(locationId) {
+        try {
+            const doc = await this.db
+                .collection('current_conditions_cache')
+                .doc(locationId)
+                .get();
+
+            if (!doc.exists) {
+                return null;
+            }
+
+            const data = doc.data();
+            const now = new Date();
+            const cacheTime = data.cached_at.toDate();
+            const minutesSinceCache = (now - cacheTime) / (1000 * 60);
+
+            // 20 minute TTL for current conditions
+            if (minutesSinceCache > 20) {
+                return null;
+            }
+
+            logger.info(`Current conditions cache hit: ${locationId}, cached ${minutesSinceCache.toFixed(1)} min ago`);
+            return {
+                ...data.conditions,
+                metadata: {
+                    cached: true,
+                    cacheAgeMinutes: minutesSinceCache,
+                    cacheTime: cacheTime.toISOString()
+                }
+            };
+        } catch (error) {
+            logger.error(`Error getting cached current conditions for ${locationId}:`, error);
+            return null;
+        }
+    }
+
+    /**
+     * Store current conditions with short TTL
+     */
+    async storeCurrentConditions(locationId, conditionsData) {
+        try {
+            const cacheDoc = {
+                location_id: locationId,
+                conditions: conditionsData,
+                cached_at: FieldValue.serverTimestamp(),
+                ttl_minutes: 20
+            };
+
+            await this.db
+                .collection('current_conditions_cache')
+                .doc(locationId)
+                .set(cacheDoc);
+
+            logger.info(`Current conditions cached for: ${locationId}`);
+            return true;
+        } catch (error) {
+            logger.error(`Error caching current conditions for ${locationId}:`, error);
+            return false;
+        }
+    }
 }
 
 module.exports = ForecastCache;

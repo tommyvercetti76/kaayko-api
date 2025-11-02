@@ -69,7 +69,7 @@ class UnifiedWeatherService {
             );
         }
         
-        return this._addMetadata(standardizedData, startTime, false, usedBackup ? 'backup' : 'primary');
+        return this._addMetadata(standardizedData, startTime, false, 'primary');
     }
 
     /**

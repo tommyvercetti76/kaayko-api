@@ -17,6 +17,10 @@ build/
 # Firebase
 .firebase/
 
+# Deployment (private - keep locally only)
+deployment/
+scripts/
+
 # Python cache
 *.pyc
 *.pyo
