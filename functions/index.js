@@ -53,22 +53,22 @@ exports.api = onRequest({
 }, apiApp);
 
 // ===========================
-// 🕒 SCHEDULED FUNCTIONS
+// SCHEDULED FUNCTIONS
 // ===========================
 const {
-  morningForecastWarming,
-  middayForecastUpdate,
+  earlyMorningForecast,
+  morningForecastUpdate,
+  afternoonForecastUpdate,
   eveningForecastUpdate,
-  nightForecastMaintenance,
   emergencyForecastRefresh,
   forecastSchedulerHealth
 } = require('./scheduled/forecastScheduler');
 
-// Export scheduled forecast functions
-exports.morningForecastWarming = morningForecastWarming;
-exports.middayForecastUpdate = middayForecastUpdate;
+// Export scheduled forecast functions (4 hourly: 5am, 9am, 1pm, 5pm PT)
+exports.earlyMorningForecast = earlyMorningForecast;
+exports.morningForecastUpdate = morningForecastUpdate;
+exports.afternoonForecastUpdate = afternoonForecastUpdate;
 exports.eveningForecastUpdate = eveningForecastUpdate;
-exports.nightForecastMaintenance = nightForecastMaintenance;
 exports.emergencyForecastRefresh = emergencyForecastRefresh;
 exports.forecastSchedulerHealth = forecastSchedulerHealth;
 
