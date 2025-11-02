@@ -14,12 +14,6 @@ Minimal production deployment for Kaayko paddle condition prediction API.
 - `POST /predict` - Paddle condition predictions
 - `GET /model/info` - Model information
 
-## Deployment
-```bash
-docker build -t kaayko-ml-service .
-docker run -p 8080:8080 kaayko-ml-service
-```
-
 ## Model Info
 - **Algorithm**: RandomForest/XGBoost
 - **Features**: 23 weather and location features

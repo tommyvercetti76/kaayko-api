@@ -4,13 +4,13 @@
  */
 
 /**
- * Generate a unique 6-character short code
- * @returns {string} Random alphanumeric code (e.g., "aBc1D2")
+ * Generate a unique 6-character short code with 'lk' prefix (Branch-style)
+ * @returns {string} Random alphanumeric code (e.g., "lk1ngp", "lk9xrf")
  */
 function generateShortCode() {
-  const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  let code = '';
-  for (let i = 0; i < 6; i++) {
+  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  let code = 'lk';
+  for (let i = 0; i < 4; i++) {
     code += chars[Math.floor(Math.random() * chars.length)];
   }
   return code;
@@ -33,7 +33,8 @@ function isValidLinkId(id) {
  */
 function isValidShortCode(code) {
   if (!code || typeof code !== 'string') return false;
-  return /^[a-zA-Z0-9]{3,12}$/.test(code);
+  // Allow alphanumeric, hyphens, and underscores (3-50 chars)
+  return /^[a-zA-Z0-9_-]{3,50}$/.test(code);
 }
 
 /**

@@ -1,22 +1,19 @@
 /**
  * functions/src/api/smartLinks.js
  * 
- * Smart Links API v2 - Link Management & Analytics
- * REFACTORED: Now uses modular service layer
+ * Smart Links API v4 - SHORT CODES ONLY!
+ * Simple: kaayko.com/l/lkXXXX → anywhere you want
  * 
- * Endpoints:
- * - GET    /api/smartlinks/r/:code    → Redirect handler
- * - POST   /api/smartlinks             → Create structured link
- * - POST   /api/smartlinks/short       → Create short code link
- * - GET    /api/smartlinks             → List all links
- * - GET    /api/smartlinks/:space/:id  → Get structured link
- * - PUT    /api/smartlinks/short/:code → Update short code link
- * - PUT    /api/smartlinks/:space/:id  → Update structured link
- * - DELETE /api/smartlinks/short/:code → Delete short code link
- * - DELETE /api/smartlinks/:space/:id  → Delete structured link
- * - POST   /api/smartlinks/events/:type → Track events
- * - GET    /api/smartlinks/stats       → Link analytics
- * - GET    /api/smartlinks/health      → Health check
+ * Endpoints (all under /api/smartlinks):
+ * - GET    /api/smartlinks/r/:code         → Redirect handler (short codes only)
+ * - POST   /api/smartlinks                  → Create short link
+ * - GET    /api/smartlinks                  → List all links
+ * - GET    /api/smartlinks/:code            → Get link by code
+ * - PUT    /api/smartlinks/:code            → Update link
+ * - DELETE /api/smartlinks/:code            → Delete link
+ * - POST   /api/smartlinks/events/:type     → Track app events
+ * - GET    /api/smartlinks/stats            → Link analytics
+ * - GET    /api/smartlinks/health           → Health check
  */
 
 const express = require('express');
@@ -26,34 +23,66 @@ const { FieldValue } = require('firebase-admin/firestore');
 
 const db = admin.firestore();
 
-// Import modular utilities and services (all in same folder now)
+// Import modular utilities and services
 const { handleRedirect } = require('./redirectHandler');
-const { normalizeUTMs, getValidSpaces } = require('./smartLinkValidation');
 const LinkService = require('./smartLinkService');
 
 // ============================================================================
-// REDIRECT ROUTE
+// HEALTH CHECK (Must be BEFORE /:code to avoid being caught by it)
 // ============================================================================
 
-/**
- * Universal redirect handler
- * Handles both short codes (lk1ngp) and structured links (lake/trinity)
- */
-router.get('/r/:code(*)', async (req, res) => {
-  const linkId = req.params.code;
-  await handleRedirect(req, res, linkId, { trackAnalytics: false });
+router.get('/health', (req, res) => {
+  res.json({
+    success: true,
+    service: 'Smart Links API v4 - Short Codes Only',
+    status: 'healthy',
+    timestamp: new Date().toISOString()
+  });
 });
 
 // ============================================================================
-// CREATE STRUCTURED LINK
+// LINK STATISTICS (Must be BEFORE /:code)
+// ============================================================================
+
+router.get('/stats', async (req, res) => {
+  try {
+    const stats = await LinkService.getLinkStats();
+    res.json({ success: true, stats });
+  } catch (error) {
+    console.error('[SmartLinks] Error fetching stats:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch statistics'
+    });
+  }
+});
+
+// ============================================================================
+// REDIRECT ROUTE (Must be BEFORE /:code)
+// ============================================================================
+
+/**
+ * Redirect handler for short codes (lk1ngp, lk9xrf, etc.)
+ */
+router.get('/r/:code', async (req, res) => {
+  const code = req.params.code;
+  await handleRedirect(req, res, code, { trackAnalytics: false });
+});
+
+// ============================================================================
+// CREATE SHORT LINK
 // ============================================================================
 
 router.post('/', async (req, res) => {
   try {
-    const link = await LinkService.createStructuredLink(req.body);
-    res.json({ success: true, link });
+    const link = await LinkService.createShortLink(req.body);
+    res.json({ 
+      success: true, 
+      link,
+      message: `Short link created: ${link.shortUrl}`
+    });
   } catch (error) {
-    console.error('[SmartLinks] Error creating structured link:', error);
+    console.error('[SmartLinks] Error creating short link:', error);
     
     if (error.code === 'ALREADY_EXISTS') {
       return res.status(409).json({
@@ -71,46 +100,19 @@ router.post('/', async (req, res) => {
 });
 
 // ============================================================================
-// CREATE SHORT CODE LINK
-// ============================================================================
-
-router.post('/short', async (req, res) => {
-  try {
-    const link = await LinkService.createShortCodeLink(req.body);
-    res.json({ success: true, link });
-  } catch (error) {
-    console.error('[SmartLinks] Error creating short code link:', error);
-    
-    if (error.code === 'ALREADY_EXISTS') {
-      return res.status(409).json({
-        success: false,
-        error: error.message,
-        existing: error.existing
-      });
-    }
-    
-    res.status(400).json({
-      success: false,
-      error: error.message || 'Failed to create short link'
-    });
-  }
-});
-
-// ============================================================================
 // LIST ALL LINKS
 // ============================================================================
 
 router.get('/', async (req, res) => {
   try {
-    const { space, enabled, limit } = req.query;
+    const { enabled, limit } = req.query;
     
     const filters = {};
-    if (space) filters.space = space;
     if (enabled !== undefined) filters.enabled = enabled === 'true';
     if (limit) filters.limit = parseInt(limit, 10);
     
-    const links = await LinkService.listLinks(filters);
-    res.json({ success: true, ...links });
+    const result = await LinkService.listLinks(filters);
+    res.json({ success: true, ...result });
   } catch (error) {
     console.error('[SmartLinks] Error listing links:', error);
     res.status(500).json({
@@ -121,13 +123,13 @@ router.get('/', async (req, res) => {
 });
 
 // ============================================================================
-// GET STRUCTURED LINK
+// GET LINK BY CODE (Must be AFTER specific routes like /health, /stats, /r/:code)
 // ============================================================================
 
-router.get('/:space/:id', async (req, res) => {
+router.get('/:code', async (req, res) => {
   try {
-    const { space, id } = req.params;
-    const link = await LinkService.getStructuredLink(space, id);
+    const { code } = req.params;
+    const link = await LinkService.getShortLink(code);
     res.json({ success: true, link });
   } catch (error) {
     console.error('[SmartLinks] Error fetching link:', error);
@@ -135,7 +137,7 @@ router.get('/:space/:id', async (req, res) => {
     if (error.code === 'NOT_FOUND') {
       return res.status(404).json({
         success: false,
-        error: 'Link not found'
+        error: 'Short code not found'
       });
     }
     
@@ -147,43 +149,15 @@ router.get('/:space/:id', async (req, res) => {
 });
 
 // ============================================================================
-// UPDATE SHORT CODE LINK
+// UPDATE LINK
 // ============================================================================
 
-router.put('/short/:code', async (req, res) => {
+router.put('/:code', async (req, res) => {
   try {
     const { code } = req.params;
     const updates = req.body;
     
-    const link = await LinkService.updateShortCodeLink(code, updates);
-    res.json({ success: true, link });
-  } catch (error) {
-    console.error('[SmartLinks] Error updating short link:', error);
-    
-    if (error.code === 'NOT_FOUND') {
-      return res.status(404).json({
-        success: false,
-        error: 'Short code not found'
-      });
-    }
-    
-    res.status(500).json({
-      success: false,
-      error: 'Failed to update link'
-    });
-  }
-});
-
-// ============================================================================
-// UPDATE STRUCTURED LINK
-// ============================================================================
-
-router.put('/:space/:id', async (req, res) => {
-  try {
-    const { space, id } = req.params;
-    const updates = req.body;
-    
-    const link = await LinkService.updateStructuredLink(space, id, updates);
+    const link = await LinkService.updateShortLink(code, updates);
     res.json({ success: true, link });
   } catch (error) {
     console.error('[SmartLinks] Error updating link:', error);
@@ -203,39 +177,13 @@ router.put('/:space/:id', async (req, res) => {
 });
 
 // ============================================================================
-// DELETE SHORT CODE LINK
+// DELETE LINK
 // ============================================================================
 
-router.delete('/short/:code', async (req, res) => {
+router.delete('/:code', async (req, res) => {
   try {
     const { code } = req.params;
-    const result = await LinkService.deleteShortCodeLink(code);
-    res.json({ success: true, ...result });
-  } catch (error) {
-    console.error('[SmartLinks] Error deleting short link:', error);
-    
-    if (error.code === 'NOT_FOUND') {
-      return res.status(404).json({
-        success: false,
-        error: 'Short code not found'
-      });
-    }
-    
-    res.status(500).json({
-      success: false,
-      error: 'Failed to delete link'
-    });
-  }
-});
-
-// ============================================================================
-// DELETE STRUCTURED LINK
-// ============================================================================
-
-router.delete('/:space/:id', async (req, res) => {
-  try {
-    const { space, id } = req.params;
-    const result = await LinkService.deleteStructuredLink(space, id);
+    const result = await LinkService.deleteShortLink(code);
     res.json({ success: true, ...result });
   } catch (error) {
     console.error('[SmartLinks] Error deleting link:', error);
@@ -284,26 +232,13 @@ router.post('/events/:type', async (req, res) => {
 
     // Update link stats if it's an install event
     if (type === 'install') {
-      // Try short link first
-      const shortLinkRef = db.collection('short_links').doc(linkId);
-      const shortLinkDoc = await shortLinkRef.get();
+      const linkRef = db.collection('short_links').doc(linkId);
+      const linkDoc = await linkRef.get();
       
-      if (shortLinkDoc.exists) {
-        await shortLinkRef.update({
+      if (linkDoc.exists) {
+        await linkRef.update({
           installCount: FieldValue.increment(1)
         });
-      } else {
-        // Try structured link
-        const structuredSnapshot = await db.collection('smart_links')
-          .where('linkId', '==', linkId)
-          .limit(1)
-          .get();
-        
-        if (!structuredSnapshot.empty) {
-          await structuredSnapshot.docs[0].ref.update({
-            installCount: FieldValue.increment(1)
-          });
-        }
       }
     }
 
@@ -319,37 +254,6 @@ router.post('/events/:type', async (req, res) => {
       error: 'Failed to track event'
     });
   }
-});
-
-// ============================================================================
-// LINK STATISTICS
-// ============================================================================
-
-router.get('/stats', async (req, res) => {
-  try {
-    const stats = await LinkService.getLinkStats();
-    res.json({ success: true, stats });
-  } catch (error) {
-    console.error('[SmartLinks] Error fetching stats:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to fetch statistics'
-    });
-  }
-});
-
-// ============================================================================
-// HEALTH CHECK
-// ============================================================================
-
-router.get('/health', (req, res) => {
-  res.json({
-    success: true,
-    service: 'Smart Links API v2',
-    status: 'healthy',
-    timestamp: new Date().toISOString(),
-    validSpaces: getValidSpaces()
-  });
 });
 
 module.exports = router;

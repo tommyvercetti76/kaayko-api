@@ -42,8 +42,7 @@ apiApp.use("/gptActions", require("./api/ai/gptActions"));                // �
 // ============================================================================
 // SMART LINKS & DEEP LINKS
 // ============================================================================
-apiApp.use("/smartlinks", require("./api/smartLinks/smartLinks"));       // 🔗 Smart link CRUD & analytics
-apiApp.use("/events", require("./api/smartLinks/smartLinks"));           // 📊 App event tracking
+apiApp.use("/smartlinks", require("./api/smartLinks/smartLinks"));       // 🔗 Smart link CRUD & analytics (includes /events)
 apiApp.use("/", require("./api/deepLinks/deeplinkRoutes"));              // 📱 Universal links (/l/:id, /resolve)
 
 // Export main API function

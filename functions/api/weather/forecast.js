@@ -58,15 +58,24 @@ async function generateComprehensiveForecast(location) {
       }
     };
 
-    // Cache the result in Firestore for fastForecast and paddleScore APIs
+    // Cache the forecast (3-day hourly) for fastForecast API
     const cacheKey = `forecast_${location.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
     await db.collection('forecast_cache').doc(cacheKey).set({
       ...result.data,
       cached_at: new Date(),
-      expires_at: new Date(Date.now() + (2 * 60 * 60 * 1000))
+      expires_at: new Date(Date.now() + (4 * 60 * 60 * 1000)) // 4 hours
     });
 
-    console.log(`Cached forecast: ${cacheKey}`);
+    // Cache current conditions separately for paddleScore API (20 min TTL)
+    const currentCacheKey = `current_${location.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
+    await db.collection('current_conditions_cache').doc(currentCacheKey).set({
+      ...result.data.current,
+      location: weatherData.location,
+      cached_at: new Date(),
+      expires_at: new Date(Date.now() + (20 * 60 * 1000)) // 20 minutes
+    });
+
+    console.log(`Cached forecast and current conditions: ${cacheKey}`);
     return result;
 
   } catch (error) {

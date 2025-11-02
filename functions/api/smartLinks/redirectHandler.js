@@ -1,15 +1,14 @@
 /**
- * Shared Smart Link Redirect Handler
+ * Smart Link Redirect Handler - SHORT CODES ONLY
  * 
- * Single source of truth for all smart link redirects across:
- * - /api/smartlinks/r/:code  (explicit API route)
- * - /l/:code                  (short URL route)
+ * SIMPLIFIED: Only handles short codes (lkXXXX)
+ * Single route: kaayko.com/l/lkXXXX
  * 
- * Supports:
- * - Short code links (e.g., lk1ngp)
- * - Structured links (e.g., lake/trinity)
+ * Features:
+ * - Short code links (e.g., lk1ngp, lk9xrf)
  * - Platform-specific destinations (iOS/Android/Web)
  * - Click analytics tracking
+ * - Expiration checking
  * - Enable/disable functionality
  */
 
@@ -63,56 +62,35 @@ function errorPage(code, title, message, showAppButton = true) {
 }
 
 /**
- * Main redirect handler for smart links
+ * Main redirect handler for short code links
  * 
- * Lookup priority:
- * 1. Short code links (short_links collection)
- * 2. Structured links (smart_links collection, space/id format)
+ * SIMPLIFIED: Only looks up short_links collection
  * 
  * @param {Object} req - Express request object
  * @param {Object} res - Express response object  
- * @param {string} linkId - Link identifier (code or space/id)
+ * @param {string} code - Short code (e.g., lk1ngp)
  * @param {Object} options - Optional configuration
  * @param {boolean} options.trackAnalytics - Enable detailed analytics tracking
  * @returns {Promise<void>} Redirects or sends error page
  */
-async function handleRedirect(req, res, linkId, options = {}) {
+async function handleRedirect(req, res, code, options = {}) {
   try {
     const userAgent = req.get('user-agent') || '';
     const platform = detectPlatform(userAgent);
     
-    let linkData = null;
-    let linkType = null;
-    let docId = null;
-
-    // Priority 1: Check short_links collection (e.g., lk1ngp, test123)
-    const shortDoc = await db.collection('short_links').doc(linkId).get();
-    if (shortDoc.exists) {
-      linkData = shortDoc.data();
-      linkType = 'short';
-      docId = linkId;
-    } else {
-      // Priority 2: Check smart_links collection (e.g., lake/trinity, product/kayak-123)
-      const parts = linkId.split('/');
-      if (parts.length === 2) {
-        const [space, id] = parts;
-        const structuredDoc = await db.collection('smart_links').doc(`${space}_${id}`).get();
-        if (structuredDoc.exists) {
-          linkData = structuredDoc.data();
-          linkType = 'structured';
-          docId = `${space}_${id}`;
-        }
-      }
-    }
+    // Look up short code in short_links collection
+    const linkDoc = await db.collection('short_links').doc(code).get();
 
     // Case 1: Link not found in database
-    if (!linkData) {
+    if (!linkDoc.exists) {
       return res.status(404).send(errorPage(
         404,
         'Link Not Found',
-        `The link "${linkId}" doesn't exist or has been removed.`
+        `The link "${code}" doesn't exist or has been removed.`
       ));
     }
+
+    const linkData = linkDoc.data();
 
     // Case 2: Link disabled by creator
     if (linkData.enabled === false) {
@@ -121,6 +99,18 @@ async function handleRedirect(req, res, linkId, options = {}) {
         'Link Disabled',
         'This link has been disabled by its creator.'
       ));
+    }
+
+    // Case 3: Link expired
+    if (linkData.expiresAt) {
+      const expirationDate = linkData.expiresAt.toDate ? linkData.expiresAt.toDate() : new Date(linkData.expiresAt);
+      if (expirationDate < new Date()) {
+        return res.status(410).send(errorPage(
+          410,
+          'Link Expired',
+          'This link has expired and is no longer available.'
+        ));
+      }
     }
 
     // Determine destination URL based on user's platform
@@ -134,9 +124,8 @@ async function handleRedirect(req, res, linkId, options = {}) {
     }
 
     // Track click metrics (async, non-blocking - don't wait for completion)
-    const collection = linkType === 'short' ? 'short_links' : 'smart_links';
-    db.collection(collection)
-      .doc(docId)
+    db.collection('short_links')
+      .doc(code)
       .update({
         clickCount: FieldValue.increment(1),
         lastClickedAt: FieldValue.serverTimestamp()
@@ -146,8 +135,7 @@ async function handleRedirect(req, res, linkId, options = {}) {
     // Optional: Detailed analytics (when enabled via options)
     if (options.trackAnalytics) {
       db.collection('link_analytics').add({
-        linkId,
-        linkType,
+        code,
         platform,
         userAgent,
         timestamp: FieldValue.serverTimestamp(),
@@ -162,7 +150,7 @@ async function handleRedirect(req, res, linkId, options = {}) {
   } catch (error) {
     // Log error with context for debugging
     console.error('[Redirect] Handler error:', {
-      linkId,
+      code,
       error: error.message,
       stack: error.stack
     });
@@ -176,28 +164,16 @@ async function handleRedirect(req, res, linkId, options = {}) {
 }
 
 /**
- * Check if a smart link exists (useful for pre-flight checks)
- * @param {string} linkId - Link identifier
- * @returns {Promise<{exists: boolean, type?: string, enabled?: boolean}>}
+ * Check if a short link exists (useful for pre-flight checks)
+ * @param {string} code - Short code
+ * @returns {Promise<{exists: boolean, enabled?: boolean}>}
  */
-async function checkLinkExists(linkId) {
+async function checkLinkExists(code) {
   try {
-    // Check short link
-    const shortDoc = await db.collection('short_links').doc(linkId).get();
-    if (shortDoc.exists) {
-      const data = shortDoc.data();
-      return { exists: true, type: 'short', enabled: data.enabled !== false };
-    }
-    
-    // Check structured link
-    const parts = linkId.split('/');
-    if (parts.length === 2) {
-      const [space, id] = parts;
-      const structuredDoc = await db.collection('smart_links').doc(`${space}_${id}`).get();
-      if (structuredDoc.exists) {
-        const data = structuredDoc.data();
-        return { exists: true, type: 'structured', enabled: data.enabled !== false };
-      }
+    const linkDoc = await db.collection('short_links').doc(code).get();
+    if (linkDoc.exists) {
+      const data = linkDoc.data();
+      return { exists: true, enabled: data.enabled !== false };
     }
     
     return { exists: false };

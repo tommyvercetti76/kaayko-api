@@ -7,21 +7,17 @@
 ```
 api/
 ├── functions/        # ☁️ Firebase Cloud Functions
-│   └── api/         # � API endpoints (7 modules, 33 endpoints documented)
+│   └── api/         # API endpoints (7 modules, 33 endpoints documented)
 ├── ml-service/      # 🧠 ML inference service (Cloud Run)
-├── docs/            # � Technical documentation & OpenAPI spec
-├── deployment/      # � Production deployment scripts
-├── local-dev/       # 🛠️ Local development tools & scripts
+├── docs/            # 📚 Technical documentation & OpenAPI spec
 ├── archive/         # 📦 Archived/legacy code (if exists)
 └── README.md        # 📘 This file
 ```
 
 **Quick Navigation:**
 - **API Endpoints** → [`functions/api/README.md`](./functions/api/README.md) (7 comprehensive READMEs)
-- **API Reference** → [`docs/API-QUICK-REFERENCE-v2.1.0.md`](./docs/API-QUICK-REFERENCE-v2.1.0.md)
-- **ML Implementation** → [`docs/GOLD_STANDARD_IMPLEMENTATION.md`](./docs/GOLD_STANDARD_IMPLEMENTATION.md)
-- **Deployment Guide** → [`deployment/README.md`](./deployment/README.md)
-- **Documentation Index** → [`DOCUMENTATION_INDEX.md`](./DOCUMENTATION_INDEX.md)
+- **API Reference** → [`API-QUICK-REFERENCE-v2.1.0.md`](./API-QUICK-REFERENCE-v2.1.0.md)
+- **ML Implementation** → [`GOLD_STANDARD_IMPLEMENTATION.md`](./GOLD_STANDARD_IMPLEMENTATION.md)
 
 ## 🚀 Production APIs
 
@@ -106,26 +102,20 @@ api/
 ## 🏗️ Project Structure
 
 ```
+```
 kaayko-api/
 ├── functions/                    # 🎯 Core Firebase Functions
-│   ├── src/
-│   │   ├── api/                  # API endpoints
-│   │   ├── services/             # Business logic
-│   │   ├── scheduled/            # Scheduled functions
-│   │   ├── middleware/           # Request middleware
-│   │   ├── utils/                # Utilities
-│   │   ├── config/               # Configuration
-│   │   └── cache/                # Caching logic
+│   ├── api/                      # API endpoints
+│   ├── config/                   # Configuration
+│   ├── cache/                    # Caching logic
 │   └── package.json              # Dependencies
 ├── ml-service/                   # 🧠 ML Prediction Service
-├── docs/                         # 📚 Technical Documentation
-│   ├── API-QUICK-REFERENCE-v2.1.0.md
-│   ├── GOLD_STANDARD_IMPLEMENTATION.md
-│   ├── HOW_SCHEDULED_FUNCTIONS_WORK.md
-│   ├── kaayko-paddling-api-swagger.yaml (2,392 lines)
-│   └── deployment/DEPLOYMENT_GUIDE.md
-├── deployment/                   # 🚀 Production Deployment Scripts
-└── local-dev/                    # �️ Local Development Tools
+└── docs/                         # 📚 Technical Documentation
+    ├── API-QUICK-REFERENCE-v2.1.0.md
+    ├── GOLD_STANDARD_IMPLEMENTATION.md
+    ├── HOW_SCHEDULED_FUNCTIONS_WORK.md
+    └── kaayko-paddling-api-swagger.yaml
+```
 ```
 
 ---
