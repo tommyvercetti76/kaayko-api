@@ -10,6 +10,12 @@ __pycache__/
 functions/.env*
 *.env
 
+# 🔒 SECURITY: Service Account Keys (NEVER COMMIT!)
+serviceAccountKey.json
+*-firebase-adminsdk-*.json
+functions/serviceAccountKey.json
+kaayko_admin/*.json
+
 # Build outputs
 dist/
 build/
@@ -40,3 +46,12 @@ kaayko-frontend/
 .DS_Store
 Thumbs.db
 ml-service/*.pkl
+
+# Development scripts with test credentials (NEVER COMMIT!)
+functions/recreate-local-admin.js
+functions/set-admin-role.js
+functions/set-local-admin-role.js
+
+# Debug logs
+functions/firestore-debug.log
+functions/*.log

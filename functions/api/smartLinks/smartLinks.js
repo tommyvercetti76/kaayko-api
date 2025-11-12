@@ -27,6 +27,12 @@ const db = admin.firestore();
 const { handleRedirect } = require('./redirectHandler');
 const LinkService = require('./smartLinkService');
 
+// Import authentication middleware
+const { requireAuth, requireAdmin, optionalAuth } = require('../../middleware/authMiddleware');
+
+// Import notification service
+const { sendLinkCreatedNotification } = require('../../services/emailNotificationService');
+
 // ============================================================================
 // HEALTH CHECK (Must be BEFORE /:code to avoid being caught by it)
 // ============================================================================
@@ -70,12 +76,30 @@ router.get('/r/:code', async (req, res) => {
 });
 
 // ============================================================================
-// CREATE SHORT LINK
+// CREATE SHORT LINK (Protected - Requires Authentication)
 // ============================================================================
 
-router.post('/', async (req, res) => {
+router.post('/', requireAuth, requireAdmin, async (req, res) => {
   try {
-    const link = await LinkService.createShortLink(req.body);
+    // Add creator info from authenticated user
+    const linkData = {
+      ...req.body,
+      createdBy: req.user.email || req.user.uid
+    };
+    
+    const link = await LinkService.createShortLink(linkData);
+    
+    // Send email notification to admin (async, don't block response)
+    sendLinkCreatedNotification(link, req.user).then(result => {
+      if (result.success) {
+        console.log('✅ Email notification sent:', result.messageId);
+      } else {
+        console.error('⚠️ Email notification failed:', result.error);
+      }
+    }).catch(err => {
+      console.error('⚠️ Email notification error:', err);
+    });
+    
     res.json({ 
       success: true, 
       link,
@@ -100,10 +124,10 @@ router.post('/', async (req, res) => {
 });
 
 // ============================================================================
-// LIST ALL LINKS
+// LIST ALL LINKS (Protected - Requires Admin Role)
 // ============================================================================
 
-router.get('/', async (req, res) => {
+router.get('/', requireAuth, requireAdmin, async (req, res) => {
   try {
     const { enabled, limit } = req.query;
     
@@ -149,10 +173,10 @@ router.get('/:code', async (req, res) => {
 });
 
 // ============================================================================
-// UPDATE LINK
+// UPDATE LINK (Protected - Requires Admin Role)
 // ============================================================================
 
-router.put('/:code', async (req, res) => {
+router.put('/:code', requireAuth, requireAdmin, async (req, res) => {
   try {
     const { code } = req.params;
     const updates = req.body;
@@ -177,10 +201,10 @@ router.put('/:code', async (req, res) => {
 });
 
 // ============================================================================
-// DELETE LINK
+// DELETE LINK (Protected - Requires Admin)
 // ============================================================================
 
-router.delete('/:code', async (req, res) => {
+router.delete('/:code', requireAuth, requireAdmin, async (req, res) => {
   try {
     const { code } = req.params;
     const result = await LinkService.deleteShortLink(code);

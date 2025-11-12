@@ -40,6 +40,12 @@ apiApp.use("/paddlebot", require("./api/ai/paddleBotConversation"));     // 🤖
 apiApp.use("/gptActions", require("./api/ai/gptActions"));                // 🧠 GPT Actions wrapper
 
 // ============================================================================
+// ADMIN & AUTHENTICATION
+// ============================================================================
+apiApp.use("/auth", require("./api/auth/authRoutes"));                   // 🔐 Authentication (login, logout, verify)
+apiApp.use("/admin", require("./api/admin/adminUsers"));                 // 👤 Admin user management
+
+// ============================================================================
 // SMART LINKS & DEEP LINKS
 // ============================================================================
 apiApp.use("/smartlinks", require("./api/smartLinks/smartLinks"));       // 🔗 Smart link CRUD & analytics (includes /events)

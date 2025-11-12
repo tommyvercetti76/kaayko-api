@@ -1,0 +1,45 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "admin_users",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "role", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "admin_users",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "enabled", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "short_links",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "enabled", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "short_links",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "createdBy", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "link_analytics",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "linkId", "order": "ASCENDING" },
+        { "fieldPath": "timestamp", "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

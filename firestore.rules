@@ -1,0 +1,40 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Admin users collection - API-only writes, authenticated reads
+    match /admin_users/{userId} {
+      // Users can read their own profile
+      allow read: if request.auth != null && request.auth.uid == userId;
+      // Only Cloud Functions can write (via Admin SDK)
+      allow write: if false;
+    }
+    
+    // Short links collection - Public reads for redirects, API-only writes
+    match /short_links/{linkId} {
+      // Public read access (needed for redirect functionality)
+      allow read: if true;
+      // Only Cloud Functions can write
+      allow write: if false;
+    }
+    
+    // Link analytics - Write by authenticated users, read by admins
+    match /link_analytics/{analyticsId} {
+      // Anyone can write analytics (for tracking)
+      allow create: if true;
+      // Only Cloud Functions can read/update/delete
+      allow read, update, delete: if false;
+    }
+    
+    // Forecast cache - Public reads, API-only writes
+    match /forecast_cache/{cacheId} {
+      allow read: if true;
+      allow write: if false;
+    }
+    
+    // All other collections - deny by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
