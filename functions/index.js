@@ -60,7 +60,9 @@ apiApp.use("/", require("./api/deepLinks/deeplinkRoutes"));
 // Export main API function
 exports.api = onRequest({
   cors: true,
-  invoker: "public"
+  invoker: "public",
+  timeoutSeconds: 300,
+  memory: "512MiB"
 }, apiApp);
 
 // ===========================
