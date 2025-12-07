@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Order Confirmation - Kaayko</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: #f5f5f5;
+      padding: 20px;
+      margin: 0;
+    }
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+      background: white;
+      padding: 40px 30px;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    }
+    .header {
+      text-align: center;
+      color: #ffd700;
+      font-size: 32px;
+      font-weight: bold;
+      margin-bottom: 10px;
+      letter-spacing: 0.5px;
+    }
+    .subheader {
+      text-align: center;
+      color: #666;
+      font-size: 18px;
+      margin-bottom: 30px;
+    }
+    .greeting {
+      color: #333;
+      font-size: 16px;
+      line-height: 1.6;
+      margin-bottom: 25px;
+    }
+    .details {
+      background: #f9f9f9;
+      padding: 25px;
+      border-radius: 5px;
+      margin: 25px 0;
+      border-left: 4px solid #ffd700;
+    }
+    .details h3 {
+      color: #333;
+      margin: 0 0 15px 0;
+      font-size: 18px;
+    }
+    .detail-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 10px 0;
+      border-bottom: 1px solid #e0e0e0;
+    }
+    .detail-row:last-child {
+      border-bottom: none;
+    }
+    .detail-label {
+      color: #666;
+      font-weight: 500;
+    }
+    .detail-value {
+      color: #333;
+      font-weight: 600;
+    }
+    .amount {
+      font-size: 20px;
+      color: #ffd700;
+    }
+    .message {
+      background: #fff9e6;
+      padding: 20px;
+      border-radius: 5px;
+      margin: 25px 0;
+      border: 1px solid #ffd700;
+      color: #333;
+      font-size: 15px;
+      line-height: 1.6;
+    }
+    .footer {
+      text-align: center;
+      color: #999;
+      margin-top: 40px;
+      padding-top: 30px;
+      border-top: 1px solid #e0e0e0;
+      font-size: 14px;
+    }
+    .footer a {
+      color: #ffd700;
+      text-decoration: none;
+      font-weight: 600;
+    }
+    .footer a:hover {
+      text-decoration: underline;
+    }
+    .brand {
+      font-weight: bold;
+      color: #333;
+      font-size: 16px;
+      margin-top: 15px;
+    }
+    .tagline {
+      color: #666;
+      font-style: italic;
+      margin-top: 5px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">🛶 Kaayko</div>
+    <div class="subheader">Order Confirmed!</div>
+    
+    <div class="greeting">
+      <p>Thank you for your order! We're excited to get your gear ready.</p>
+    </div>
+    
+    <div class="details">
+      <h3>Order Details</h3>
+      <div class="detail-row">
+        <span class="detail-label">Order ID</span>
+        <span class="detail-value">{{orderId}}</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-label">Product</span>
+        <span class="detail-value">{{productName}}</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-label">Size</span>
+        <span class="detail-value">{{size}}</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-label">Amount</span>
+        <span class="detail-value amount">${{amount}}</span>
+      </div>
+    </div>
+    
+    <div class="message">
+      <strong>📦 What's Next?</strong><br><br>
+      Your order is being processed and will ship shortly. You'll receive a shipping confirmation email with tracking information once your package is on the way.
+      <br><br>
+      <strong>Questions?</strong> Reply to this email or contact us at <a href="mailto:orders@kaayko.com" style="color: #ffd700;">orders@kaayko.com</a>
+    </div>
+    
+    <div class="footer">
+      <div class="brand">Kaayko</div>
+      <div class="tagline">Made for the Wild</div>
+      <p style="margin-top: 20px;">
+        <a href="https://kaayko.com">Visit Our Store</a> | 
+        <a href="https://kaayko.com/paddlingout.html">Check Conditions</a> | 
+        <a href="https://kaayko.com/about.html">About Us</a>
+      </p>
+      <p style="margin-top: 15px; font-size: 12px; color: #bbb;">
+        This is an automated message. Please do not reply directly to this email.
+      </p>
+    </div>
+  </div>
+</body>
+</html>

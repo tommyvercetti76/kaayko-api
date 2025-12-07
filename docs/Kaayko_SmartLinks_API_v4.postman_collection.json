@@ -1,0 +1,592 @@
+{
+  "info": {
+    "name": "Kaayko SmartLinks API v4",
+    "description": "Complete API collection for Kaayko SmartLinks, Deep Links, and Admin Management.\n\n**Base URL**: https://us-central1-kaaykostore.cloudfunctions.net/api\n\n**Authentication**: All protected endpoints require Firebase ID token in Authorization header.\n\nSee SWAGGER_USAGE_GUIDE.md for detailed documentation.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "kaayko-engineering"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{firebase_id_token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "https://us-central1-kaaykostore.cloudfunctions.net/api",
+      "type": "string"
+    },
+    {
+      "key": "firebase_id_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "test_link_code",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "🔗 SmartLinks",
+      "item": [
+        {
+          "name": "Create SmartLink (Auto Code)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    pm.collectionVariables.set('test_link_code', response.link.code);",
+                  "    pm.test('Link created successfully', () => {",
+                  "        pm.expect(response.success).to.be.true;",
+                  "        pm.expect(response.link.code).to.exist;",
+                  "    });",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Test SmartLink {{$timestamp}}\",\n  \"description\": \"Created via Postman\",\n  \"webDestination\": \"https://kaayko.com/test\",\n  \"iosDestination\": \"kaayko://test\",\n  \"androidDestination\": \"kaayko://test\",\n  \"metadata\": {\n    \"source\": \"postman\",\n    \"test_run\": true\n  },\n  \"utm\": {\n    \"utm_source\": \"postman\",\n    \"utm_medium\": \"api_test\",\n    \"utm_campaign\": \"test_{{$timestamp}}\"\n  },\n  \"enabled\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/smartlinks",
+              "host": ["{{base_url}}"],
+              "path": ["smartlinks"]
+            },
+            "description": "Create a new SmartLink with auto-generated short code (e.g., lk1ngp).\n\nThis request automatically saves the generated code to `{{test_link_code}}` for use in subsequent requests."
+          },
+          "response": []
+        },
+        {
+          "name": "Create SmartLink (Custom Code)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"summer2024\",\n  \"title\": \"Summer Sale 2024\",\n  \"description\": \"20% off all kayaks this summer\",\n  \"webDestination\": \"https://kaayko.com/store/kayaks?sale=summer\",\n  \"iosDestination\": \"kaayko://store/kayaks?sale=summer\",\n  \"androidDestination\": \"kaayko://store/kayaks?sale=summer\",\n  \"metadata\": {\n    \"discount\": 20,\n    \"campaign_type\": \"seasonal\",\n    \"target_audience\": \"all\"\n  },\n  \"utm\": {\n    \"utm_source\": \"email\",\n    \"utm_medium\": \"newsletter\",\n    \"utm_campaign\": \"summer2024\"\n  },\n  \"expiresAt\": \"2024-12-31T23:59:59Z\",\n  \"enabled\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/smartlinks",
+              "host": ["{{base_url}}"],
+              "path": ["smartlinks"]
+            },
+            "description": "Create a branded SmartLink with custom short code.\n\n**Note**: Will return 409 Conflict if code already exists."
+          },
+          "response": []
+        },
+        {
+          "name": "List All SmartLinks",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/smartlinks?limit=50",
+              "host": ["{{base_url}}"],
+              "path": ["smartlinks"],
+              "query": [
+                {
+                  "key": "enabled",
+                  "value": "true",
+                  "description": "Filter by enabled status",
+                  "disabled": true
+                },
+                {
+                  "key": "limit",
+                  "value": "50",
+                  "description": "Max results (1-1000)"
+                }
+              ]
+            },
+            "description": "Retrieve all SmartLinks with optional filtering.\n\n**Query Parameters**:\n- `enabled` (boolean): Filter active/inactive links\n- `limit` (integer): Max results (default: 100, max: 1000)"
+          },
+          "response": []
+        },
+        {
+          "name": "Get SmartLink by Code",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/smartlinks/{{test_link_code}}",
+              "host": ["{{base_url}}"],
+              "path": ["smartlinks", "{{test_link_code}}"]
+            },
+            "description": "Retrieve a single SmartLink by its short code.\n\n**Uses**: `{{test_link_code}}` variable (set by Create request)."
+          },
+          "response": []
+        },
+        {
+          "name": "Update SmartLink",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Updated Title\",\n  \"description\": \"Updated description\",\n  \"enabled\": true,\n  \"metadata\": {\n    \"updated_at\": \"{{$isoTimestamp}}\",\n    \"updated_via\": \"postman\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/smartlinks/{{test_link_code}}",
+              "host": ["{{base_url}}"],
+              "path": ["smartlinks", "{{test_link_code}}"]
+            },
+            "description": "Update SmartLink metadata (partial update - only provided fields are modified).\n\n**Immutable Fields**: `code`, `createdAt`, `createdBy`, `clickCount`"
+          },
+          "response": []
+        },
+        {
+          "name": "Disable SmartLink",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"enabled\": false\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/smartlinks/{{test_link_code}}",
+              "host": ["{{base_url}}"],
+              "path": ["smartlinks", "{{test_link_code}}"]
+            },
+            "description": "Disable a SmartLink (returns 410 Gone on redirect attempts).\n\n**Alternative to deletion** - preserves analytics data."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete SmartLink",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/smartlinks/{{test_link_code}}",
+              "host": ["{{base_url}}"],
+              "path": ["smartlinks", "{{test_link_code}}"]
+            },
+            "description": "⚠️ **DESTRUCTIVE**: Permanently delete SmartLink and all analytics.\n\n**Authorization**: Requires `admin` or `super-admin` role with `smartlinks:delete` permission."
+          },
+          "response": []
+        },
+        {
+          "name": "Get SmartLinks Stats",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/smartlinks/stats",
+              "host": ["{{base_url}}"],
+              "path": ["smartlinks", "stats"]
+            },
+            "description": "Get aggregated statistics across all SmartLinks:\n- Total links\n- Total clicks\n- Enabled/disabled count"
+          },
+          "response": []
+        },
+        {
+          "name": "Track App Install Event",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"linkId\": \"{{test_link_code}}\",\n  \"userId\": \"user_{{$randomUUID}}\",\n  \"platform\": \"ios\",\n  \"metadata\": {\n    \"app_version\": \"1.2.3\",\n    \"os_version\": \"17.1\",\n    \"device_model\": \"iPhone 15 Pro\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/smartlinks/events/install",
+              "host": ["{{base_url}}"],
+              "path": ["smartlinks", "events", "install"]
+            },
+            "description": "Track app install attributed to SmartLink.\n\nIncrements `installCount` on the link document."
+          },
+          "response": []
+        },
+        {
+          "name": "Track Custom Event",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"linkId\": \"{{test_link_code}}\",\n  \"userId\": \"user_abc123\",\n  \"platform\": \"ios\",\n  \"metadata\": {\n    \"event_name\": \"purchase_complete\",\n    \"revenue\": 49.99,\n    \"currency\": \"USD\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/smartlinks/events/conversion",
+              "host": ["{{base_url}}"],
+              "path": ["smartlinks", "events", "conversion"]
+            },
+            "description": "Track custom conversion event.\n\n**Event Types**: `install`, `open`, `conversion`, `custom`"
+          },
+          "response": []
+        },
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/smartlinks/health",
+              "host": ["{{base_url}}"],
+              "path": ["smartlinks", "health"]
+            },
+            "description": "Verify SmartLinks service is operational."
+          },
+          "response": []
+        }
+      ],
+      "description": "SmartLinks CRUD operations, analytics, and event tracking."
+    },
+    {
+      "name": "📱 Deep Links",
+      "item": [
+        {
+          "name": "Universal Link Redirect",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/l/{{test_link_code}}",
+              "host": ["{{base_url}}"],
+              "path": ["l", "{{test_link_code}}"]
+            },
+            "description": "Primary redirect endpoint for SmartLinks.\n\n**Platform Detection**: Automatically routes to iOS/Android/Web destination based on User-Agent.\n\n**No Auth Required**: Public endpoint for end-user clicks."
+          },
+          "response": []
+        },
+        {
+          "name": "Universal Link (App Store Mode)",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/l/{{test_link_code}}?src=ul&appStore=Y",
+              "host": ["{{base_url}}"],
+              "path": ["l", "{{test_link_code}}"],
+              "query": [
+                {
+                  "key": "src",
+                  "value": "ul",
+                  "description": "Source: universal link"
+                },
+                {
+                  "key": "appStore",
+                  "value": "Y",
+                  "description": "Force App Store redirect"
+                }
+              ]
+            },
+            "description": "Show App Store redirect page (2 second delay before redirect).\n\n**Use Case**: QR codes, marketing materials where you want to ensure app download."
+          },
+          "response": []
+        },
+        {
+          "name": "Resolve Context Token",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/resolve?id=550e8400-e29b-41d4-a716-446655440000",
+              "host": ["{{base_url}}"],
+              "path": ["resolve"],
+              "query": [
+                {
+                  "key": "id",
+                  "value": "550e8400-e29b-41d4-a716-446655440000",
+                  "description": "Context token (UUID)"
+                }
+              ]
+            },
+            "description": "Restore user context after app install (deferred deep linking).\n\n**Called by**: iOS/Android app on first launch to restore SmartLink context."
+          },
+          "response": []
+        },
+        {
+          "name": "Deep Links Health Check",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/health",
+              "host": ["{{base_url}}"],
+              "path": ["health"]
+            },
+            "description": "Verify deep link service is operational.\n\n**Includes**: Rate limit config, security settings, available endpoints."
+          },
+          "response": []
+        }
+      ],
+      "description": "Universal link routing, context preservation, and deferred deep linking."
+    },
+    {
+      "name": "🔐 Authentication",
+      "item": [
+        {
+          "name": "Get Current User",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/auth/me",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "me"]
+            },
+            "description": "Retrieve authenticated user's profile.\n\n**Returns**: UID, email, role, displayName, emailVerified"
+          },
+          "response": []
+        },
+        {
+          "name": "Verify ID Token",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"{{firebase_id_token}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/verify",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "verify"]
+            },
+            "description": "Debug endpoint to verify Firebase ID token and decode claims.\n\n**Use Cases**: Token debugging, expiration check, inspect custom claims."
+          },
+          "response": []
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/auth/logout",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "logout"]
+            },
+            "description": "Revoke all refresh tokens, invalidating all user sessions.\n\n**Client Actions**:\n1. Call this endpoint\n2. Clear localStorage\n3. Redirect to login"
+          },
+          "response": []
+        }
+      ],
+      "description": "Authentication endpoints for login, logout, and token verification."
+    },
+    {
+      "name": "👤 Admin Users",
+      "item": [
+        {
+          "name": "Get Admin Profile",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/admin/me",
+              "host": ["{{base_url}}"],
+              "path": ["admin", "me"]
+            },
+            "description": "Get current user's admin profile with role and permissions.\n\n**Auto-records login** timestamp."
+          },
+          "response": []
+        },
+        {
+          "name": "List Admin Users",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/admin/users?role=admin&enabled=true",
+              "host": ["{{base_url}}"],
+              "path": ["admin", "users"],
+              "query": [
+                {
+                  "key": "role",
+                  "value": "admin",
+                  "description": "Filter by role",
+                  "disabled": true
+                },
+                {
+                  "key": "enabled",
+                  "value": "true",
+                  "description": "Filter by enabled status",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "List all admin users.\n\n**Authorization**: Requires `super-admin` role."
+          },
+          "response": []
+        },
+        {
+          "name": "Create Admin User",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"newadmin@kaayko.com\",\n  \"password\": \"SecurePassword123!\",\n  \"displayName\": \"New Admin\",\n  \"role\": \"admin\",\n  \"metadata\": {\n    \"department\": \"Engineering\",\n    \"created_via\": \"postman\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/admin/users",
+              "host": ["{{base_url}}"],
+              "path": ["admin", "users"]
+            },
+            "description": "Create new admin user with Firebase Auth account.\n\n**Process**:\n1. Creates Firebase Auth user\n2. Creates Firestore admin_users document\n3. Assigns default permissions based on role\n\n**Authorization**: Requires `super-admin` role."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Admin User by UID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/admin/users/:uid",
+              "host": ["{{base_url}}"],
+              "path": ["admin", "users", ":uid"],
+              "variable": [
+                {
+                  "key": "uid",
+                  "value": "abc123xyz",
+                  "description": "Firebase Auth UID"
+                }
+              ]
+            },
+            "description": "Get specific admin user by Firebase UID.\n\n**Authorization**: Requires `super-admin` role."
+          },
+          "response": []
+        },
+        {
+          "name": "Update Admin User",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"role\": \"editor\",\n  \"displayName\": \"Updated Name\",\n  \"enabled\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/admin/users/:uid",
+              "host": ["{{base_url}}"],
+              "path": ["admin", "users", ":uid"],
+              "variable": [
+                {
+                  "key": "uid",
+                  "value": "abc123xyz",
+                  "description": "Firebase Auth UID"
+                }
+              ]
+            },
+            "description": "Update admin user's role, permissions, or profile.\n\n**Security**: Cannot modify your own role.\n\n**Authorization**: Requires `super-admin` role."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Admin User",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/admin/users/:uid",
+              "host": ["{{base_url}}"],
+              "path": ["admin", "users", ":uid"],
+              "variable": [
+                {
+                  "key": "uid",
+                  "value": "abc123xyz",
+                  "description": "Firebase Auth UID"
+                }
+              ]
+            },
+            "description": "Soft delete (disable) admin user.\n\n**Security**: Cannot delete yourself.\n\n**Authorization**: Requires `super-admin` role."
+          },
+          "response": []
+        },
+        {
+          "name": "Get Available Roles",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/admin/roles",
+              "host": ["{{base_url}}"],
+              "path": ["admin", "roles"]
+            },
+            "description": "Get all available roles and their default permissions.\n\n**Use Case**: Populate role dropdown in admin UI."
+          },
+          "response": []
+        }
+      ],
+      "description": "Enterprise admin user management with role-based access control (RBAC)."
+    }
+  ]
+}

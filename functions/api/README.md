@@ -10,7 +10,7 @@
 api/
 ├── weather/       🌦️  Weather & paddle condition APIs
 ├── smartLinks/    🔗 Link management & analytics
-├── ai/            🤖 PaddleBot conversational AI
+├── ai/            🤖 GPT Actions (ChatGPT integration)
 ├── products/      🛍️  Product catalog & images
 ├── deepLinks/     📱 Universal links (iOS integration)
 └── core/          📚 Documentation & OpenAPI specs
@@ -87,23 +87,16 @@ GET    /api/smartlinks/stats              # Analytics
 **README:** [ai/README.md](ai/README.md)
 
 ### APIs:
-1. **PaddleBot Chat** - Conversational AI with GPT-4o
-2. **Session Management** - Context tracking across turns
-3. **GPT Actions** - OpenAI Custom GPT integration
+1. **GPT Actions** - OpenAI Custom GPT integration (ChatGPT)
 
 ### Key Features:
-- ✅ Natural language understanding
-- ✅ Multi-turn conversations with memory
-- ✅ Location extraction and geocoding
-- ✅ Intent recognition
-- ✅ Real-time data integration
+- ✅ Paddle score and weather data for GPT
+- ✅ Location-based forecasts
+- ✅ Nearby paddling spot discovery
+- ✅ Optimized for ChatGPT consumption
 
 ### Endpoints:
 ```
-POST   /api/paddlebot/chat               # Chat with PaddleBot
-GET    /api/paddlebot/session/:id        # Get session context
-DELETE /api/paddlebot/session/:id        # Clear session
-
 GET    /api/gptActions/paddleScore       # GPT action: paddle score
 GET    /api/gptActions/forecast          # GPT action: forecast
 GET    /api/gptActions/locations         # GPT action: locations
@@ -252,10 +245,8 @@ curl -X POST "http://127.0.0.1:5001/kaaykostore/us-central1/api/smartlinks/short
   -H "Content-Type: application/json" \
   -d '{"destination": "https://kaayko.com"}'
 
-# Test PaddleBot
-curl -X POST "http://127.0.0.1:5001/kaaykostore/us-central1/api/paddlebot/chat" \
-  -H "Content-Type: application/json" \
-  -d '{"message": "What are conditions at Lake Travis?", "sessionId": "test123"}'
+# Test GPT Actions
+curl "http://127.0.0.1:5001/kaaykostore/us-central1/api/gptActions/paddleScore?latitude=30.3894&longitude=-97.9433"
 ```
 
 ---
@@ -275,7 +266,7 @@ curl -X POST "http://127.0.0.1:5001/kaaykostore/us-central1/api/paddlebot/chat" 
 │   └── Complete Smart Links documentation
 │
 ├── 🤖 api/functions/api/ai/README.md
-│   └── Complete AI/PaddleBot documentation
+│   └── Complete GPT Actions documentation
 │
 ├── 🛍️  api/functions/api/products/README.md
 │   └── Complete products & images documentation
@@ -323,7 +314,7 @@ paddlingout:       150ms
 nearbyWater:       800ms-2s
 smartLinks/create: 200ms (800ms with enrichment)
 smartLinks/get:    50ms
-paddlebot/chat:    2-5s
+gptActions:        500ms
 products:          150ms
 deepLinks:         100ms
 docs:              50ms
@@ -384,8 +375,8 @@ docs:              50ms
 **Create marketing links:**
 → `smartLinks/README.md` → POST /smartlinks
 
-**Build chatbot:**
-→ `ai/README.md` → POST /paddlebot/chat
+**ChatGPT integration:**
+→ `ai/README.md` → GET /gptActions/paddleScore
 
 **Display products:**
 → `products/README.md` → GET /products

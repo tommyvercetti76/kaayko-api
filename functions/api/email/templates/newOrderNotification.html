@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>New Order - Kaayko Admin</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: #f5f5f5;
+      padding: 20px;
+      margin: 0;
+    }
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+      background: white;
+      padding: 40px 30px;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    }
+    .header {
+      text-align: center;
+      color: #ffd700;
+      font-size: 28px;
+      font-weight: bold;
+      margin-bottom: 10px;
+    }
+    .alert {
+      background: #fff9e6;
+      padding: 20px;
+      border-left: 4px solid #ffd700;
+      margin: 20px 0;
+      border-radius: 4px;
+    }
+    .alert-title {
+      color: #333;
+      font-size: 18px;
+      font-weight: bold;
+      margin-bottom: 10px;
+    }
+    .alert-text {
+      color: #666;
+      font-size: 15px;
+    }
+    .details {
+      background: #f9f9f9;
+      padding: 25px;
+      border-radius: 5px;
+      margin: 25px 0;
+    }
+    .details h3 {
+      color: #333;
+      margin: 0 0 20px 0;
+      font-size: 18px;
+      border-bottom: 2px solid #ffd700;
+      padding-bottom: 10px;
+    }
+    .detail-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 12px 0;
+      border-bottom: 1px solid #e0e0e0;
+    }
+    .detail-row:last-child {
+      border-bottom: none;
+    }
+    .detail-label {
+      color: #666;
+      font-weight: 500;
+      flex: 0 0 40%;
+    }
+    .detail-value {
+      color: #333;
+      font-weight: 600;
+      flex: 1;
+      text-align: right;
+      word-break: break-word;
+    }
+    .amount {
+      font-size: 22px;
+      color: #ffd700;
+    }
+    .status-success {
+      color: #22c55e;
+      font-weight: bold;
+    }
+    .actions {
+      margin: 30px 0;
+      text-align: center;
+    }
+    .button {
+      display: inline-block;
+      background: #ffd700;
+      color: #0a0a0a;
+      padding: 15px 35px;
+      text-decoration: none;
+      border-radius: 5px;
+      font-weight: bold;
+      font-size: 16px;
+      margin: 5px;
+    }
+    .button:hover {
+      background: #e6c200;
+    }
+    .button-secondary {
+      background: #333;
+      color: white;
+    }
+    .button-secondary:hover {
+      background: #555;
+    }
+    .footer {
+      text-align: center;
+      color: #999;
+      margin-top: 40px;
+      padding-top: 30px;
+      border-top: 1px solid #e0e0e0;
+      font-size: 13px;
+    }
+    .timestamp {
+      color: #999;
+      font-size: 13px;
+      text-align: center;
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">🔔 New Order Received</div>
+    
+    <div class="alert">
+      <div class="alert-title">⚡ Action Required</div>
+      <div class="alert-text">
+        A new order has been placed and payment has been confirmed. Please process and fulfill this order promptly.
+      </div>
+    </div>
+    
+    <div class="details">
+      <h3>Order Information</h3>
+      <div class="detail-row">
+        <span class="detail-label">Order ID</span>
+        <span class="detail-value">{{orderId}}</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-label">Customer Email</span>
+        <span class="detail-value">{{customerEmail}}</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-label">Product</span>
+        <span class="detail-value">{{productName}}</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-label">Size</span>
+        <span class="detail-value">{{size}}</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-label">Amount</span>
+        <span class="detail-value amount">${{amount}}</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-label">Payment Status</span>
+        <span class="detail-value status-success">{{status}}</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-label">Payment Intent</span>
+        <span class="detail-value" style="font-size: 12px; font-family: monospace;">{{paymentIntentId}}</span>
+      </div>
+    </div>
+    
+    <div class="actions">
+      <a href="https://dashboard.stripe.com/test/payments/{{paymentIntentId}}" class="button">
+        View in Stripe Dashboard →
+      </a>
+      <br>
+      <a href="https://kaayko.com/admin/smartlinks.html" class="button button-secondary">
+        Go to Admin Panel
+      </a>
+    </div>
+    
+    <div class="timestamp">
+      Order received: {{timestamp}}
+    </div>
+    
+    <div class="footer">
+      <strong>Kaayko Admin Notifications</strong>
+      <p style="margin-top: 10px;">
+        This is an automated notification sent to rohan@kaayko.com for new orders.
+      </p>
+    </div>
+  </div>
+</body>
+</html>

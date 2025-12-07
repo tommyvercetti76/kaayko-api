@@ -1,0 +1,1873 @@
+openapi: 3.0.3
+info:
+  title: Kaayko SmartLinks & Admin API
+  version: 4.0.0
+  description: |
+    # Kaayko Enterprise API - SmartLinks, Deep Links, and Admin Management
+    
+    **Production URL**: `https://us-central1-kaaykostore.cloudfunctions.net/api`
+    
+    ## Architecture Overview
+    
+    This API provides:
+    - **SmartLinks v4**: Short code link management with rich metadata, UTM tracking, and analytics
+    - **Deep Links**: Universal link routing with context preservation for iOS/Android apps
+    - **Admin Management**: Role-based access control (RBAC) with super-admin, admin, editor, viewer roles
+    - **Authentication**: Firebase ID token-based authentication with JWT verification
+    
+    ## Authentication
+    
+    All protected endpoints require a Firebase ID token in the Authorization header:
+    ```
+    Authorization: Bearer <firebase_id_token>
+    ```
+    
+    ### Role-Based Access Control (RBAC)
+    
+    **Roles** (hierarchical):
+    - `super-admin`: Full system access, user management, all permissions
+    - `admin`: Full SmartLinks access (CRUD + analytics), cannot manage users
+    - `editor`: Create/read/update SmartLinks, no deletion
+    - `viewer`: Read-only access to SmartLinks and analytics
+    
+    **Permissions** (granular):
+    - `smartlinks:create`, `smartlinks:read`, `smartlinks:update`, `smartlinks:delete`
+    - `users:create`, `users:read`, `users:update`, `users:delete`
+    - `analytics:read`, `qr:create`, `settings:update`
+    
+    ## SmartLinks Architecture
+    
+    ### Link Format
+    All links follow the pattern: `https://kaayko.com/l/{code}`
+    
+    **Short Codes**:
+    - Auto-generated: `lk1ngp`, `lk9xrf` (6 chars, alphanumeric, unique)
+    - Custom aliases: `summer2024`, `trinity-lake`, `kayak-promo`
+    
+    ### Multi-Platform Routing
+    Each SmartLink can have platform-specific destinations:
+    - `iosDestination`: Deep link for iOS app (e.g., `kaayko://product/123`)
+    - `androidDestination`: Deep link for Android app
+    - `webDestination`: Fallback web URL
+    
+    ### Analytics Tracking
+    SmartLinks automatically track:
+    - Click count (incremented on each redirect)
+    - Install count (tracked via `/events/install` endpoint)
+    - Unique users (fingerprinted by hashed IP)
+    - Last clicked timestamp
+    - Platform distribution (iOS, Android, Web)
+    - UTM campaign attribution
+    
+    ## Deep Links & Context Preservation
+    
+    The `/l/:id` endpoint handles two link types:
+    
+    1. **SmartLinks** (priority): Modern short codes with rich routing
+    2. **Legacy Links** (fallback): Location-based links (e.g., `antero456`)
+    
+    ### Context Preservation Flow
+    
+    ```
+    User clicks link → Server saves context token → Cookie + Firestore
+                    → Redirects to app/store → App reads context
+                    → App calls /resolve → Restores user context
+    ```
+    
+    **Context Token** (UUID): 7-day TTL, stores:
+    - Link ID and metadata
+    - User fingerprint (OS, device, timezone)
+    - Geographic location (if available)
+    - UTM parameters
+    
+    ## Rate Limiting & Security
+    
+    - **Rate Limit**: 30 requests/minute per IP for deep links
+    - **Security Headers**: CSP, X-Frame-Options, HSTS enabled
+    - **Token Expiry**: Firebase tokens expire in 1 hour (refresh required)
+    - **Cookie Security**: HttpOnly, Secure (production), SameSite=Lax
+    
+    ## Error Handling
+    
+    All endpoints follow standardized error responses:
+    ```json
+    {
+      "success": false,
+      "error": "Human-readable error message",
+      "code": "ERROR_CODE_CONSTANT",
+      "details": "Technical details (optional)"
+    }
+    ```
+    
+    **Common Error Codes**:
+    - `AUTH_TOKEN_MISSING`: No Bearer token provided
+    - `AUTH_TOKEN_EXPIRED`: Token expired, refresh required
+    - `AUTH_TOKEN_INVALID`: Malformed or invalid token
+    - `INSUFFICIENT_PERMISSIONS`: User role lacks required permissions
+    - `NOT_FOUND`: Resource not found
+    - `ALREADY_EXISTS`: Duplicate resource (e.g., short code collision)
+    
+  contact:
+    name: Kaayko Engineering
+    email: rohan@kaayko.com
+  license:
+    name: Proprietary
+    url: https://kaayko.com/terms
+
+servers:
+  - url: https://us-central1-kaaykostore.cloudfunctions.net/api
+    description: Production Firebase Functions (US Central)
+  - url: http://localhost:5001/kaaykostore/us-central1/api
+    description: Local Firebase Emulator
+
+tags:
+  - name: SmartLinks
+    description: |
+      Short code link management with rich metadata, UTM tracking, and multi-platform routing.
+      All SmartLinks follow the format: `kaayko.com/l/{code}`
+  - name: Deep Links
+    description: |
+      Universal link routing with context preservation for mobile apps.
+      Handles app install attribution and deferred deep linking.
+  - name: Authentication
+    description: Firebase authentication endpoints (login, logout, token verification)
+  - name: Admin Users
+    description: |
+      Enterprise admin user management with role-based access control.
+      Requires super-admin role for user CRUD operations.
+  - name: Analytics
+    description: Link click tracking and event analytics
+
+paths:
+  # ============================================================================
+  # SMARTLINKS - CRUD Operations
+  # ============================================================================
+  
+  /smartlinks:
+    post:
+      summary: Create SmartLink
+      description: |
+        Create a new short code link with rich metadata and multi-platform routing.
+        
+        **Auto-generation**: If `code` is not provided, a unique 6-character short code is generated (e.g., `lk1ngp`).
+        
+        **Custom Aliases**: Provide `code` for branded links (e.g., `summer2024`, `trinity-lake`).
+        
+        **Validation**:
+        - At least one destination (iOS, Android, or Web) is required
+        - Custom codes must be unique (409 conflict if exists)
+        - Custom codes: 3-20 chars, alphanumeric + hyphens/underscores
+        
+        **Email Notification**: Admin receives email with link details (async, non-blocking).
+      operationId: createSmartLink
+      tags: [SmartLinks]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSmartLinkRequest'
+            examples:
+              basic:
+                summary: Basic SmartLink (auto-generated code)
+                value:
+                  title: "Summer Kayak Sale"
+                  description: "20% off all kayaks"
+                  webDestination: "https://kaayko.com/store/kayaks"
+                  iosDestination: "kaayko://store/kayaks"
+                  androidDestination: "kaayko://store/kayaks"
+                  enabled: true
+              
+              custom_alias:
+                summary: Custom branded link
+                value:
+                  code: "summer2024"
+                  title: "Summer 2024 Promo"
+                  webDestination: "https://kaayko.com/promo/summer"
+                  metadata:
+                    campaign: "summer_sale"
+                    discount: 20
+                  utm:
+                    utm_source: "email"
+                    utm_medium: "newsletter"
+                    utm_campaign: "summer2024"
+              
+              expires:
+                summary: Link with expiration
+                value:
+                  title: "Flash Sale"
+                  webDestination: "https://kaayko.com/flash"
+                  expiresAt: "2024-12-31T23:59:59Z"
+                  metadata:
+                    sale_type: "flash"
+      
+      responses:
+        '200':
+          description: SmartLink created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SmartLinkResponse'
+              example:
+                success: true
+                link:
+                  code: "lk1ngp"
+                  shortUrl: "https://kaayko.com/l/lk1ngp"
+                  qrCodeUrl: "https://kaayko.com/qr/lk1ngp.png"
+                  title: "Summer Kayak Sale"
+                  destinations:
+                    ios: "kaayko://store/kayaks"
+                    android: "kaayko://store/kayaks"
+                    web: "https://kaayko.com/store/kayaks"
+                  clickCount: 0
+                  enabled: true
+                  createdBy: "admin@kaayko.com"
+                  createdAt: "2024-11-13T10:00:00Z"
+                message: "Short link created: https://kaayko.com/l/lk1ngp"
+        
+        '400':
+          description: Invalid request (missing destinations, invalid code format)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                error: "At least one destination (iOS, Android, or Web) is required"
+        
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        
+        '409':
+          description: Short code already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                error: "Short code already exists"
+                code: "ALREADY_EXISTS"
+                existing:
+                  code: "summer2024"
+    
+    get:
+      summary: List SmartLinks
+      description: |
+        Retrieve all SmartLinks with optional filtering by enabled status.
+        
+        **Pagination**: Use `limit` parameter to control results (default: 100, max: 1000).
+        
+        **Filtering**: Filter by `enabled=true/false` to get only active/inactive links.
+        
+        **Sorting**: Results are ordered by creation date (newest first).
+      operationId: listSmartLinks
+      tags: [SmartLinks]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: enabled
+          in: query
+          description: Filter by enabled status
+          schema:
+            type: boolean
+          example: true
+        
+        - name: limit
+          in: query
+          description: Maximum number of links to return
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+            default: 100
+          example: 50
+      
+      responses:
+        '200':
+          description: List of SmartLinks
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  links:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SmartLink'
+                  total:
+                    type: integer
+                    description: Total number of links returned
+                    example: 42
+        
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /smartlinks/{code}:
+    get:
+      summary: Get SmartLink by Code
+      description: |
+        Retrieve a single SmartLink by its short code.
+        
+        **Public Access**: This endpoint does not require authentication (used by redirect handler).
+        
+        **Use Cases**:
+        - Preview link details before clicking
+        - Retrieve QR code URL
+        - Check link expiration status
+      operationId: getSmartLink
+      tags: [SmartLinks]
+      parameters:
+        - $ref: '#/components/parameters/CodeParam'
+      
+      responses:
+        '200':
+          description: SmartLink details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  link:
+                    $ref: '#/components/schemas/SmartLink'
+        
+        '404':
+          description: SmartLink not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                error: "Short code not found"
+                code: "NOT_FOUND"
+    
+    put:
+      summary: Update SmartLink
+      description: |
+        Update an existing SmartLink's metadata, destinations, or status.
+        
+        **Partial Updates**: Only provided fields are updated (PATCH semantics).
+        
+        **Immutable Fields**: `code`, `createdAt`, `createdBy`, `clickCount` cannot be modified.
+        
+        **Use Cases**:
+        - Change destination URLs
+        - Update UTM parameters
+        - Enable/disable link
+        - Extend expiration date
+      operationId: updateSmartLink
+      tags: [SmartLinks]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CodeParam'
+      
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateSmartLinkRequest'
+            examples:
+              disable_link:
+                summary: Disable a link
+                value:
+                  enabled: false
+              
+              update_destinations:
+                summary: Change routing destinations
+                value:
+                  destinations:
+                    ios: "kaayko://newpage"
+                    android: "kaayko://newpage"
+                    web: "https://kaayko.com/newpage"
+              
+              extend_expiry:
+                summary: Extend expiration date
+                value:
+                  expiresAt: "2025-12-31T23:59:59Z"
+      
+      responses:
+        '200':
+          description: SmartLink updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  link:
+                    $ref: '#/components/schemas/SmartLink'
+                  message:
+                    type: string
+                    example: "Link updated successfully"
+        
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        
+        '404':
+          description: SmartLink not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    
+    delete:
+      summary: Delete SmartLink
+      description: |
+        Permanently delete a SmartLink from the system.
+        
+        **DESTRUCTIVE**: This action cannot be undone. All analytics data for this link will be lost.
+        
+        **Alternative**: Consider disabling the link instead (`PUT /smartlinks/{code}` with `enabled: false`).
+        
+        **Authorization**: Requires `admin` or `super-admin` role with `smartlinks:delete` permission.
+      operationId: deleteSmartLink
+      tags: [SmartLinks]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CodeParam'
+      
+      responses:
+        '200':
+          description: SmartLink deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  code:
+                    type: string
+                    example: "lk1ngp"
+                  message:
+                    type: string
+                    example: "Link deleted successfully"
+        
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        
+        '404':
+          description: SmartLink not found
+
+  /smartlinks/r/{code}:
+    get:
+      summary: Redirect Short Code (Alias)
+      description: |
+        **ALIAS ENDPOINT**: This is an alternate redirect route. Most redirects happen via `/l/{code}`.
+        
+        Redirects user to the appropriate destination based on platform detection.
+        
+        **Platform Detection**:
+        - iOS: Redirects to `iosDestination` or falls back to `webDestination`
+        - Android: Redirects to `androidDestination` or falls back to `webDestination`
+        - Web/Desktop: Redirects to `webDestination`
+        
+        **Analytics**: Click counts are tracked asynchronously (non-blocking).
+        
+        **Disabled Links**: Returns 410 Gone if link is disabled.
+        
+        **Expired Links**: Returns 410 Gone if `expiresAt` has passed.
+      operationId: redirectSmartLinkAlias
+      tags: [SmartLinks]
+      parameters:
+        - $ref: '#/components/parameters/CodeParam'
+      
+      responses:
+        '302':
+          description: Redirect to destination URL
+          headers:
+            Location:
+              description: Destination URL
+              schema:
+                type: string
+                example: "https://kaayko.com/store/kayaks"
+        
+        '404':
+          description: Short code not found
+        
+        '410':
+          description: Link disabled or expired
+
+  /smartlinks/stats:
+    get:
+      summary: Get SmartLinks Statistics
+      description: |
+        Retrieve aggregated statistics across all SmartLinks.
+        
+        **Metrics**:
+        - Total links created
+        - Total clicks across all links
+        - Enabled vs disabled link count
+        
+        **Use Case**: Dashboard summary widget.
+      operationId: getSmartLinksStats
+      tags: [SmartLinks, Analytics]
+      security:
+        - bearerAuth: []
+      
+      responses:
+        '200':
+          description: Aggregated statistics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  stats:
+                    type: object
+                    properties:
+                      totalLinks:
+                        type: integer
+                        example: 127
+                      totalClicks:
+                        type: integer
+                        example: 5423
+                      enabledLinks:
+                        type: integer
+                        example: 115
+                      disabledLinks:
+                        type: integer
+                        example: 12
+
+  /smartlinks/events/{type}:
+    post:
+      summary: Track App Event
+      description: |
+        Track user events related to SmartLinks (install, open, conversion, etc.).
+        
+        **Event Types**:
+        - `install`: App installed after clicking SmartLink
+        - `open`: App opened via SmartLink
+        - `conversion`: User completed desired action
+        - `custom`: Custom event defined by client
+        
+        **Install Tracking**: Increments `installCount` on the link document.
+        
+        **Analytics Storage**: Events are stored in `link_analytics` collection with full metadata.
+      operationId: trackEvent
+      tags: [SmartLinks, Analytics]
+      parameters:
+        - name: type
+          in: path
+          required: true
+          description: Event type (install, open, conversion, custom)
+          schema:
+            type: string
+            enum: [install, open, conversion, custom]
+          example: install
+      
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - linkId
+              properties:
+                linkId:
+                  type: string
+                  description: SmartLink code
+                  example: "lk1ngp"
+                userId:
+                  type: string
+                  description: Anonymous user ID (UUID or hashed identifier)
+                  example: "usr_abc123"
+                platform:
+                  type: string
+                  enum: [ios, android, web]
+                  example: "ios"
+                metadata:
+                  type: object
+                  description: Custom event metadata
+                  additionalProperties: true
+                  example:
+                    app_version: "1.2.3"
+                    os_version: "17.1"
+      
+      responses:
+        '200':
+          description: Event tracked successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "install event tracked"
+        
+        '400':
+          description: Missing required field (linkId)
+
+  /smartlinks/health:
+    get:
+      summary: SmartLinks Health Check
+      description: Verify SmartLinks service is operational
+      operationId: smartlinksHealth
+      tags: [SmartLinks]
+      responses:
+        '200':
+          description: Service healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  service:
+                    type: string
+                    example: "Smart Links API v4 - Short Codes Only"
+                  status:
+                    type: string
+                    example: "healthy"
+                  timestamp:
+                    type: string
+                    format: date-time
+
+  # ============================================================================
+  # DEEP LINKS - Universal Link Routing
+  # ============================================================================
+  
+  /l/{id}:
+    get:
+      summary: Universal Short Link Redirect
+      description: |
+        **PRIMARY REDIRECT ENDPOINT**: Handles all short link redirects with intelligent routing.
+        
+        ## Dual-Purpose Routing
+        
+        This endpoint handles TWO types of links with priority fallback:
+        
+        1. **SmartLinks (Priority)**: Modern short codes with rich metadata
+           - Examples: `lk1ngp`, `summer2024`, `trinity-lake`
+           - Fast existence check in `short_links` collection
+           - Platform-specific routing (iOS/Android/Web)
+        
+        2. **Legacy Location Links (Fallback)**: Pre-v4 location-based deep links
+           - Examples: `antero456`, `tahoe123`
+           - Used for backward compatibility
+           - Redirects to paddlingout page with context
+        
+        ## Context Preservation Flow
+        
+        For legacy links and some SmartLinks, the server:
+        1. Generates a unique context token (UUID)
+        2. Stores context in Firestore (`ctx_tokens` collection, 7-day TTL)
+        3. Sets cookies: `kaayko_ctxid`, `kaayko_location`
+        4. Redirects to destination with context parameter `?_kctx={token}`
+        
+        The app can later restore context via `/resolve?id={token}`.
+        
+        ## Redirect Behavior
+        
+        **Query Parameters Control Routing**:
+        - `?src=ul&appStore=Y`: Show App Store redirect page (2s delay)
+        - `?src=ul`: Attempt Universal Link, fallback to App Store (3s delay)
+        - No params: Direct redirect to web destination
+        
+        ## Platform Detection
+        
+        User-Agent parsing determines platform:
+        - iOS: iPhone, iPad, iOS keywords → `iosDestination`
+        - Android: Android keyword → `androidDestination`
+        - Other: Desktop/Web → `webDestination`
+        
+        ## Analytics
+        
+        All redirects are logged asynchronously to `link_clicks` collection:
+        - Click ID (UUID)
+        - Timestamp
+        - User-Agent, OS, device
+        - IP (hashed for privacy)
+        - Referrer
+        - UTM parameters (normalized)
+        - Context token (for attribution)
+        
+        ## Error Handling
+        
+        - **404**: Link not found (neither SmartLink nor legacy link exists)
+        - **410**: Link disabled or expired
+        - **500**: Server error (shows fallback App Store page)
+      operationId: universalLinkRedirect
+      tags: [Deep Links]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: |
+            Short code or link identifier. Can be:
+            - SmartLink code: `lk1ngp`, `summer2024`
+            - Legacy link: `antero456`, `tahoe123`
+          schema:
+            type: string
+          example: "lk1ngp"
+        
+        - name: src
+          in: query
+          description: |
+            Source parameter controlling redirect behavior:
+            - `ul`: Universal Link mode (attempts app launch)
+            - Other values: Standard web redirect
+          schema:
+            type: string
+          example: "ul"
+        
+        - name: appStore
+          in: query
+          description: |
+            Force App Store redirect (used with `src=ul`)
+            - `Y`: Show App Store redirect page
+            - Other: Standard Universal Link flow
+          schema:
+            type: string
+            enum: [Y, N]
+          example: "Y"
+        
+        - name: utm_source
+          in: query
+          description: UTM campaign source
+          schema:
+            type: string
+          example: "email"
+        
+        - name: utm_medium
+          in: query
+          description: UTM campaign medium
+          schema:
+            type: string
+          example: "newsletter"
+        
+        - name: utm_campaign
+          in: query
+          description: UTM campaign name
+          schema:
+            type: string
+          example: "summer2024"
+      
+      responses:
+        '302':
+          description: Redirect to destination
+          headers:
+            Location:
+              description: Destination URL (app deep link, web URL, or App Store)
+              schema:
+                type: string
+                example: "kaayko://lake/123?_kctx=uuid-token"
+            Set-Cookie:
+              description: Context cookies for post-install attribution
+              schema:
+                type: string
+                example: "kaayko_ctxid=uuid-token; Max-Age=1800; Path=/; SameSite=Lax"
+        
+        '200':
+          description: HTML page (Universal Link mode or App Store redirect)
+          content:
+            text/html:
+              schema:
+                type: string
+              example: |
+                <html>
+                  <head><title>Kaayko - Opening App...</title></head>
+                  <body>
+                    <h2>🏞️ Kaayko</h2>
+                    <p>Opening in Kaayko app...</p>
+                    <script>
+                      // Attempt Universal Link
+                      setTimeout(() => {
+                        window.location.href = "kaayko://lake/123";
+                      }, 100);
+                      
+                      // Fallback to App Store
+                      setTimeout(() => {
+                        window.location.href = "https://apps.apple.com/app/kaayko/id123456";
+                      }, 3000);
+                    </script>
+                  </body>
+                </html>
+        
+        '404':
+          description: Link not found (neither SmartLink nor legacy link)
+          content:
+            text/html:
+              schema:
+                type: string
+              example: |
+                <html>
+                  <body>
+                    <h2>🏞️ Kaayko</h2>
+                    <p>This location link is not available.</p>
+                    <a href="https://apps.apple.com/app/kaayko/id123456">Download Kaayko App</a>
+                  </body>
+                </html>
+        
+        '410':
+          description: Link disabled or expired
+        
+        '500':
+          description: Server error (shows fallback App Store page)
+
+  /resolve:
+    get:
+      summary: Resolve Context Token
+      description: |
+        Restore user context after app install (deferred deep linking).
+        
+        ## Use Case: Post-Install Attribution
+        
+        When a user clicks a SmartLink but doesn't have the app installed:
+        1. User is redirected to App Store
+        2. Server stores context in cookie + Firestore (7-day TTL)
+        3. User installs app and opens it
+        4. App calls `/resolve?id={token}` to restore context
+        5. App navigates to original intended destination
+        
+        ## Context Sources (Priority Order)
+        
+        1. **Query Parameter**: `?id={token}` (explicit)
+        2. **Cookie**: `kaayko_ctxid` (automatic)
+        3. **Legacy Cookie**: `kaayko_lake_id` (backward compatibility)
+        
+        ## Response Data
+        
+        Context includes:
+        - Link ID and metadata
+        - Original destination (space, params)
+        - User fingerprint (OS, device)
+        - Timestamp (context age)
+        
+        ## Cache vs Database
+        
+        - **Fast Path**: Cookie `kaayko_location` has full context (no DB query)
+        - **Slow Path**: Firestore `ctx_tokens` lookup (if cookie missing)
+      operationId: resolveContext
+      tags: [Deep Links]
+      parameters:
+        - name: id
+          in: query
+          description: Context token (UUID)
+          schema:
+            type: string
+            format: uuid
+          example: "550e8400-e29b-41d4-a716-446655440000"
+      
+      responses:
+        '200':
+          description: Context resolved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  source:
+                    type: string
+                    enum: [cache, database]
+                    description: Where context was found
+                    example: "cache"
+                  context:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        example: "antero456"
+                      name:
+                        type: string
+                        example: "Antero Reservoir"
+                      lat:
+                        type: number
+                        format: double
+                        example: 38.9
+                      lon:
+                        type: number
+                        format: double
+                        example: -106.2
+                      type:
+                        type: string
+                        enum: [paddling_location, legacy_location, smartlink]
+                        example: "legacy_location"
+                  timestamp:
+                    type: string
+                    format: date-time
+                    example: "2024-11-13T10:00:00Z"
+        
+        '404':
+          description: Context not found (expired or invalid token)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  error:
+                    type: string
+                    example: "Context not found"
+                  ctxId:
+                    type: string
+                    example: "550e8400-e29b-41d4-a716-446655440000"
+
+  /health:
+    get:
+      summary: Deep Links Health Check
+      description: Verify deep link service is operational
+      operationId: deepLinksHealth
+      tags: [Deep Links]
+      responses:
+        '200':
+          description: Service healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "healthy"
+                  version:
+                    type: string
+                    example: "2.0.0"
+                  service:
+                    type: string
+                    example: "Kaayko Deep Link Router"
+                  description:
+                    type: string
+                    example: "Universal link management with context preservation"
+                  security:
+                    type: object
+                    properties:
+                      rateLimitEnabled:
+                        type: boolean
+                        example: true
+                      maxRequestsPerMinute:
+                        type: integer
+                        example: 30
+                      cookieMaxAge:
+                        type: integer
+                        description: Cookie max age in milliseconds
+                        example: 1800000
+                  endpoints:
+                    type: array
+                    items:
+                      type: string
+                    example:
+                      - "GET /l/:id - Short link redirect with context"
+                      - "GET /resolve - Context restoration after app install"
+                      - "GET /health - This health check"
+
+  # ============================================================================
+  # AUTHENTICATION
+  # ============================================================================
+  
+  /auth/logout:
+    post:
+      summary: Logout User
+      description: |
+        Revoke all refresh tokens for the authenticated user, invalidating all sessions.
+        
+        **Client Responsibilities**:
+        1. Call this endpoint with valid Bearer token
+        2. Clear localStorage (token, user data)
+        3. Redirect to login page
+        
+        **Security**: All existing tokens become invalid immediately (enforced by Firebase).
+      operationId: logout
+      tags: [Authentication]
+      security:
+        - bearerAuth: []
+      
+      responses:
+        '200':
+          description: Logout successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Logout successful. All sessions have been terminated."
+                  revokedAt:
+                    type: string
+                    format: date-time
+                    description: Timestamp when tokens were revoked
+                    example: "2024-11-13T10:00:00Z"
+        
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/me:
+    get:
+      summary: Get Current User
+      description: Retrieve authenticated user's profile information
+      operationId: getCurrentUser
+      tags: [Authentication]
+      security:
+        - bearerAuth: []
+      
+      responses:
+        '200':
+          description: User profile
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  user:
+                    type: object
+                    properties:
+                      uid:
+                        type: string
+                        example: "abc123xyz"
+                      email:
+                        type: string
+                        format: email
+                        example: "admin@kaayko.com"
+                      role:
+                        type: string
+                        enum: [super-admin, admin, editor, viewer]
+                        example: "admin"
+                      displayName:
+                        type: string
+                        nullable: true
+                        example: "John Doe"
+                      emailVerified:
+                        type: boolean
+                        example: true
+        
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/verify:
+    post:
+      summary: Verify ID Token
+      description: |
+        Debug endpoint to verify a Firebase ID token and decode its claims.
+        
+        **Use Cases**:
+        - Token debugging
+        - Validate token expiration
+        - Inspect custom claims (role, permissions)
+      operationId: verifyToken
+      tags: [Authentication]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - token
+              properties:
+                token:
+                  type: string
+                  description: Firebase ID token
+                  example: "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9..."
+      
+      responses:
+        '200':
+          description: Token valid
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  decoded:
+                    type: object
+                    properties:
+                      uid:
+                        type: string
+                        example: "abc123xyz"
+                      email:
+                        type: string
+                        example: "admin@kaayko.com"
+                      role:
+                        type: string
+                        nullable: true
+                        example: "admin"
+                      exp:
+                        type: string
+                        format: date-time
+                        description: Token expiration
+                        example: "2024-11-13T11:00:00Z"
+                      iat:
+                        type: string
+                        format: date-time
+                        description: Token issued at
+                        example: "2024-11-13T10:00:00Z"
+        
+        '401':
+          description: Token invalid or expired
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  error:
+                    type: string
+                    example: "Invalid or expired token"
+                  details:
+                    type: string
+                    example: "Firebase ID token has expired"
+
+  # ============================================================================
+  # ADMIN USER MANAGEMENT
+  # ============================================================================
+  
+  /admin/me:
+    get:
+      summary: Get Admin Profile
+      description: |
+        Retrieve current user's admin profile with role and permissions.
+        
+        **Records Login**: Automatically updates `lastLoginAt` timestamp.
+        
+        **Error Cases**:
+        - 404: User authenticated but not in `admin_users` collection (not an admin)
+      operationId: getAdminProfile
+      tags: [Admin Users]
+      security:
+        - bearerAuth: []
+      
+      responses:
+        '200':
+          description: Admin profile
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  user:
+                    $ref: '#/components/schemas/AdminUser'
+        
+        '404':
+          description: User not found in admin system
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  error:
+                    type: string
+                    example: "User not found in admin system"
+                  message:
+                    type: string
+                    example: "Your account is authenticated but not registered as an admin user. Contact system administrator."
+
+  /admin/users:
+    get:
+      summary: List Admin Users
+      description: |
+        Retrieve all admin users with optional filtering.
+        
+        **Authorization**: Requires `super-admin` role.
+        
+        **Filtering**:
+        - `role`: Filter by role (super-admin, admin, editor, viewer)
+        - `enabled`: Filter by enabled status (true/false)
+      operationId: listAdminUsers
+      tags: [Admin Users]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: role
+          in: query
+          description: Filter by role
+          schema:
+            type: string
+            enum: [super-admin, admin, editor, viewer]
+          example: admin
+        
+        - name: enabled
+          in: query
+          description: Filter by enabled status
+          schema:
+            type: boolean
+          example: true
+      
+      responses:
+        '200':
+          description: List of admin users
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  users:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AdminUser'
+                  total:
+                    type: integer
+                    example: 5
+        
+        '403':
+          description: Not authorized (requires super-admin role)
+    
+    post:
+      summary: Create Admin User
+      description: |
+        Create a new admin user with Firebase Auth account and Firestore profile.
+        
+        **Authorization**: Requires `super-admin` role.
+        
+        **Process**:
+        1. Create Firebase Auth user with email/password
+        2. Create Firestore document in `admin_users` collection
+        3. Assign default permissions based on role
+        
+        **Email Verification**: User will receive Firebase verification email.
+      operationId: createAdminUser
+      tags: [Admin Users]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: "newadmin@kaayko.com"
+                password:
+                  type: string
+                  format: password
+                  minLength: 8
+                  example: "SecurePassword123!"
+                displayName:
+                  type: string
+                  example: "Jane Doe"
+                role:
+                  type: string
+                  enum: [super-admin, admin, editor, viewer]
+                  default: viewer
+                  example: "admin"
+                permissions:
+                  type: array
+                  items:
+                    type: string
+                  description: Custom permissions (optional, defaults to role permissions)
+                  example: ["smartlinks:create", "smartlinks:read"]
+                metadata:
+                  type: object
+                  additionalProperties: true
+                  description: Custom metadata
+                  example:
+                    department: "Marketing"
+      
+      responses:
+        '201':
+          description: Admin user created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  user:
+                    $ref: '#/components/schemas/AdminUser'
+                  message:
+                    type: string
+                    example: "Admin user created: newadmin@kaayko.com"
+        
+        '409':
+          description: Email already exists
+
+  /admin/users/{uid}:
+    get:
+      summary: Get Admin User
+      description: Get specific admin user by Firebase UID
+      operationId: getAdminUser
+      tags: [Admin Users]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UidParam'
+      
+      responses:
+        '200':
+          description: Admin user details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  user:
+                    $ref: '#/components/schemas/AdminUser'
+        
+        '404':
+          description: User not found
+    
+    put:
+      summary: Update Admin User
+      description: |
+        Update admin user's role, permissions, or profile.
+        
+        **Security**: Users cannot modify their own role (prevents privilege escalation).
+        
+        **Auto-Permission Update**: If role is changed without explicit permissions, defaults are applied.
+      operationId: updateAdminUser
+      tags: [Admin Users]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UidParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                role:
+                  type: string
+                  enum: [super-admin, admin, editor, viewer]
+                permissions:
+                  type: array
+                  items:
+                    type: string
+                displayName:
+                  type: string
+                enabled:
+                  type: boolean
+                metadata:
+                  type: object
+                  additionalProperties: true
+      
+      responses:
+        '200':
+          description: User updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  user:
+                    $ref: '#/components/schemas/AdminUser'
+                  message:
+                    type: string
+                    example: "User updated successfully"
+        
+        '403':
+          description: Cannot modify your own role
+    
+    delete:
+      summary: Delete Admin User
+      description: |
+        Soft delete (disable) an admin user.
+        
+        **Soft Delete**: User is disabled, not permanently deleted.
+        
+        **Security**: Users cannot delete themselves.
+        
+        **Permanent Delete**: Contact database admin to hard delete if needed.
+      operationId: deleteAdminUser
+      tags: [Admin Users]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UidParam'
+      
+      responses:
+        '200':
+          description: User disabled
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "User disabled successfully"
+        
+        '403':
+          description: Cannot delete your own account
+
+  /admin/roles:
+    get:
+      summary: Get Available Roles
+      description: |
+        Retrieve all available roles and their default permissions.
+        
+        **Use Case**: Populate role dropdown in admin UI.
+      operationId: getRoles
+      tags: [Admin Users]
+      security:
+        - bearerAuth: []
+      
+      responses:
+        '200':
+          description: Available roles
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  roles:
+                    type: object
+                    additionalProperties:
+                      oneOf:
+                        - type: string
+                        - type: array
+                          items:
+                            type: string
+                    example:
+                      super-admin: "*"
+                      admin:
+                        - "smartlinks:create"
+                        - "smartlinks:read"
+                        - "smartlinks:update"
+                        - "smartlinks:delete"
+                        - "analytics:read"
+                        - "qr:create"
+                      editor:
+                        - "smartlinks:create"
+                        - "smartlinks:read"
+                        - "smartlinks:update"
+                        - "analytics:read"
+                        - "qr:create"
+                      viewer:
+                        - "smartlinks:read"
+                        - "analytics:read"
+
+# ============================================================================
+# COMPONENTS - Reusable Schemas
+# ============================================================================
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        Firebase ID token. Obtain from Firebase Authentication SDK.
+        
+        **Example**:
+        ```javascript
+        const token = await firebase.auth().currentUser.getIdToken();
+        fetch('/api/smartlinks', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        ```
+
+  parameters:
+    CodeParam:
+      name: code
+      in: path
+      required: true
+      description: Short code or link identifier
+      schema:
+        type: string
+        minLength: 3
+        maxLength: 20
+        pattern: '^[a-zA-Z0-9_-]+$'
+      example: "lk1ngp"
+    
+    UidParam:
+      name: uid
+      in: path
+      required: true
+      description: Firebase Auth UID
+      schema:
+        type: string
+      example: "abc123xyz"
+
+  schemas:
+    SmartLink:
+      type: object
+      properties:
+        code:
+          type: string
+          description: Unique short code (6 chars auto-generated or custom alias)
+          example: "lk1ngp"
+        shortUrl:
+          type: string
+          format: uri
+          description: Full short URL
+          example: "https://kaayko.com/l/lk1ngp"
+        qrCodeUrl:
+          type: string
+          format: uri
+          description: QR code image URL
+          example: "https://kaayko.com/qr/lk1ngp.png"
+        title:
+          type: string
+          description: Human-readable title
+          example: "Summer Kayak Sale"
+        description:
+          type: string
+          description: Optional description
+          example: "20% off all kayaks this summer"
+        destinations:
+          type: object
+          properties:
+            ios:
+              type: string
+              nullable: true
+              description: iOS deep link
+              example: "kaayko://store/kayaks"
+            android:
+              type: string
+              nullable: true
+              description: Android deep link
+              example: "kaayko://store/kayaks"
+            web:
+              type: string
+              nullable: true
+              description: Web fallback URL
+              example: "https://kaayko.com/store/kayaks"
+        metadata:
+          type: object
+          additionalProperties: true
+          description: Custom key-value metadata
+          example:
+            campaign: "summer_sale"
+            discount: 20
+        utm:
+          type: object
+          description: UTM tracking parameters
+          properties:
+            utm_source:
+              type: string
+              example: "email"
+            utm_medium:
+              type: string
+              example: "newsletter"
+            utm_campaign:
+              type: string
+              example: "summer2024"
+            utm_term:
+              type: string
+            utm_content:
+              type: string
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Link expiration date (null = never expires)
+          example: "2024-12-31T23:59:59Z"
+        clickCount:
+          type: integer
+          description: Total number of clicks
+          example: 127
+        installCount:
+          type: integer
+          description: Number of app installs attributed to this link
+          example: 15
+        uniqueUsers:
+          type: array
+          items:
+            type: string
+          description: Array of hashed user IDs who clicked (for deduplication)
+        lastClickedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Timestamp of last click
+          example: "2024-11-13T09:45:00Z"
+        enabled:
+          type: boolean
+          description: Link active status
+          example: true
+        createdBy:
+          type: string
+          description: Email of creator
+          example: "admin@kaayko.com"
+        createdAt:
+          type: string
+          format: date-time
+          example: "2024-11-01T10:00:00Z"
+        updatedAt:
+          type: string
+          format: date-time
+          example: "2024-11-13T10:00:00Z"
+    
+    CreateSmartLinkRequest:
+      type: object
+      required:
+        - title
+      properties:
+        code:
+          type: string
+          description: Custom short code (optional, auto-generated if omitted)
+          minLength: 3
+          maxLength: 20
+          pattern: '^[a-zA-Z0-9_-]+$'
+          example: "summer2024"
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+          example: "Summer Kayak Sale"
+        description:
+          type: string
+          maxLength: 1000
+          example: "20% off all kayaks"
+        iosDestination:
+          type: string
+          description: iOS deep link URL
+          example: "kaayko://store/kayaks"
+        androidDestination:
+          type: string
+          description: Android deep link URL
+          example: "kaayko://store/kayaks"
+        webDestination:
+          type: string
+          format: uri
+          description: Web fallback URL (at least one destination required)
+          example: "https://kaayko.com/store/kayaks"
+        metadata:
+          type: object
+          additionalProperties: true
+          example:
+            campaign: "summer_sale"
+        utm:
+          type: object
+          properties:
+            utm_source:
+              type: string
+            utm_medium:
+              type: string
+            utm_campaign:
+              type: string
+            utm_term:
+              type: string
+            utm_content:
+              type: string
+        expiresAt:
+          type: string
+          format: date-time
+          description: Link expiration (ISO 8601)
+          example: "2024-12-31T23:59:59Z"
+        enabled:
+          type: boolean
+          default: true
+          example: true
+    
+    UpdateSmartLinkRequest:
+      type: object
+      description: Partial update (only provided fields are modified)
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        destinations:
+          type: object
+          properties:
+            ios:
+              type: string
+            android:
+              type: string
+            web:
+              type: string
+        metadata:
+          type: object
+          additionalProperties: true
+        utm:
+          type: object
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+        enabled:
+          type: boolean
+    
+    SmartLinkResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        link:
+          $ref: '#/components/schemas/SmartLink'
+        message:
+          type: string
+          example: "Short link created: https://kaayko.com/l/lk1ngp"
+    
+    AdminUser:
+      type: object
+      properties:
+        uid:
+          type: string
+          description: Firebase Auth UID
+          example: "abc123xyz"
+        email:
+          type: string
+          format: email
+          example: "admin@kaayko.com"
+        displayName:
+          type: string
+          example: "John Doe"
+        role:
+          type: string
+          enum: [super-admin, admin, editor, viewer]
+          description: User role (hierarchical access level)
+          example: "admin"
+        permissions:
+          type: array
+          items:
+            type: string
+          description: Granular permissions array ("*" = all permissions)
+          example: ["smartlinks:create", "smartlinks:read", "smartlinks:update", "smartlinks:delete", "analytics:read"]
+        lastLoginAt:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2024-11-13T10:00:00Z"
+        enabled:
+          type: boolean
+          description: Account active status
+          example: true
+        createdAt:
+          type: string
+          format: date-time
+          example: "2024-11-01T10:00:00Z"
+        updatedAt:
+          type: string
+          format: date-time
+          example: "2024-11-13T10:00:00Z"
+        metadata:
+          type: object
+          additionalProperties: true
+          description: Custom metadata
+          example:
+            department: "Engineering"
+            environment: "production"
+    
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: string
+          description: Human-readable error message
+          example: "Authentication failed"
+        code:
+          type: string
+          description: Machine-readable error code (optional)
+          example: "AUTH_TOKEN_EXPIRED"
+        details:
+          type: string
+          description: Technical details (optional)
+          example: "Firebase ID token has expired"
+
+  responses:
+    Unauthorized:
+      description: Unauthorized - Missing or invalid authentication token
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error: "Unauthorized"
+            message: "No authentication token provided"
+            code: "AUTH_TOKEN_MISSING"
+    
+    Forbidden:
+      description: Forbidden - Insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error: "Forbidden"
+            message: "Access denied. Required role: admin. Your role: viewer"
+            code: "INSUFFICIENT_PERMISSIONS"
+    
+    BadRequest:
+      description: Bad Request - Invalid input data
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error: "At least one destination (iOS, Android, or Web) is required"

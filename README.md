@@ -145,7 +145,7 @@ kaayko-api/
 |--------|-----------|---------------|--------------|
 | **Weather** | 5 APIs | [`weather/README.md`](./functions/api/weather/README.md) | ML ratings, forecasts, locations |
 | **Smart Links** | 12 APIs | [`smartLinks/README.md`](./functions/api/smartLinks/README.md) | Link management, analytics |
-| **AI/Chat** | 7 APIs | [`ai/README.md`](./functions/api/ai/README.md) | PaddleBot, GPT integration |
+| **AI/Chat** | 4 APIs | [`ai/README.md`](./functions/api/ai/README.md) | GPT Actions (ChatGPT) |
 | **Products** | 3 APIs | [`products/README.md`](./functions/api/products/README.md) | E-commerce catalog |
 | **Deep Links** | 3 APIs | [`deepLinks/README.md`](./functions/api/deepLinks/README.md) | Universal links (iOS) |
 | **Core** | 3 APIs | [`core/README.md`](./functions/api/core/README.md) | API documentation |

@@ -18,17 +18,20 @@
 
 ## 📖 Core Documentation (`docs/`)
 
-### **API Reference**
+### **🎯 API Reference & Specifications**
+- **`OPENAPI_SMARTLINKS_V4.yaml`** - 🆕 **COMPLETE** SmartLinks + Admin OpenAPI 3.0 spec (1,800+ lines)
+- **`SWAGGER_USAGE_GUIDE.md`** - 🆕 **Comprehensive guide** to using Swagger/OpenAPI (500+ lines)
+- **`Kaayko_SmartLinks_API_v4.postman_collection.json`** - 🆕 **Postman collection** (25 ready-to-use requests)
 - **`API-QUICK-REFERENCE-v2.1.0.md`** - Quick reference for all API endpoints
+- **`kaayko-paddling-api-swagger.yaml`** - Weather/Paddling APIs OpenAPI spec (2,392 lines)
 - **`FIREBASE_API.md`** - Firebase-specific API details
 - **`MASTER_TEST_INDEX.md`** - Comprehensive testing documentation
 
-### **Implementation Guides** (7 files)
+### **Implementation Guides**
 - **`GOLD_STANDARD_IMPLEMENTATION.md`** - ML model integration (v3)
 - **`HOW_SCHEDULED_FUNCTIONS_WORK.md`** - Scheduled jobs & cron
 - **`WHY_OVERPASS_IS_PERFECT.md`** - OpenStreetMap integration rationale
 - **`SMART_WARNING_SYSTEM_API_DOCS.md`** - Safety warning system
-- **`kaayko-paddling-api-swagger.yaml`** - Complete OpenAPI 3.0 specification (2,392 lines)
 
 ---
 

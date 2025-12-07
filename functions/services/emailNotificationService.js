@@ -14,10 +14,14 @@ const ADMIN_EMAIL = 'rohan@kaayko.com';
 const FROM_EMAIL = 'noreply@kaayko.com';
 const APP_NAME = 'Kaayko Smart Links';
 
-// SendGrid API key (optional for production)
-const sendGridApiKey = defineString('SENDGRID_API_KEY', { 
-  default: '' 
-});
+// SendGrid API key (optional for production) - LAZY LOAD
+let sendGridApiKey;
+function getSendGridApiKey() {
+  if (!sendGridApiKey) {
+    sendGridApiKey = defineString('SENDGRID_API_KEY', { default: '' });
+  }
+  return sendGridApiKey;
+}
 
 /**
  * Send email notification when a new link is created
