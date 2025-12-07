@@ -21,6 +21,8 @@ api/
 
 ## 🚀 Production APIs
 
+NOTE: The list below is derived from the current `functions/index.js`. Most API modules are mounted; some pieces (e.g., adminUsers router) still exist in-code but are not automatically mounted and are marked in the module READMEs when relevant.
+
 ### **FastForecast** - `/api/fastForecast` 
 **Public API for frontend - Super fast cached responses**
 
@@ -31,6 +33,7 @@ api/
   - `GET /api/fastForecast?location=Malibu,CA`
   - `GET /api/fastForecast?spotId=malibu_surfrider`
 - **Returns**: Weather + ML paddle ratings (1-5 scale) + safety levels
+- **Status**: mounted and available at `/api/fastForecast` (ensure ML/Cache services are configured before heavy load)
 
 ### **Forecast** - `/api/forecast`
 **Internal API for scheduled jobs and premium users**
@@ -42,6 +45,18 @@ api/
   - `GET /api/forecast?location=Lake Tahoe`
   - `POST /api/forecast/batch` (processes all paddling spots)
 - **Returns**: Deep weather analysis + ML ratings + caches results for FastForecast
+- **Status**: mounted and available at `/api/forecast` (internal/premium — rate-limited)
+
+### Scheduled Functions (forecast warming & maintenance)
+The scheduled forecast jobs are enabled. They run on the following schedule (America/Los_Angeles):
+- `earlyMorningForecast` — 05:00 daily
+- `morningForecastUpdate` — 09:00 daily
+- `afternoonForecastUpdate` — 13:00 daily
+- `eveningForecastUpdate` — 17:00 daily
+- `emergencyForecastRefresh` — Every 4 hours (backup)
+- `forecastSchedulerHealth` — Weekly health check (Sunday midnight)
+
+These scheduled functions are exported from `functions/scheduled/forecastScheduler.js` and will populate the `forecast_cache` Firestore collection used by `fastForecast`.
 
 ### **NearbyWater** - `/api/nearbyWater` 
 **Find nearby lakes and rivers for paddling using OpenStreetMap**
@@ -53,6 +68,7 @@ api/
   - `GET /api/nearbyWater?lat=32.7767&lng=-96.7970&radius=20`
   - `GET /api/nearbyWater?lat=33.1487&lng=-96.7005&radius=50&publicOnly=true`
 - **Returns**: Real water bodies with coordinates, type (Lake/River/Reservoir), distance
+- **Status**: mounted and available at `/api/nearbyWater`
 
 ---
 
@@ -66,6 +82,7 @@ api/
   - `GET /api/paddlingOut` → List all paddling spots
   - `GET /api/paddlingOut/:id` → Get spot details + images
 - **Returns**: Spot info, amenities (parking/restrooms), coordinates, YouTube videos, photos
+ - **Status**: mounted and active (see `functions/index.js` → apiApp.use('/paddlingOut', require('./api/weather/paddlingout')))
 
 ### **DeepLink** - `/api/l`
 **Universal link routing with context preservation**
@@ -89,6 +106,9 @@ api/
   - `GET /api/products/:id` → Product details
   - `POST /api/products/:id/vote` → Vote on products
 - **Returns**: T-shirts, gear with images, pricing, availability, voting
+
+### Admin endpoints (important security note)
+Some admin endpoints are mounted directly in `functions/index.js` without authentication wrappers (see `apiApp.post('/admin/updateOrderStatus', ...)` and `apiApp.get('/admin/getOrder', ...)`). Confirm this is intended for your deployment; otherwise add `requireAuth` or `requireAdmin` where appropriate.
 
 ### **Images** - `/api/images`
 **Secure image proxy for store products**

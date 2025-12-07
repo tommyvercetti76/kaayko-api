@@ -1,3 +1,153 @@
+# 🔗 Smart Links API v4 — Short codes & Link Management
+
+This module implements the Smart Links service used by Kaayko to create short shareable links (short codes + optional semantic paths), handle redirects and track analytics.
+
+Note (code-derived): the `smartLinks` router is mounted at `/api/smartlinks` in `functions/index.js`. The public short link direct routes (e.g. `/l/:id`) are handled by the `deepLinks` module and may delegate to the redirect handler in this folder.
+
+Files in this folder
+- `smartLinks.js` — primary Express router for `/api/smartlinks`
+- `smartLinkService.js` — core CRUD + stats business logic (writes to Firestore)
+- `redirectHandler.js` — redirect logic, platform detection, click tracking
+- `publicRouter.js` — lightweight public router for `/l/:id` and `/resolve` (deferred linking)
+- helpers: `smartLinkValidation.js`, `smartLinkDefaults.js`, `smartLinkEnrichment.js`
+
+Documentation style
+For each endpoint we show: Endpoint, Method, Description, Auth, Request (path / query / body), Response (shape + example), Errors, Side effects.
+
+--------------------------------------------------------------------------------
+GET /health
+Method: GET
+Path: /api/smartlinks/health
+Description: Basic health check for the Smart Links service.
+Auth: public
+Request: none
+Response:
+{
+  "success": true,
+  "service": "Smart Links API v4 - Short Codes Only",
+  "status": "healthy",
+  "timestamp": "2025-..."
+}
+
+--------------------------------------------------------------------------------
+GET /stats
+Method: GET
+Path: /api/smartlinks/stats
+Description: Return aggregated statistics for smart links (total links, total clicks, enabled/disabled counts).
+Auth: public (no authentication in code)
+Request: none
+Response: { success: true, stats: { totalLinks, totalClicks, enabledLinks, disabledLinks } }
+Errors: 500 on failure
+
+--------------------------------------------------------------------------------
+GET /r/:code
+Method: GET
+Path: /api/smartlinks/r/:code
+Description: Redirect handler entrypoint for short codes (delegates to redirect handler; does not require auth).
+Auth: public
+Path params: code (string) — short code (eg. "lk1ngp")
+Behavior: Delegates to `handleRedirect(req,res,code,{trackAnalytics:false})`. Will return 302 redirect on success, or branded HTML error pages on 404/410/500.
+Side effects: increments click counter on `short_links/{code}` in Firestore (post-write) — tracked asynchronously.
+
+--------------------------------------------------------------------------------
+POST /
+Method: POST
+Path: /api/smartlinks
+Description: Create a new short link (enriched metadata & destinations). This API assembles the short link, validates or generates a short code, stores the document in `short_links` collection and returns the enriched link object.
+Auth: Protected — `requireAuth` and `requireAdmin` are applied in `smartLinks.js`.
+Body (JSON) — fields derived from `smartLinkService.createShortLink`:
+  - code (optional) — custom alias (validated)
+  - webDestination (optional) — URL for web
+  - iosDestination (optional)
+  - androidDestination (optional)
+  - title, description (optional)
+  - metadata (optional object)
+  - utm (optional object)
+  - expiresAt (optional ISO string)
+  - enabled (optional boolean)
+
+Response (success 200):
+{ success: true, link: { code, shortUrl, qrCodeUrl, destinations, title, metadata, utm, expiresAt, enabled, createdBy, createdAt } , message }
+
+Errors:
+ - 400: generic input error — JSON error details
+ - 409: ALREADY_EXISTS — custom code already taken (response includes existing)
+
+Side effects:
+ - Writes `short_links/{code}` document to Firestore
+ - Asynchronously triggers an email notification via `sendLinkCreatedNotification` (does not block response)
+
+Example:
+curl -X POST -H "Authorization: Bearer <token>" -H "Content-Type: application/json" \
+  -d '{ "webDestination":"https://kaayko.com/paddlingout?id=antero", "title":"Antero" }' \
+  https://<host>/api/smartlinks
+
+--------------------------------------------------------------------------------
+GET /
+Method: GET
+Path: /api/smartlinks
+Description: List smart links, with optional filtering.
+Auth: Protected — `requireAuth` and `requireAdmin` in code.
+Query params:
+  - enabled (optional) — 'true'|'false'
+  - limit (optional) — parseable integer max results
+Response: { success: true, links: [...], total }
+Errors: 500 on error
+
+--------------------------------------------------------------------------------
+GET /:code
+Method: GET
+Path: /api/smartlinks/:code
+Description: Retrieve a short link by short code. Public access.
+Auth: public
+Path params: code (string)
+Response (200): { success: true, link: { ... } }
+Errors:
+  - 404: Short code not found (error.code === 'NOT_FOUND')
+  - 500: internal error
+
+--------------------------------------------------------------------------------
+PUT /:code
+Method: PUT
+Path: /api/smartlinks/:code
+Description: Update an existing short link. Admin only (protected by requireAuth + requireAdmin).
+Auth: requireAuth + requireAdmin
+Path params: code
+Body: partial updates allowed (metadata, utm, destinations, enabled, title, description, expiresAt)
+Response: { success: true, link: updated }
+Errors: 404 if not found, 500 otherwise
+
+--------------------------------------------------------------------------------
+DELETE /:code
+Method: DELETE
+Path: /api/smartlinks/:code
+Description: Delete a short link (admin-only).
+Auth: requireAuth + requireAdmin
+Path params: code
+Response: { success: true, code }
+Errors: 404 if not found, 500 otherwise
+
+--------------------------------------------------------------------------------
+POST /events/:type
+Method: POST
+Path: /api/smartlinks/events/:type
+Description: Track custom events for short links. Stores click/install/open events in `link_analytics` collection and updates counters for installs.
+Auth: public
+Path params: type — event type string (install, open, click, etc.)
+Body: { linkId (required), userId (optional), platform (optional), metadata (optional) }
+Response: { success: true, message }
+Errors: 400 if linkId missing, 500 on internal error
+
+Side effects:
+ - Writes to `link_analytics` collection
+ - If type === 'install': increments `installCount` on `short_links/{linkId}` document
+
+--------------------------------------------------------------------------------
+Notes / TODOs (code-driven & non-hallucinated):
+- The Smart Links router calls `requireAuth` and `requireAdmin` for creation/management endpoints. Confirm deployment configuration ensures these routes are reachable only to intended admin frontends or internal clients.
+- Public short-link redirect flows are handled by `deepLinks/deeplinkRoutes.js` for top-level `/l/:id` and may use `redirectHandler` here. Verify public mounting differences if you rely on `/smartlinks/r/:code` vs `/l/:id` in production.
+
+If anything above is not clear from the code or behavior depends on runtime wiring/hosting configuration, mark as TODO: verify in this README.
 # 🔗 Smart Links API v4 - Enterprise Link Shortener# 🔗 Smart Links API v4 - Enterprise Link Shortener
 
 

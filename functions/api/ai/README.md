@@ -6,6 +6,8 @@
 
 ## 📁 Files in this Module
 
+_Mount status: `gptActions.js` is implemented and mounted in `functions/index.js` at `/gptActions` — routes are reachable at runtime._
+
 1. **`gptActions.js`** - GPT Actions for OpenAI custom GPT integration (ChatGPT)
 
 ---

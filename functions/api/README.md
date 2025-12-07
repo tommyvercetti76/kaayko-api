@@ -5,28 +5,38 @@
 ---
 
 ## 📁 Directory Structure
+### APIs (summary of modules present)
+Note: the list below is derived from the current code in `functions/index.js` and each module's router files. Most modules are mounted; where parts remain unmounted (eg. adminUsers router) the README below will call that out.
 
-```
-api/
-├── weather/       🌦️  Weather & paddle condition APIs
-├── smartLinks/    🔗 Link management & analytics
-├── ai/            🤖 GPT Actions (ChatGPT integration)
+1. **paddleScore** - Current paddle conditions with ML rating (GOLD STANDARD) (mounted at /paddleScore)
+2. **fastForecast** - Ultra-fast cached 3-day forecasts (192ms avg) (mounted at /fastForecast)
+3. **forecast** - Premium real-time forecasts with marine data (mounted at /forecast)
+4. **paddlingOut** - Curated paddling locations (17+ spots) (mounted at /paddlingOut)
+5. **nearbyWater** - OpenStreetMap water discovery (mounted at /nearbyWater)
 ├── products/      🛍️  Product catalog & images
 ├── deepLinks/     📱 Universal links (iOS integration)
 └── core/          📚 Documentation & OpenAPI specs
 ```
 
----
-
-## 🌦️ Weather APIs
-
-**Location:** `weather/`  
+### Smart Links API (mounted)
+1. **Smart Links CRUD** - Create, read, update, delete short links (mounted at /smartlinks)
+2. **Short Codes** - Short links (lkXXXX) and redirect handlers (some public redirect routes are handled by `deepLinks` module mounted at `/l/*`)
+3. **Analytics** - Click tracking and stats
 **README:** [weather/README.md](weather/README.md)
-
-### APIs:
-1. **paddleScore** - Current paddle conditions with ML rating (GOLD STANDARD)
-2. **fastForecast** - Ultra-fast cached 3-day forecasts (192ms avg)
-3. **forecast** - Premium real-time forecasts with marine data
+### Modules mapped to runtime:
+| Module | Mounted? | Path | Notes |
+|---|---:|---|---|
+| weather (paddlingOut) | ✅ | /paddlingOut | Listed in index.js
+| smartLinks | ✅ | /smartlinks | Admin + public actions (see smartLinks README)
+| ai (gptActions) | ✅ | /gptActions | Mounted in index.js
+| admin | ⚠️ partially mounted | /admin/* | Some admin endpoints are mounted directly (getOrder/listOrders/updateOrderStatus). adminUsers router exists but is not registered in index.js by default.
+| auth | ✅ | /auth/* | Mounted in index.js (logout, me, verify)
+| products | ✅ | /products and /images | Mounted
+| deepLinks | ✅ | /l/* and /resolve via root router | Mounted at root '/'
+| core (docs) | ✅ | /docs | Swagger UI and spec
+**Endpoint coverage:** several modules are implemented (some mounted, some not). Full, code-derived docs are in each module README inside `functions/api/`.
+Additional runtime helpers:
+- `GET /helloWorld` → simple health / smoke-check endpoint (returns "OK").
 4. **paddlingOut** - Curated paddling locations (17+ spots)
 5. **nearbyWater** - OpenStreetMap water discovery
 

@@ -28,15 +28,21 @@ apiApp.use("/paddlingOut", require("./api/weather/paddlingout"));
 apiApp.use("/docs", require("./api/core/docs"));
 
 // 🌍 LOCATION SERVICES
-// apiApp.use("/nearbyWater", require("./api/weather/nearbyWater")); // Find nearby lakes/rivers for custom locations
+apiApp.use("/nearbyWater", require("./api/weather/nearbyWater")); // Find nearby lakes/rivers for custom locations
 
-// 🌟 STREAMLINED WEATHER APIs - TEMPORARILY DISABLED FOR STRIPE TESTING
-// apiApp.use("/paddleScore", require("./api/weather/paddleScore"));     // ML-POWERED: Paddle condition rating with ML model
-// apiApp.use("/fastForecast", require("./api/weather/fastForecast"));   // PUBLIC: Fast cached forecasts for frontend
-// apiApp.use("/forecast", require("./api/weather/forecast").router);    // PREMIUM: On-demand forecasts (requires $$ token)
+// 🌟 STREAMLINED WEATHER APIs - Enabled
+apiApp.use("/paddleScore", require("./api/weather/paddleScore"));     // ML-POWERED: Paddle condition rating with ML model
+apiApp.use("/fastForecast", require("./api/weather/fastForecast"));   // PUBLIC: Fast cached forecasts for frontend
+apiApp.use("/forecast", require("./api/weather/forecast").router);    // PREMIUM: On-demand forecasts (requires $$ token)
 
 // 🔗 SMART LINKS - NEW!
 apiApp.use("/smartlinks", require("./api/smartLinks/smartLinks"));    // Smart link CRUD & analytics
+
+// 🤖 AI / GPT Actions (exposed for ChatGPT / internal GPT Actions clients)
+apiApp.use("/gptActions", require("./api/ai/gptActions"));
+
+// 🔐 Auth routes (login / logout / session helpers)
+apiApp.use("/auth", require("./api/auth/authRoutes"));
 
 // 💳 CHECKOUT & PAYMENTS
 apiApp.use("/createPaymentIntent", require("./api/checkout/router")); // Stripe payment intent creation
@@ -59,21 +65,22 @@ exports.api = onRequest({
 // ===========================
 // 🕒 SCHEDULED FUNCTIONS - TEMPORARILY DISABLED
 // ===========================
-// const {
-//   morningForecastWarming,
-//   middayForecastUpdate,
-//   eveningForecastUpdate,
-//   nightForecastMaintenance,
-//   emergencyForecastRefresh,
-//   forecastSchedulerHealth
-// } = require('./scheduled/forecastScheduler');
+// Scheduled forecast generator (enabled)
+const {
+  earlyMorningForecast,
+  morningForecastUpdate,
+  afternoonForecastUpdate,
+  eveningForecastUpdate,
+  emergencyForecastRefresh,
+  forecastSchedulerHealth
+} = require('./scheduled/forecastScheduler');
 
-// Export scheduled forecast functions
-// exports.morningForecastWarming = morningForecastWarming;
-// exports.middayForecastUpdate = middayForecastUpdate;
-// exports.eveningForecastUpdate = eveningForecastUpdate;
-// exports.nightForecastMaintenance = nightForecastMaintenance;
-// exports.emergencyForecastRefresh = emergencyForecastRefresh;
-// exports.forecastSchedulerHealth = forecastSchedulerHealth;
+// Export scheduled forecast functions as Cloud Function scheduled triggers
+exports.earlyMorningForecast = earlyMorningForecast;
+exports.morningForecastUpdate = morningForecastUpdate;
+exports.afternoonForecastUpdate = afternoonForecastUpdate;
+exports.eveningForecastUpdate = eveningForecastUpdate;
+exports.emergencyForecastRefresh = emergencyForecastRefresh;
+exports.forecastSchedulerHealth = forecastSchedulerHealth;
 
 console.log("✅ Kaayko API v2 - PUBLIC: fastForecast + paddlingOut | PREMIUM: forecast ($$) | SMARTLINKS: admin portal");

@@ -7,11 +7,19 @@
 ## 📁 Files in this Module
 
 ### **Main API Endpoints:**
-1. **`paddleScore.js`** - Current paddle conditions with ML rating
-2. **`fastForecast.js`** - Ultra-fast cached 3-day forecasts
-3. **`forecast.js`** - Premium real-time forecasts with marine data
-4. **`paddlingout.js`** - Curated paddling locations database
-5. **`nearbyWater.js`** - OpenStreetMap water discovery
+_Mount status — All weather routers are mounted in `functions/index.js` and are reachable at runtime. The module mounts are:_
+
+- `/paddlingOut` → `paddlingout.js` (listed and mounted)
+- `/paddleScore` → `paddleScore.js` (ML-powered paddle score)
+- `/fastForecast` → `fastForecast.js` (public, cached forecasts)
+- `/forecast` → `forecast.js` (internal/premium; rate-limited)
+- `/nearbyWater` → `nearbyWater.js` (OpenStreetMap / Overpass queries)
+
+1. **`paddleScore.js`** - Current paddle conditions with ML rating (mounted at `/paddleScore`)
+2. **`fastForecast.js`** - Ultra-fast cached 3-day forecasts (mounted at `/fastForecast`)
+3. **`forecast.js`** - Premium real-time forecasts with marine data (mounted at `/forecast`)
+4. **`paddlingout.js`** - Curated paddling locations database (mounted at `/paddlingOut`)
+5. **`nearbyWater.js`** - OpenStreetMap water discovery (mounted at `/nearbyWater`)
 
 ### **Service Layer:**
 6. **`mlService.js`** - ML model integration (99.98% accuracy)
@@ -60,11 +68,6 @@ OPTION 3: Known spot ID (fastest)
   "success": true,
   "location": {
     "name": "White Rock Lake",
-    "coordinates": { "latitude": 32.8309, "longitude": -96.7176 }
-  },
-  "paddle_score": 4.5,
-  "conditions": {
-    "temperature": 72,
     "wind_speed": 8,
     "humidity": 65,
     "precipitation": 0
@@ -107,18 +110,9 @@ OPTION 3: Known spot ID (fastest)
 - ✅ 3-day hourly forecasts
 - ✅ ML paddle scores for each hour
 - ✅ Firestore + memory caching
-- ✅ Automatic cache warming (scheduled)
-
-### Request Parameters:
-```
-Same as paddleScore:
 ?lat=32.8309&lng=-96.7176
 ?location=32.8309,-96.7176
-?spotId=whiterlake
-```
-
 ### Response Format:
-```json
 {
   "success": true,
   "location": { "name": "White Rock Lake", "coordinates": {...} },
@@ -127,11 +121,6 @@ Same as paddleScore:
       "hourly": {
         "06:00": { "paddle_score": 4.0, "temp": 68, "wind_kph": 10 },
         "12:00": { "paddle_score": 4.5, "temp": 75, "wind_kph": 8 },
-        "18:00": { "paddle_score": 3.5, "temp": 70, "wind_kph": 15 }
-      }
-    },
-    "2025-11-01": { "hourly": {...} },
-    "2025-11-02": { "hourly": {...} }
   },
   "cache_hit": true,
   "cached_at": "2025-10-31T12:00:00Z"
@@ -175,15 +164,9 @@ Same as paddleScore:
 {
   "success": true,
   "location": {...},
-  "forecast": {
-    "daily": [
-      {
         "date": "2025-10-31",
         "paddle_score_avg": 4.2,
-        "paddle_score_range": { "min": 3.5, "max": 4.5 },
-        "best_time": "12:00",
         "conditions": {...},
-        "hourly": [...]
       }
     ]
   },
