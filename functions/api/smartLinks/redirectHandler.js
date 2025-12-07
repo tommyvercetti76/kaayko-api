@@ -166,6 +166,14 @@ async function handleRedirect(req, res, code, options = {}) {
     if (clickId && (platform === 'ios' || platform === 'android')) {
       destination = appendClickIdToDestination(destination, clickId, req.query);
     }
+    
+    // KORTEX BYPASS: Add bypass parameter for internal Kaayko pages (store, etc.)
+    // This allows smart links to bypass authentication on protected pages
+    if (destination.includes('kaayko.com/store') || destination.includes('/store.html')) {
+      const separator = destination.includes('?') ? '&' : '?';
+      destination = `${destination}${separator}bypass=kortex&ref=${code}`;
+      console.log('[Kortex] Added auth bypass for store link:', code);
+    }
 
     // Perform redirect (302 = temporary, preserves POST data if needed)
     return res.redirect(302, destination);

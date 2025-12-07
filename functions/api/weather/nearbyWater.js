@@ -1,11 +1,27 @@
 // functions/src/api/nearbyWater.js
 // Simple working nearbyWater API that actually returns lakes
+// WITH IN-MEMORY CACHING for 30 minutes
 
 const express = require("express");
 const https = require("https");
 const { logger } = require("firebase-functions");
 
 const router = express.Router();
+
+// In-memory cache for water body results
+const waterBodyCache = new Map();
+const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
+
+// Clean up old cache entries every 10 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, value] of waterBodyCache.entries()) {
+    if (now - value.timestamp > CACHE_TTL) {
+      waterBodyCache.delete(key);
+    }
+  }
+  logger.info(`🧹 Cache cleanup: ${waterBodyCache.size} entries remaining`);
+}, 10 * 60 * 1000);
 
 // Enhanced Overpass query function with mirror fallback
 async function queryOverpass(query) {
@@ -91,7 +107,7 @@ router.get("/", async (req, res) => {
     const lat = parseFloat(req.query.lat || req.query.latitude);
     const lng = parseFloat(req.query.lng || req.query.longitude);
     const radius = parseInt(req.query.radius || 50);
-    const publicOnly = req.query.publicOnly === 'true'; // New optional parameter
+    const publicOnly = req.query.publicOnly === 'true';
 
     if (!lat || !lng || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
       return res.status(400).json({
@@ -99,6 +115,21 @@ router.get("/", async (req, res) => {
         message: "Please provide valid lat/lng parameters"
       });
     }
+
+    // Check cache first (round to 2 decimal places for ~1km precision)
+    const cacheKey = `${Math.round(lat * 100) / 100},${Math.round(lng * 100) / 100},${radius},${publicOnly}`;
+    const cached = waterBodyCache.get(cacheKey);
+    
+    if (cached && (Date.now() - cached.timestamp < CACHE_TTL)) {
+      logger.info(`✅ Cache HIT for ${cacheKey} (age: ${Math.round((Date.now() - cached.timestamp) / 1000)}s)`);
+      return res.json({
+        ...cached.data,
+        cached: true,
+        cacheAge: Math.round((Date.now() - cached.timestamp) / 1000)
+      });
+    }
+    
+    logger.info(`❌ Cache MISS for ${cacheKey} - fetching from Overpass API`);
 
     logger.info(`🔎 Searching for water bodies near ${lat}, ${lng} within ${radius}km${publicOnly ? ' (PUBLIC ONLY)' : ''}`);
 
@@ -377,13 +408,23 @@ out tags center;
       logger.info(`🎯 Top result: ${results[0].name} (${results[0].type}) - ${results[0].distanceMiles}mi${results[0].areaKm2 ? ` [${results[0].areaKm2}km²]` : ''}${results[0].publicLand ? ` [${results[0].publicLand.name}]` : ''}`);
     }
 
-    res.json({
+    const responseData = {
       success: true,
       location: { lat, lng, radiusKm: radius },
       waterBodies: results,
       publicOnly: publicOnly,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      cached: false
+    };
+
+    // Store in cache
+    waterBodyCache.set(cacheKey, {
+      data: responseData,
+      timestamp: Date.now()
     });
+    logger.info(`💾 Cached result for ${cacheKey} (${waterBodyCache.size} total entries)`);
+
+    res.json(responseData);
 
   } catch (error) {
     logger.error("❌ nearbyWater error:", error);

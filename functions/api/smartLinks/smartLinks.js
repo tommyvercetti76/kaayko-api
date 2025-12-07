@@ -39,6 +39,20 @@ const { sendLinkCreatedNotification } = require('../../services/emailNotificatio
 // Import webhook service
 const { triggerWebhooks, EVENT_TYPES } = require('./webhookService');
 
+// Import security middleware
+const { rateLimiter, botProtection, secureHeaders, honeypot } = require('../../middleware/securityMiddleware');
+
+// Apply security middleware to all routes
+router.use(secureHeaders);
+router.use(botProtection);
+
+// ============================================================================
+// SECURITY: Honeypot trap for bots
+// ============================================================================
+router.get('/admin/api-key', honeypot);
+router.post('/admin/bulk-import', honeypot);
+router.get('/export-all-data', honeypot);
+
 // ============================================================================
 // HEALTH CHECK (Must be BEFORE /:code to avoid being caught by it)
 // ============================================================================
@@ -70,6 +84,147 @@ router.get('/admin/migrate', requireAuth, requireAdmin, async (req, res) => {
     return res.status(500).json({
       success: false,
       error: 'Migration failed',
+      message: error.message
+    });
+  }
+});
+
+// ============================================================================
+// TENANT REGISTRATION - PUBLIC (No auth required, but rate limited)
+// ============================================================================
+
+router.post('/tenant-registration', rateLimiter('tenantRegistration'), async (req, res) => {
+  try {
+    const registrationData = req.body;
+    
+    console.log('[TenantReg] New registration request:', registrationData.organization?.name);
+    
+    // Validate required fields
+    if (!registrationData.organization?.name || !registrationData.organization?.domain || !registrationData.contact?.email) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required fields: organization name, domain, and contact email are required'
+      });
+    }
+    
+    // Check if domain already exists
+    const existingTenant = await db.collection('tenants')
+      .where('domain', '==', registrationData.organization.domain)
+      .limit(1)
+      .get();
+    
+    if (!existingTenant.empty) {
+      return res.status(409).json({
+        success: false,
+        error: 'A tenant with this domain already exists'
+      });
+    }
+    
+    // Store registration in pending_tenant_registrations collection
+    const registrationRef = await db.collection('pending_tenant_registrations').add({
+      ...registrationData,
+      status: 'pending',
+      submittedAt: FieldValue.serverTimestamp(),
+      reviewedAt: null,
+      reviewedBy: null,
+      tenantId: null
+    });
+    
+    console.log('[TenantReg] ✅ Stored registration:', registrationRef.id);
+    
+    // TODO: Send email notification to admin team
+    // TODO: Send confirmation email to applicant
+    
+    return res.json({
+      success: true,
+      message: 'Registration submitted successfully',
+      registrationId: registrationRef.id,
+      estimatedReviewTime: '24-48 hours'
+    });
+    
+  } catch (error) {
+    console.error('[TenantReg] Error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to submit registration',
+      message: error.message
+    });
+  }
+});
+
+// ============================================================================
+// GET TENANTS FOR MULTI-TENANT LOGIN (Must be BEFORE /:code)
+// ============================================================================
+
+router.get('/tenants', requireAuth, rateLimiter('tenants'), async (req, res) => {
+  try {
+    const user = req.user;
+    
+    // Get user profile from admin_users collection
+    const profileDoc = await db.collection('admin_users').doc(user.uid).get();
+    
+    if (!profileDoc.exists) {
+      return res.status(404).json({
+        success: false,
+        error: 'User profile not found'
+      });
+    }
+    
+    const profile = profileDoc.data();
+    const role = profile.role;
+    
+    // Super-admins can see all tenants
+    if (role === 'super-admin') {
+      const tenantsSnapshot = await db.collection('tenants')
+        .where('enabled', '==', true)
+        .orderBy('name')
+        .get();
+      
+      const tenants = tenantsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        name: doc.data().name,
+        domain: doc.data().domain,
+        pathPrefix: doc.data().pathPrefix
+      }));
+      
+      return res.json({
+        success: true,
+        tenants: tenants.length > 0 ? tenants : [
+          { id: 'kaayko-default', name: 'Kaayko (Default)', domain: 'kaayko.com', pathPrefix: '/l' }
+        ]
+      });
+    }
+    
+    // Regular admins only see their assigned tenant(s)
+    const tenantId = profile.tenantId || 'kaayko-default';
+    const tenantDoc = await db.collection('tenants').doc(tenantId).get();
+    
+    if (!tenantDoc.exists) {
+      // Fallback to default tenant
+      return res.json({
+        success: true,
+        tenants: [
+          { id: 'kaayko-default', name: 'Kaayko (Default)', domain: 'kaayko.com', pathPrefix: '/l' }
+        ]
+      });
+    }
+    
+    const tenant = tenantDoc.data();
+    return res.json({
+      success: true,
+      tenants: [{
+        id: tenantDoc.id,
+        name: tenant.name,
+        domain: tenant.domain,
+        pathPrefix: tenant.pathPrefix
+      }]
+    });
+    
+  } catch (error) {
+    console.error('[SmartLinks] Error fetching tenants:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to fetch tenants',
       message: error.message
     });
   }
