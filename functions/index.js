@@ -47,11 +47,12 @@ apiApp.use("/auth", require("./api/auth/authRoutes"));
 // 💳 CHECKOUT & PAYMENTS
 apiApp.use("/createPaymentIntent", require("./api/checkout/router")); // Stripe payment intent creation
 
-// 👔 ADMIN ORDER MANAGEMENT
-apiApp.post("/admin/updateOrderStatus", require("./api/admin/updateOrderStatus"));
+// 👔 ADMIN ORDER MANAGEMENT - PROTECTED WITH AUTH
+const { requireAuth, requireAdmin } = require("./middleware/authMiddleware");
+apiApp.post("/admin/updateOrderStatus", requireAuth, requireAdmin, require("./api/admin/updateOrderStatus"));
 const { getOrder, listOrders } = require("./api/admin/getOrder");
-apiApp.get("/admin/getOrder", getOrder);
-apiApp.get("/admin/listOrders", listOrders);
+apiApp.get("/admin/getOrder", requireAuth, requireAdmin, getOrder);
+apiApp.get("/admin/listOrders", requireAuth, requireAdmin, listOrders);
 
 // Legacy deeplink routes
 apiApp.use("/", require("./api/deepLinks/deeplinkRoutes"));

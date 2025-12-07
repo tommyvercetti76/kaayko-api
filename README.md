@@ -2,6 +2,22 @@
 
 **Fast paddling weather forecasts with ML-powered ratings for kayakers and paddlers**
 
+## 🔒 Security Update (Dec 6, 2025)
+
+**Admin Endpoints Now Protected:**
+- `/admin/updateOrderStatus` - Requires authentication + admin role
+- `/admin/getOrder` - Requires authentication + admin role  
+- `/admin/listOrders` - Requires authentication + admin role
+
+All admin endpoints now require:
+1. Valid Firebase ID token in `Authorization: Bearer <token>` header
+2. User must be in admin users list (verified via `requireAdmin` middleware)
+
+**Frontend Protection:**
+- Smart Links admin portal (`/admin/smartlinks.html`) now redirects unauthenticated users to `/admin/login.html`
+- Login page uses Firebase Authentication (production)
+- ID tokens are stored in localStorage and sent with API requests
+
 ## 📁 Directory Structure
 
 ```
