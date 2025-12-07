@@ -11,12 +11,14 @@
 const admin = require('firebase-admin');
 const { FieldValue } = require('firebase-admin/firestore');
 const { generateShortCode, isValidShortCode } = require('./smartLinkValidation');
+const { DEFAULT_TENANT_ID } = require('./tenantContext');
 
 const db = admin.firestore();
 
 /**
  * Create a short code link
  * ENRICHED: Full metadata support - destinations, UTM, expiry, creator, custom fields
+ * MULTI-TENANT: Now supports tenantId, domain, and pathPrefix
  */
 async function createShortLink(data) {
   const {
@@ -29,7 +31,13 @@ async function createShortLink(data) {
     utm = {},
     expiresAt = null,
     createdBy = 'system',
-    enabled = true
+    enabled = true,
+    // NEW: Multi-tenant fields
+    tenantId = DEFAULT_TENANT_ID,
+    tenantName = 'Kaayko',
+    domain = 'kaayko.com',
+    pathPrefix = '/l',
+    apiKeyId = null
   } = data;
 
   // If caller provided a custom short code (alias), validate and use it
@@ -72,11 +80,24 @@ async function createShortLink(data) {
     }
   }
 
-  // Create ENRICHED short link document with ALL metadata
+  // Construct short URL with tenant's domain
+  const shortDomain = domain.startsWith('http') ? domain : `https://${domain}`;
+  const shortUrl = `${shortDomain}${pathPrefix}/${shortCode}`;
+  const qrCodeUrl = `${shortDomain}/qr/${shortCode}.png`;
+
+  // Create ENRICHED short link document with ALL metadata + multi-tenant fields
   const linkDoc = {
     code: shortCode,
-    shortUrl: `https://kaayko.com/l/${shortCode}`,
-    qrCodeUrl: `https://kaayko.com/qr/${shortCode}.png`,
+    shortUrl,
+    qrCodeUrl,
+    
+    // Multi-tenant fields
+    tenantId,
+    tenantName,
+    domain,
+    pathPrefix,
+    apiKeyId, // Track which API key created this
+    
     destinations: {
       ios: iosDestination || null,
       android: androidDestination || null,
@@ -91,6 +112,7 @@ async function createShortLink(data) {
     installCount: 0,
     uniqueUsers: [],
     lastClickedAt: null, // Track last click timestamp
+    lastInstallAt: null, // Track last install timestamp
     enabled, // Active/inactive status
     createdBy, // Audit trail: who created this
     createdAt: FieldValue.serverTimestamp(),
@@ -103,8 +125,12 @@ async function createShortLink(data) {
   // Return FULL enriched link data
   return {
     code: shortCode,
-    shortUrl: `https://kaayko.com/l/${shortCode}`,
-    qrCodeUrl: `https://kaayko.com/qr/${shortCode}.png`,
+    shortUrl,
+    qrCodeUrl,
+    tenantId,
+    tenantName,
+    domain,
+    pathPrefix,
     destinations: linkDoc.destinations,
     title,
     description,
@@ -115,6 +141,7 @@ async function createShortLink(data) {
     installCount: 0,
     enabled,
     createdBy,
+    apiKeyId,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
   };
@@ -124,15 +151,20 @@ async function createShortLink(data) {
 
 /**
  * List all short links with optional filtering
+ * MULTI-TENANT: Now filters by tenantId
  */
 async function listLinks(filters = {}) {
-  const { enabled, limit = 100 } = filters;
+  const { enabled, limit = 100, tenantId } = filters;
 
   let query = db.collection('short_links');
   
+  // Filter by enabled status if specified
   if (enabled !== undefined) {
     query = query.where('enabled', '==', enabled);
   }
+  
+  // Order by creation date (newest first)
+  query = query.orderBy('createdAt', 'desc');
   
   const snapshot = await query.limit(limit).get();
 

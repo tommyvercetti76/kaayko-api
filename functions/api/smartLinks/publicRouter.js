@@ -18,25 +18,23 @@ const {
   handleRedirect
 } = require('./redirectHandler');
 
-// Import shared utilities
+// Import attribution service
 const {
-  createRateLimitMiddleware,
-  securityHeadersMiddleware,
-  createAPIErrorHandler
-} = require('../weather/sharedWeatherUtils');
+  resolveContext
+} = require('./attributionService');
+
+// Import rate limiting
+const { ipRateLimit } = require('./rateLimitService');
 
 const db = admin.firestore();
 
-// Security configuration
-const SECURITY_CONFIG = {
-  MAX_REQUESTS_PER_MINUTE: 30,
-  REQUEST_TIMEOUT: 10000
-};
-
-// Apply shared middleware
-router.use(createRateLimitMiddleware(SECURITY_CONFIG.MAX_REQUESTS_PER_MINUTE));
-router.use(securityHeadersMiddleware);
-router.use(createAPIErrorHandler('PublicLink'));
+// Security configuration - Apply IP-based rate limiting
+// More lenient for public redirects (high traffic expected)
+router.use(ipRateLimit({ 
+  maxRequests: 100, // 100 requests per minute per IP
+  windowSeconds: 60,
+  message: 'Too many link clicks from this IP. Please wait a moment.'
+}));
 
 
 
@@ -75,45 +73,82 @@ router.get("/l/:id", async (req, res) => {
 });
 
 /**
- * Context restoration endpoint for iOS deferred deep linking.
- * Called by iOS app after installation to retrieve preserved location context.
- * Checks cookies first (fast), then falls back to database/legacy lookups.
+ * ENHANCED: Context resolution + install attribution endpoint.
+ * Called by mobile apps on first open after installation.
+ * 
+ * Features:
+ * - Click-to-install attribution via clickId
+ * - Deferred deep link context resolution
+ * - Backward compatible with legacy cookie/ctx_tokens resolution
+ * - Tracks install events and conversion metrics
  * 
  * @async
  * @route GET /resolve
  * 
  * @param {Express.Request} req - Express request object
- * @param {string} req.query.id - Context ID from URL parameter
- * @param {Object} req.cookies - Cookie object with preserved context
- * @param {string} req.cookies.kaayko_ctxid - Primary context identifier
- * @param {string} req.cookies.kaayko_lake_id - Legacy lake identifier
- * @param {string} req.cookies.kaayko_location - JSON-encoded location data
+ * @param {string} req.query.clickId - Click ID from deep link (NEW - for attribution)
+ * @param {string} req.query.deviceId - Stable device identifier (NEW)
+ * @param {string} req.query.platform - ios|android (NEW)
+ * @param {string} req.query.appVersion - App version string (NEW)
+ * @param {string} req.query.userId - Optional user ID if logged in
+ * @param {string} req.query.id - Legacy context ID (backward compatibility)
+ * @param {Object} req.cookies - Cookie object with preserved context (legacy)
  * @param {Express.Response} res - Express response object
  * 
- * @returns {Promise<void>} JSON response with location context
+ * @returns {Promise<void>} JSON response with attribution result
  * @returns {boolean} success - Operation status
- * @returns {string} source - Data source ('cache', 'database', 'legacy', or 'not_found')
- * @returns {Object} context - Location data (id, name, lat, lon)
+ * @returns {string} source - Data source ('click_attribution', 'cache', 'database', 'not_found')
+ * @returns {boolean} attributed - Whether install was attributed to a click
+ * @returns {boolean} isNewInstall - First time attribution vs. repeat call
+ * @returns {Object} context - Link context (destinations, utm, metadata, campaign info)
  * @returns {string} timestamp - ISO timestamp
  * 
  * @example
- * // Cookie-based resolution (fastest)
+ * // NEW: Attribution-based resolution (primary use case)
+ * GET /resolve?clickId=c_abc123&deviceId=uuid-456&platform=ios&appVersion=1.0.0
+ * // → Attributes install, returns:
+ * // { success: true, source: 'click_attribution', attributed: true, 
+ * //   isNewInstall: true, context: { linkCode, utm, destinations, ... } }
+ * 
+ * @example
+ * // Legacy: Cookie-based resolution (backward compatible)
  * GET /resolve
  * Cookie: kaayko_location={"id":"antero","name":"Antero Reservoir",...}
- * // → Returns: { success: true, source: 'cache', context: {...} }
+ * // → { success: true, source: 'cache', attributed: false, context: {...} }
  * 
  * @example
- * // URL parameter resolution
- * GET /resolve?id=antero456
- * // → Looks up location → { success: true, source: 'database', context: {...} }
- * 
- * @example
- * // Not found
- * GET /resolve?id=invalid999
- * // → { success: false, source: 'not_found', message: 'No context...' }
+ * // Organic install (no attribution)
+ * GET /resolve?platform=ios&appVersion=1.0.0
+ * // → { success: false, source: 'not_found', attributed: false, 
+ * //     message: 'App opened without attribution context...' }
  */
 router.get("/resolve", async (req, res) => {
   try {
+    // NEW: Attribution-based resolution via clickId
+    const clickId = req.query.clickId;
+    const deviceId = req.query.deviceId;
+    const platform = req.query.platform;
+    const appVersion = req.query.appVersion;
+    const userId = req.query.userId;
+
+    // If clickId provided, use new attribution flow
+    if (clickId || deviceId) {
+      const result = await resolveContext({
+        clickId,
+        deviceId,
+        platform,
+        appVersion,
+        userId,
+        metadata: {
+          userAgent: req.get('user-agent'),
+          ip: req.ip || req.connection.remoteAddress
+        }
+      });
+      
+      return res.json(result);
+    }
+
+    // LEGACY: Cookie/database-based resolution (backward compatibility)
     const ctxId = req.query.id || 
                   (req.cookies && req.cookies.kaayko_ctxid) || 
                   (req.cookies && req.cookies.kaayko_lake_id);
@@ -126,6 +161,7 @@ router.get("/resolve", async (req, res) => {
         return res.json({
           success: true,
           source: 'cache',
+          attributed: false,
           context: locationData,
           timestamp: new Date().toISOString()
         });
@@ -143,6 +179,7 @@ router.get("/resolve", async (req, res) => {
           return res.json({
             success: true,
             source: 'database',
+            attributed: false,
             context: ctxData.params,
             timestamp: new Date().toISOString()
           });
@@ -152,10 +189,13 @@ router.get("/resolve", async (req, res) => {
       }
     }
     
-    // Context not found
+    // Context not found (organic install)
     return res.status(404).json({
       success: false,
+      source: 'not_found',
+      attributed: false,
       error: 'Context not found',
+      message: 'App opened without attribution context. This is normal for organic installs.',
       ctxId: ctxId || 'none',
       timestamp: new Date().toISOString()
     });

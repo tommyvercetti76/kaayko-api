@@ -14,6 +14,7 @@
 
 const admin = require('firebase-admin');
 const { FieldValue } = require('firebase-admin/firestore');
+const { trackClick, updateClickRedirect } = require('./clickTracking');
 
 const db = admin.firestore();
 
@@ -117,31 +118,53 @@ async function handleRedirect(req, res, code, options = {}) {
     const destinations = linkData.destinations || {};
     let destination = destinations.web || 'https://kaayko.com';
     
+    // Handle A/B routing if destinations are arrays
     if (platform === 'ios' && destinations.ios) {
-      destination = destinations.ios;
+      destination = selectDestinationVariant(destinations.ios);
     } else if (platform === 'android' && destinations.android) {
-      destination = destinations.android;
+      destination = selectDestinationVariant(destinations.android);
+    } else if (destinations.web) {
+      destination = selectDestinationVariant(destinations.web);
     }
 
-    // Track click metrics (async, non-blocking - don't wait for completion)
+    // Track click with full context (generates clickId for attribution)
+    let clickId = null;
+    if (options.trackAnalytics) {
+      try {
+        const clickData = await trackClick({
+          linkCode: code,
+          tenantId: linkData.tenantId || 'kaayko-default',
+          platform,
+          userAgent,
+          ip: req.ip || req.connection.remoteAddress,
+          referrer: req.get('referer') || null,
+          utm: extractUTMParams(req.query),
+          metadata: {
+            linkTitle: linkData.title,
+            linkMetadata: linkData.metadata
+          }
+        });
+        clickId = clickData.clickId;
+
+        // Update click with redirect destination
+        await updateClickRedirect(clickId, destination);
+      } catch (trackError) {
+        console.error('[Redirect] Click tracking failed:', trackError);
+      }
+    }
+
+    // Track basic click metrics (async, non-blocking)
     db.collection('short_links')
       .doc(code)
       .update({
         clickCount: FieldValue.increment(1),
         lastClickedAt: FieldValue.serverTimestamp()
       })
-      .catch(err => console.error('[Redirect] Click tracking failed:', err));
+      .catch(err => console.error('[Redirect] Click count update failed:', err));
 
-    // Optional: Detailed analytics (when enabled via options)
-    if (options.trackAnalytics) {
-      db.collection('link_analytics').add({
-        code,
-        platform,
-        userAgent,
-        timestamp: FieldValue.serverTimestamp(),
-        destination,
-        referrer: req.get('referer') || null
-      }).catch(err => console.error('[Redirect] Analytics tracking failed:', err));
+    // Append clickId to destination for attribution (if mobile deep link)
+    if (clickId && (platform === 'ios' || platform === 'android')) {
+      destination = appendClickIdToDestination(destination, clickId, req.query);
     }
 
     // Perform redirect (302 = temporary, preserves POST data if needed)
@@ -160,6 +183,87 @@ async function handleRedirect(req, res, code, options = {}) {
       'Something Went Wrong',
       'We encountered an error processing your link. Please try again.'
     ));
+  }
+}
+
+/**
+ * Select destination variant for A/B routing
+ * If destination is a string, return it as-is.
+ * If it's an array of variants, select based on weighted random.
+ * 
+ * @param {string|Array<{url: string, weight: number, label: string}>} destination
+ * @returns {string} Selected destination URL
+ */
+function selectDestinationVariant(destination) {
+  // Simple string destination
+  if (typeof destination === 'string') {
+    return destination;
+  }
+
+  // Array of variants for A/B testing
+  if (Array.isArray(destination) && destination.length > 0) {
+    // Calculate total weight
+    const totalWeight = destination.reduce((sum, variant) => sum + (variant.weight || 1), 0);
+    
+    // Random selection based on weights
+    let random = Math.random() * totalWeight;
+    for (const variant of destination) {
+      random -= (variant.weight || 1);
+      if (random <= 0) {
+        console.log('[Redirect] A/B variant selected:', variant.label || variant.url);
+        return variant.url;
+      }
+    }
+    
+    // Fallback to first variant
+    return destination[0].url;
+  }
+
+  // Fallback
+  return 'https://kaayko.com';
+}
+
+/**
+ * Extract UTM parameters from query string
+ * @param {Object} query - Request query object
+ * @returns {Object} UTM parameters
+ */
+function extractUTMParams(query) {
+  const utmParams = {};
+  const utmKeys = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content'];
+  
+  for (const key of utmKeys) {
+    if (query[key]) {
+      utmParams[key] = query[key];
+    }
+  }
+  
+  return utmParams;
+}
+
+/**
+ * Append clickId and context to destination URL for attribution
+ * @param {string} destination - Original destination URL
+ * @param {string} clickId - Click ID
+ * @param {Object} query - Query parameters (for UTM passthrough)
+ * @returns {string} Modified destination with clickId
+ */
+function appendClickIdToDestination(destination, clickId, query = {}) {
+  try {
+    const url = new URL(destination);
+    url.searchParams.set('clickId', clickId);
+    
+    // Pass through UTM parameters
+    const utmParams = extractUTMParams(query);
+    for (const [key, value] of Object.entries(utmParams)) {
+      url.searchParams.set(key, value);
+    }
+    
+    return url.toString();
+  } catch (error) {
+    // If URL parsing fails, append manually
+    const separator = destination.includes('?') ? '&' : '?';
+    return `${destination}${separator}clickId=${clickId}`;
   }
 }
 
@@ -187,5 +291,8 @@ async function checkLinkExists(code) {
 module.exports = { 
   handleRedirect, 
   detectPlatform,
-  checkLinkExists 
+  checkLinkExists,
+  selectDestinationVariant,
+  extractUTMParams,
+  appendClickIdToDestination
 };

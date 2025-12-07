@@ -30,8 +30,14 @@ const LinkService = require('./smartLinkService');
 // Import authentication middleware
 const { requireAuth, requireAdmin, optionalAuth } = require('../../middleware/authMiddleware');
 
+// Import tenant context
+const { getTenantFromRequest, createTenantScopedQuery } = require('./tenantContext');
+
 // Import notification service
 const { sendLinkCreatedNotification } = require('../../services/emailNotificationService');
+
+// Import webhook service
+const { triggerWebhooks, EVENT_TYPES } = require('./webhookService');
 
 // ============================================================================
 // HEALTH CHECK (Must be BEFORE /:code to avoid being caught by it)
@@ -44,6 +50,29 @@ router.get('/health', (req, res) => {
     status: 'healthy',
     timestamp: new Date().toISOString()
   });
+});
+
+// ============================================================================
+// MIGRATION ENDPOINT - TEMPORARY (Run once to add tenant fields)
+// ============================================================================
+
+router.get('/admin/migrate', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { migrateExistingLinksToDefaultTenant } = require('./tenantContext');
+    const result = await migrateExistingLinksToDefaultTenant();
+    return res.json({
+      success: true,
+      message: 'Migration completed successfully',
+      result
+    });
+  } catch (error) {
+    console.error('[SmartLinks] Migration error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Migration failed',
+      message: error.message
+    });
+  }
 });
 
 // ============================================================================
@@ -81,10 +110,14 @@ router.get('/r/:code', async (req, res) => {
 
 router.post('/', requireAuth, requireAdmin, async (req, res) => {
   try {
-    // Add creator info from authenticated user
+    // Add creator info with default tenant values (backward compatibility)
     const linkData = {
       ...req.body,
-      createdBy: req.user.email || req.user.uid
+      createdBy: req.user.email || req.user.uid,
+      tenantId: 'kaayko-default',
+      tenantName: 'Kaayko',
+      domain: req.body.domain || 'kaayko.com',
+      pathPrefix: req.body.pathPrefix || '/l'
     };
     
     const link = await LinkService.createShortLink(linkData);
@@ -98,6 +131,26 @@ router.post('/', requireAuth, requireAdmin, async (req, res) => {
       }
     }).catch(err => {
       console.error('⚠️ Email notification error:', err);
+    });
+
+    // Trigger webhooks (async, don't block response)
+    triggerWebhooks({
+      tenantId: 'kaayko-default',
+      eventType: EVENT_TYPES.LINK_CREATED,
+      payload: {
+        event: 'link.created',
+        link: {
+          code: link.code,
+          shortUrl: link.shortUrl,
+          title: link.title,
+          destinations: link.destinations,
+          createdBy: link.createdBy,
+          createdAt: link.createdAt
+        },
+        timestamp: new Date().toISOString()
+      }
+    }).catch(err => {
+      console.error('⚠️ Webhook trigger error:', err);
     });
     
     res.json({ 
@@ -131,17 +184,23 @@ router.get('/', requireAuth, requireAdmin, async (req, res) => {
   try {
     const { enabled, limit } = req.query;
     
+    // Build filters without tenant scoping for now (backward compatibility)
+    // TODO: Re-enable tenant scoping after migration runs
     const filters = {};
     if (enabled !== undefined) filters.enabled = enabled === 'true';
     if (limit) filters.limit = parseInt(limit, 10);
     
     const result = await LinkService.listLinks(filters);
-    res.json({ success: true, ...result });
+    res.json({ 
+      success: true, 
+      ...result
+    });
   } catch (error) {
     console.error('[SmartLinks] Error listing links:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch links'
+      error: 'Failed to fetch links',
+      message: error.message
     });
   }
 });
