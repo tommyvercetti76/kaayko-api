@@ -47,7 +47,10 @@ apiApp.use("/auth", require("./api/auth/authRoutes"));
 // 💳 CHECKOUT & PAYMENTS
 apiApp.use("/createPaymentIntent", require("./api/checkout/router")); // Stripe payment intent creation
 
-// 👔 ADMIN ORDER MANAGEMENT - PROTECTED WITH AUTH
+// � BILLING & SUBSCRIPTIONS
+apiApp.use("/billing", require("./api/billing/router")); // Subscription management for Kortex
+
+// �👔 ADMIN ORDER MANAGEMENT - PROTECTED WITH AUTH
 const { requireAuth, requireAdmin } = require("./middleware/authMiddleware");
 apiApp.post("/admin/updateOrderStatus", requireAuth, requireAdmin, require("./api/admin/updateOrderStatus"));
 const { getOrder, listOrders } = require("./api/admin/getOrder");
