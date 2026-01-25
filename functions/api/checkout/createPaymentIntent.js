@@ -9,13 +9,22 @@ const admin = require('firebase-admin');
 let stripe = null;
 function getStripe() {
   if (!stripe) {
-    // Load dotenv only when needed
-    require('dotenv').config({ path: require('path').join(__dirname, '../../.env.local') });
-    const apiKey = process.env.STRIPE_SECRET_KEY;
+    // IMPORTANT: Firebase secrets may include trailing newlines, so we must trim
+    const apiKey = process.env.STRIPE_SECRET_KEY?.trim();
+    console.log(`🔑 STRIPE_SECRET_KEY check:`);
+    console.log(`   - Exists: ${!!apiKey}`);
+    console.log(`   - Length: ${apiKey?.length || 0}`);
+    console.log(`   - Starts with: ${apiKey?.substring(0, 15) || 'N/A'}...`);
     if (!apiKey) {
       throw new Error('STRIPE_SECRET_KEY not configured');
     }
-    stripe = require('stripe')(apiKey);
+    console.log(`🔧 Initializing Stripe client...`);
+    stripe = require('stripe')(apiKey, {
+      timeout: 60000, // 60 second timeout (increased from 30)
+      maxNetworkRetries: 2,
+      telemetry: false // Disable telemetry for faster startup
+    });
+    console.log(`✅ Stripe client initialized`);
   }
   return stripe;
 }
@@ -95,7 +104,9 @@ async function createPaymentIntent(req, res) {
     console.log(`💰 Creating payment for ${validatedItems.length} items, total: $${(totalAmount/100).toFixed(2)} (${totalAmount} cents)`);
 
     // Create payment intent with Stripe (lazy-loaded)
+    console.log(`🔄 Getting Stripe client...`);
     const stripeClient = getStripe();
+    console.log(`🚀 Calling Stripe paymentIntents.create...`);
     const paymentIntent = await stripeClient.paymentIntents.create({
       amount: totalAmount,
       currency: 'usd',
@@ -174,6 +185,10 @@ async function createPaymentIntent(req, res) {
 
   } catch (error) {
     console.error('❌ Error creating payment intent:', error);
+    console.error('❌ Error name:', error.name);
+    console.error('❌ Error type:', error.type);
+    console.error('❌ Error code:', error.code);
+    console.error('❌ Error stack:', error.stack);
     res.status(500).json({
       success: false,
       error: 'Failed to create payment intent',
