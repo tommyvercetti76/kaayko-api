@@ -108,9 +108,22 @@ async function requireAuth(req, res, next) {
 function requireAdmin(req, res, next) {
   // Check for X-Admin-Key header (simpler admin access for internal tools)
   const adminKey = req.headers['x-admin-key'];
-  const ADMIN_PASSPHRASE = process.env.ADMIN_PASSPHRASE || 'kaayko2026admin';
+  const isEmulator = process.env.FUNCTIONS_EMULATOR === 'true';
+  const ADMIN_PASSPHRASE = isEmulator 
+    ? (process.env.ADMIN_PASSPHRASE || 'dev-admin-local-only')
+    : process.env.ADMIN_PASSPHRASE;
   
-  if (adminKey && adminKey === ADMIN_PASSPHRASE) {
+  if (!ADMIN_PASSPHRASE && !isEmulator) {
+    console.error('[SECURITY] ADMIN_PASSPHRASE not configured - admin access disabled');
+    return res.status(503).json({
+      success: false,
+      error: 'Service Unavailable',
+      message: 'Admin authentication not configured',
+      code: 'ADMIN_NOT_CONFIGURED'
+    });
+  }
+  
+  if (adminKey && ADMIN_PASSPHRASE && adminKey === ADMIN_PASSPHRASE) {
     // Admin key is valid - grant access
     req.user = req.user || { uid: 'admin-key-user', email: 'admin@kaayko.com', role: 'admin' };
     req.user.role = 'admin';

@@ -17,6 +17,21 @@ const crypto = require('crypto');
 
 const db = admin.firestore();
 
+// Validate required environment variables
+const SESSION_SECRET = process.env.SESSION_SECRET;
+if (!SESSION_SECRET && process.env.FUNCTIONS_EMULATOR !== 'true') {
+  console.error('[SECURITY] SESSION_SECRET environment variable is required in production');
+}
+const getSessionSecret = () => {
+  if (process.env.FUNCTIONS_EMULATOR === 'true') {
+    return process.env.SESSION_SECRET || 'dev-only-secret-not-for-production';
+  }
+  if (!process.env.SESSION_SECRET) {
+    throw new Error('SESSION_SECRET environment variable must be configured');
+  }
+  return process.env.SESSION_SECRET;
+};
+
 // Kreator statuses
 const KREATOR_STATUS = {
   PENDING_PASSWORD: 'pending_password',  // Approved, awaiting password setup
@@ -181,7 +196,7 @@ async function createSessionToken(uid) {
   
   const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
   const body = Buffer.from(JSON.stringify(payload)).toString('base64url');
-  const signature = crypto.createHmac('sha256', process.env.SESSION_SECRET || 'kaayko-kreator-secret-2026')
+  const signature = crypto.createHmac('sha256', getSessionSecret())
     .update(`${header}.${body}`)
     .digest('base64url');
   
@@ -201,7 +216,7 @@ function verifySessionToken(token) {
     const [header, body, signature] = parts;
     
     // Verify signature
-    const expectedSig = crypto.createHmac('sha256', process.env.SESSION_SECRET || 'kaayko-kreator-secret-2026')
+    const expectedSig = crypto.createHmac('sha256', getSessionSecret())
       .update(`${header}.${body}`)
       .digest('base64url');
     
