@@ -31,7 +31,7 @@ function detectPlatform(userAgent = '') {
 }
 
 /**
- * Generate branded error page with consistent styling
+ * Generate branded error page with Kaayko dark theme styling
  * @param {number} code - HTTP status code
  * @param {string} title - Error title
  * @param {string} message - User-friendly error message
@@ -40,22 +40,116 @@ function detectPlatform(userAgent = '') {
  */
 function errorPage(code, title, message, showAppButton = true) {
   const appButton = showAppButton 
-    ? `<a href="https://kaayko.com" style="background: #007AFF; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; display: inline-block; margin-top: 20px;">Go to Kaayko</a>`
+    ? `<a href="https://kaayko.com" class="btn">Go to Kaayko</a>`
     : '';
+  
+  // Icon based on error type
+  const icon = code === 404 ? '🔍' : code === 410 ? '⏰' : '⚠️';
   
   return `
     <!DOCTYPE html>
     <html>
     <head>
-      <title>${title}</title>
+      <title>${title} | Kaayko</title>
       <meta name="viewport" content="width=device-width, initial-scale=1">
+      <link rel="icon" type="image/png" sizes="32x32" href="https://kaayko.com/favicon-32x32.png">
+      <link href="https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+      <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+          font-family: 'Josefin Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+          min-height: 100vh;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: #0a0a0a;
+          color: #fff;
+          padding: 20px;
+        }
+        .container {
+          max-width: 420px;
+          width: 100%;
+          text-align: center;
+        }
+        .logo {
+          width: 60px;
+          height: 60px;
+          margin: 0 auto 24px;
+          background: linear-gradient(135deg, #D4A84B 0%, #C4983B 100%);
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 28px;
+          font-weight: 700;
+          color: #0a0a0a;
+          box-shadow: 0 4px 20px rgba(212, 168, 75, 0.3);
+        }
+        .card {
+          background: #141414;
+          border: 1px solid #2a2a2a;
+          border-radius: 16px;
+          padding: 40px 32px;
+        }
+        .icon {
+          font-size: 48px;
+          margin-bottom: 16px;
+        }
+        h1 {
+          font-size: 24px;
+          font-weight: 700;
+          color: #fff;
+          margin-bottom: 8px;
+        }
+        p {
+          font-size: 15px;
+          color: #888;
+          line-height: 1.5;
+          margin-bottom: 24px;
+        }
+        .btn {
+          display: inline-block;
+          background: linear-gradient(135deg, #D4A84B 0%, #C4983B 100%);
+          color: #0a0a0a;
+          font-family: inherit;
+          font-size: 14px;
+          font-weight: 600;
+          padding: 12px 28px;
+          border-radius: 8px;
+          text-decoration: none;
+          transition: all 0.2s ease;
+          box-shadow: 0 2px 12px rgba(212, 168, 75, 0.25);
+        }
+        .btn:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 4px 20px rgba(212, 168, 75, 0.4);
+        }
+        .footer {
+          margin-top: 32px;
+          font-size: 13px;
+          color: #555;
+        }
+        .footer a {
+          color: #D4A84B;
+          text-decoration: none;
+        }
+        .footer a:hover {
+          text-decoration: underline;
+        }
+      </style>
     </head>
-    <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; text-align: center; padding: 50px; background: #f5f5f5;">
-      <div style="max-width: 500px; margin: 0 auto; background: white; padding: 40px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
-        <h1 style="font-size: 3em; margin: 0;">🏞️</h1>
-        <h2 style="color: #333; margin: 20px 0 10px;">${title}</h2>
-        <p style="color: #666; margin: 0;">${message}</p>
-        ${appButton}
+    <body>
+      <div class="container">
+        <div class="logo">K</div>
+        <div class="card">
+          <div class="icon">${icon}</div>
+          <h1>${title}</h1>
+          <p>${message}</p>
+          ${appButton}
+        </div>
+        <div class="footer">
+          <a href="https://kaayko.com">kaayko.com</a> · Know Before You Go
+        </div>
       </div>
     </body>
     </html>
