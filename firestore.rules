@@ -32,6 +32,30 @@ service cloud.firestore {
       allow write: if false;
     }
     
+    // ========================================
+    // KREATOR COLLECTIONS
+    // ========================================
+    
+    // Kreator applications - API-only access
+    match /kreator_applications/{applicationId} {
+      // Public can check their own application status via API
+      // All writes go through Cloud Functions
+      allow read, write: if false;
+    }
+    
+    // Kreators collection - API-only writes, kreators can read own
+    match /kreators/{kreatorId} {
+      // Kreators can read their own profile
+      allow read: if request.auth != null && request.auth.uid == kreatorId;
+      // Only Cloud Functions can write
+      allow write: if false;
+    }
+    
+    // Admin audit logs - API-only access
+    match /admin_audit_logs/{logId} {
+      allow read, write: if false;
+    }
+    
     // All other collections - deny by default
     match /{document=**} {
       allow read, write: if false;

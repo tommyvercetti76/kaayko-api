@@ -38,6 +38,9 @@ apiApp.use("/forecast", require("./api/weather/forecast").router);    // PREMIUM
 // 🔗 SMART LINKS - NEW!
 apiApp.use("/smartlinks", require("./api/smartLinks/smartLinks"));    // Smart link CRUD & analytics
 
+// 🎨 KREATOR (CREATOR) MANAGEMENT - NEW!
+apiApp.use("/kreators", require("./api/kreators/kreatorRoutes"));     // Kreator onboarding, auth, profile
+
 // 🤖 AI / GPT Actions (exposed for ChatGPT / internal GPT Actions clients)
 apiApp.use("/gptActions", require("./api/ai/gptActions"));
 

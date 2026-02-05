@@ -100,14 +100,30 @@ async function requireAuth(req, res, next) {
 
 /**
  * Require user to be an admin (super-admin or admin role)
- * @middleware - Must be used after requireAuth
+ * Supports two authentication methods:
+ * 1. Firebase Auth (Bearer token) with admin role
+ * 2. X-Admin-Key header with valid admin passphrase
+ * @middleware - Must be used after requireAuth (or standalone with X-Admin-Key)
  */
 function requireAdmin(req, res, next) {
+  // Check for X-Admin-Key header (simpler admin access for internal tools)
+  const adminKey = req.headers['x-admin-key'];
+  const ADMIN_PASSPHRASE = process.env.ADMIN_PASSPHRASE || 'kaayko2026admin';
+  
+  if (adminKey && adminKey === ADMIN_PASSPHRASE) {
+    // Admin key is valid - grant access
+    req.user = req.user || { uid: 'admin-key-user', email: 'admin@kaayko.com', role: 'admin' };
+    req.user.role = 'admin';
+    req.user.authMethod = 'admin-key';
+    return next();
+  }
+
+  // Fall back to Firebase Auth check
   if (!req.user) {
     return res.status(401).json({
       success: false,
       error: 'Unauthorized',
-      message: 'Authentication required',
+      message: 'Authentication required. Provide Bearer token or X-Admin-Key header.',
       code: 'AUTH_REQUIRED'
     });
   }
@@ -259,10 +275,28 @@ async function optionalAuth(req, res, next) {
   }
 }
 
+/**
+ * Flexible auth middleware - allows X-Admin-Key OR Bearer token
+ * Use this before requireAdmin for routes that should accept admin key
+ * @middleware
+ */
+function optionalAuthForAdmin(req, res, next) {
+  // If X-Admin-Key is provided, skip Firebase auth check
+  const adminKey = req.headers['x-admin-key'];
+  if (adminKey) {
+    // Let requireAdmin handle the validation
+    return next();
+  }
+  
+  // Otherwise, require Firebase auth
+  return requireAuth(req, res, next);
+}
+
 module.exports = {
   requireAuth,
   requireAdmin,
   requireRole,
   requirePermission,
-  optionalAuth
+  optionalAuth,
+  optionalAuthForAdmin
 };
