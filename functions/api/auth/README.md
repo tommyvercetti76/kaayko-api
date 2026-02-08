@@ -1,37 +1,67 @@
-# 🔐 Authentication Routes
+# 🔐 Auth API
 
-This module implements authentication helpers and session endpoints used by the frontend and other services. The router `authRoutes.js` exposes auth-related endpoints in this folder.
+Firebase Authentication helpers — logout, profile, and token verification.
 
-Mount status: `authRoutes.js` is mounted in `functions/index.js` at `/auth` (endpoints: `/auth/logout`, `/auth/me`, `/auth/verify`).
+## Files
 
-Files
-- `authRoutes.js` — logout, me, and token verification endpoints
+| File | Purpose |
+|------|---------|
+| `authRoutes.js` | Router — mounted at `/auth` |
 
-Endpoints implemented (code-driven)
+---
 
-POST /logout
-Method: POST
-Path: /api/auth/logout
-Description: Revoke a user's refresh tokens to force logout across devices. Uses `requireAuth` middleware in the handler.
-Auth: requireAuth (token required)
-Body: none
-Response: { success: true, message: 'Logout successful', revokedAt }
-Errors: 500 internal error
+## Endpoints
 
-GET /me
-Method: GET
-Path: /api/auth/me
-Description: Returns authenticated user's basic info (uid, email, role, displayName, emailVerified). Uses `requireAuth` middleware.
-Auth: requireAuth
-Response: { success: true, user: { uid, email, role, displayName, emailVerified } }
+| Method | Path | Description | Auth |
+|--------|------|-------------|------|
+| POST | `/auth/logout` | Revoke refresh tokens (force logout) | `requireAuth` |
+| GET | `/auth/me` | Get current user profile | `requireAuth` |
+| POST | `/auth/verify` | Verify a Firebase ID token (debug) | None (token in body) |
 
-POST /verify
-Method: POST
-Path: /api/auth/verify
-Description: Debug/debugging endpoint — verify a provided Firebase ID token and return decoded token contents.
-Auth: none required (accepts token in body); primarily useful for debugging.
-Body: { token }
-Response: { success: true, decoded: { uid, email, role, exp, iat } } or 401 for invalid/expired tokens
+### POST `/auth/logout`
 
-Security notes:
-- `requireAuth` depends on Firebase ID tokens in Authorization: Bearer <token> header. See `middleware/authMiddleware.js` for verification logic and role/permission loading.
+Revokes all refresh tokens for the authenticated user. Forces logout across all devices.
+
+**Headers:** `Authorization: Bearer <firebase_id_token>`  
+**Response:** `{ success: true, message: "Logout successful", revokedAt: "..." }`
+
+### GET `/auth/me`
+
+Returns the authenticated user's basic info from the decoded token and `admin_users` collection.
+
+**Headers:** `Authorization: Bearer <firebase_id_token>`  
+**Response:**
+```json
+{
+  "success": true,
+  "user": {
+    "uid": "abc123",
+    "email": "admin@kaayko.com",
+    "role": "super-admin",
+    "displayName": "Admin User",
+    "emailVerified": true
+  }
+}
+```
+
+### POST `/auth/verify`
+
+Debug endpoint — decodes and returns the contents of a Firebase ID token. Useful for troubleshooting auth issues.
+
+**Body:** `{ "token": "<firebase_id_token>" }`  
+**Response:** `{ success: true, decoded: { uid, email, role, exp, iat } }`  
+**Errors:** `401` for invalid/expired tokens
+
+---
+
+## Auth Middleware
+
+Auth routes use `requireAuth` from `middleware/authMiddleware.js`:
+1. Extracts `Authorization: Bearer <token>` header
+2. Verifies token with Firebase Admin SDK
+3. Loads user profile from `admin_users` Firestore collection
+4. Attaches `req.user` with uid, email, role, permissions
+
+---
+
+**Test suite:** `__tests__/auth.test.js` (12 tests)

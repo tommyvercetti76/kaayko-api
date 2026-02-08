@@ -1,409 +1,338 @@
-# 📚 Kaayko API Modules
+# 📡 Kaayko API — Endpoint Reference
 
-**Complete documentation for all API modules**
+**99 endpoints across 11 modules**, all served from a single Express app exported as one Cloud Function.
 
----
-
-## 📁 Directory Structure
-### APIs (summary of modules present)
-Note: the list below is derived from the current code in `functions/index.js` and each module's router files. Most modules are mounted; where parts remain unmounted (eg. adminUsers router) the README below will call that out.
-
-1. **paddleScore** - Current paddle conditions with ML rating (GOLD STANDARD) (mounted at /paddleScore)
-2. **fastForecast** - Ultra-fast cached 3-day forecasts (192ms avg) (mounted at /fastForecast)
-3. **forecast** - Premium real-time forecasts with marine data (mounted at /forecast)
-4. **paddlingOut** - Curated paddling locations (17+ spots) (mounted at /paddlingOut)
-5. **nearbyWater** - OpenStreetMap water discovery (mounted at /nearbyWater)
-├── products/      🛍️  Product catalog & images
-├── deepLinks/     📱 Universal links (iOS integration)
-└── core/          📚 Documentation & OpenAPI specs
-```
-
-### Smart Links API (mounted)
-1. **Smart Links CRUD** - Create, read, update, delete short links (mounted at /smartlinks)
-2. **Short Codes** - Short links (lkXXXX) and redirect handlers (some public redirect routes are handled by `deepLinks` module mounted at `/l/*`)
-3. **Analytics** - Click tracking and stats
-**README:** [weather/README.md](weather/README.md)
-### Modules mapped to runtime:
-| Module | Mounted? | Path | Notes |
-|---|---:|---|---|
-| weather (paddlingOut) | ✅ | /paddlingOut | Listed in index.js
-| smartLinks | ✅ | /smartlinks | Admin + public actions (see smartLinks README)
-| ai (gptActions) | ✅ | /gptActions | Mounted in index.js
-| admin | ⚠️ partially mounted | /admin/* | Some admin endpoints are mounted directly (getOrder/listOrders/updateOrderStatus). adminUsers router exists but is not registered in index.js by default.
-| auth | ✅ | /auth/* | Mounted in index.js (logout, me, verify)
-| products | ✅ | /products and /images | Mounted
-| deepLinks | ✅ | /l/* and /resolve via root router | Mounted at root '/'
-| core (docs) | ✅ | /docs | Swagger UI and spec
-**Endpoint coverage:** several modules are implemented (some mounted, some not). Full, code-derived docs are in each module README inside `functions/api/`.
-Additional runtime helpers:
-- `GET /helloWorld` → simple health / smoke-check endpoint (returns "OK").
-4. **paddlingOut** - Curated paddling locations (17+ spots)
-5. **nearbyWater** - OpenStreetMap water discovery
-
-### Key Features:
-- ✅ 99.98% ML accuracy (v3 model)
-- ✅ Real-time + cached forecasts
-- ✅ Marine data integration
-- ✅ Smart warning system
-- ✅ Penalty-adjusted ratings
-
-### Endpoints:
-```
-GET /api/paddleScore?lat=32.8309&lng=-96.7176
-GET /api/fastForecast?location=32.8309,-96.7176
-GET /api/forecast?spotId=whiterlake
-GET /api/paddlingout
-GET /api/nearbyWater?lat=32.8309&lng=-96.7176&radius=5000
-```
+**Base URL (prod):** `https://us-central1-kaaykostore.cloudfunctions.net/api`  
+**Base URL (local):** `http://127.0.0.1:5001/kaaykostore/us-central1/api`
 
 ---
 
-## 🔗 Smart Links APIs
+## Module Index
 
-**Location:** `kortex/`  
-**README:** [kortex/README.md](kortex/README.md)
+| # | Module | Mount Path | Endpoints | Files | Auth |
+|---|--------|-----------|-----------|-------|------|
+| 1 | [Weather](#-weather) | `/paddleScore`, `/fastForecast`, `/forecast`, `/paddlingOut`, `/nearbyWater` | 8 | 23 | Public |
+| 2 | [Products](#-products) | `/products`, `/images` | 4 | 2 | Public |
+| 3 | [Checkout](#-checkout) | `/createPaymentIntent`, `/stripe-webhook` | 3 | 5 | Public + Stripe |
+| 4 | [Billing](#-billing) | `/billing/*` | 6 | 3 | Firebase Auth |
+| 5 | [Auth](#-auth) | `/auth/*` | 3 | 1 | Firebase Auth |
+| 6 | [Admin](#-admin) | `/admin/*` | 10 | 4 | Firebase Auth + RBAC |
+| 7 | [Kortex](#-kortex-smart-links) | `/smartlinks/*`, `/public/*`, `/l/:code` | 27 | 21 | Mixed |
+| 8 | [Kreators](#-kreators) | `/kreators/*` | 27 | 12 | Mixed |
+| 9 | [AI](#-ai--gpt-actions) | `/gptActions/*` | 5 | 2 | Public |
+| 10 | [Core](#-core--docs) | `/docs/*` | 3 | 1 | Public |
+| 11 | [Health](#-health) | `/helloWorld` | 1 | — | Public |
 
-### APIs:
-1. **Smart Links CRUD** - Create, read, update, delete links
-2. **Short Codes** - Branch-style short links (lk1ngp)
-3. **Redirect Handler** - Universal redirect system
-4. **Analytics** - Click tracking and stats
+---
 
-### Key Features:
-- ✅ Two link formats (structured + short codes)
-- ✅ Auto-enrichment with metadata
-- ✅ UTM parameter management
-- ✅ Real-time analytics
-- ✅ Custom expiration
+## 🌤️ Weather
 
-### Endpoints:
+**Files:** 23 in `api/weather/` — routers, services, helpers, ML integration, penalties, warnings.
+
+| Method | Path | Description | Auth |
+|--------|------|-------------|------|
+| GET | `/paddleScore` | ML-powered paddle rating (1-5) + weather | Public |
+| GET | `/fastForecast` | Cached forecast (fast, ~192ms) | Public |
+| GET | `/forecast` | Premium real-time forecast + ML | Rate limited (10/min) |
+| POST | `/forecast/batch` | Batch process all locations | Rate limited |
+| GET | `/forecast/cacheStats` | Cache performance stats | Public |
+| GET | `/paddlingOut` | List all paddling spots | Public |
+| GET | `/paddlingOut/:id` | Spot details + images | Public |
+| GET | `/nearbyWater` | Find nearby lakes/rivers (Overpass API) | Public |
+
+**Middleware:** `inputStandardization` (normalizes lat/lng/spotId) applied to paddleScore, forecast, fastForecast.
+
+📖 [Full weather docs →](weather/README.md)
+
+---
+
+## 🛍️ Products
+
+**Files:** `products.js`, `images.js`
+
+| Method | Path | Description | Auth |
+|--------|------|-------------|------|
+| GET | `/products` | List all products | Public |
+| GET | `/products/:productId` | Single product details | Public |
+| POST | `/products/:productId/vote` | Vote on a product | Public |
+| GET | `/images/:path` | Image proxy from Cloud Storage | Public |
+
+📖 [Full products docs →](products/README.md)
+
+---
+
+## 💳 Checkout
+
+**Files:** `router.js`, `createPaymentIntent.js`, `stripeWebhook.js`, `stripeOrderHandler.js`, `updatePaymentIntentEmail.js`
+
+| Method | Path | Description | Auth |
+|--------|------|-------------|------|
+| POST | `/createPaymentIntent` | Create Stripe payment intent | Public |
+| POST | `/createPaymentIntent/update-email` | Attach email to payment | Public |
+| POST | `/stripe-webhook` | Stripe webhook handler | Stripe signature |
+
+📖 [Full checkout docs →](checkout/README.md)
+
+---
+
+## 💰 Billing
+
+**Files:** `router.js`, `billingHandlers.js`, `billingConfig.js`
+
+| Method | Path | Description | Auth |
+|--------|------|-------------|------|
+| GET | `/billing/plans` | List available plans | Public |
+| GET | `/billing/subscription` | Get current subscription | `requireAuth` |
+| POST | `/billing/create-checkout` | Create Stripe billing checkout | `requireAuth` + tenant |
+| POST | `/billing/downgrade` | Downgrade subscription | `requireAuth` |
+| GET | `/billing/invoices` | List invoices | `requireAuth` |
+| POST | `/billing/webhook` | Stripe billing webhook | Stripe signature |
+
+📖 [Full billing docs →](billing/README.md)
+
+---
+
+## 🔐 Auth
+
+**File:** `authRoutes.js`
+
+| Method | Path | Description | Auth |
+|--------|------|-------------|------|
+| POST | `/auth/logout` | Revoke refresh tokens | `requireAuth` |
+| GET | `/auth/me` | Get current user profile | `requireAuth` |
+| POST | `/auth/verify` | Debug — verify a Firebase ID token | None (token in body) |
+
+📖 [Full auth docs →](auth/README.md)
+
+---
+
+## 👔 Admin
+
+**Files:** `adminUsers.js`, `adminUserHandlers.js`, `getOrder.js`, `updateOrderStatus.js`
+
+### Order Management (direct mounts in index.js)
+
+| Method | Path | Description | Auth |
+|--------|------|-------------|------|
+| POST | `/admin/updateOrderStatus` | Update order status/tracking | `requireAuth` + `requireAdmin` |
+| GET | `/admin/getOrder` | Get order by ID or parentOrderId | `requireAuth` + `requireAdmin` |
+| GET | `/admin/listOrders` | List orders with filters + pagination | `requireAuth` + `requireAdmin` |
+
+### User Management (admin router)
+
+| Method | Path | Description | Auth |
+|--------|------|-------------|------|
+| GET | `/admin-users/me` | Current admin profile | `requireAuth` |
+| GET | `/admin-users/users` | List all admin users | `requireAuth` + super-admin |
+| GET | `/admin-users/users/:uid` | Get admin user | `requireAuth` + super-admin |
+| POST | `/admin-users/users` | Create admin user | `requireAuth` + super-admin |
+| PUT | `/admin-users/users/:uid` | Update admin user | `requireAuth` + super-admin |
+| DELETE | `/admin-users/users/:uid` | Soft-delete admin user | `requireAuth` + super-admin |
+| GET | `/admin-users/roles` | List available roles | `requireAuth` |
+
+📖 [Full admin docs →](admin/README.md)
+
+---
+
+## 🔗 Kortex (Smart Links)
+
+**Files:** 21 in `api/kortex/` — CRUD, redirect, public API, attribution, tenants, webhooks, rate limiting.
+
+### Main CRUD (`/smartlinks` — requires Firebase Auth)
+
+| Method | Path | Description | Auth |
+|--------|------|-------------|------|
+| GET | `/smartlinks/health` | Health check | Public |
+| GET | `/smartlinks/stats` | Link statistics | `requireAuth` + `optionalAuthForAdmin` |
+| POST | `/smartlinks` | Create short link | `requireAuth` + `optionalAuthForAdmin` |
+| GET | `/smartlinks` | List all links | `requireAuth` + `optionalAuthForAdmin` |
+| GET | `/smartlinks/:code` | Get link by code | Public |
+| PUT | `/smartlinks/:code` | Update link | `requireAuth` + `optionalAuthForAdmin` |
+| DELETE | `/smartlinks/:code` | Delete link | `requireAuth` + `optionalAuthForAdmin` |
+| POST | `/smartlinks/:code/events` | Record link events | Public |
+
+### Tenant Management (sub-routes under `/smartlinks`)
+
+| Method | Path | Description | Auth |
+|--------|------|-------------|------|
+| POST | `/smartlinks/tenant-registration` | Register new tenant | Rate limited |
+| GET | `/smartlinks/tenants` | List tenants | `requireAuth` |
+| GET | `/smartlinks/tenants/:tenantId` | Get tenant | `requireAuth` + super-admin |
+
+### Public API (`/public` — API key auth)
+
+| Method | Path | Description | Auth |
+|--------|------|-------------|------|
+| POST | `/public/smartlinks` | Create link | API key (`create:links`) |
+| GET | `/public/smartlinks` | List links | API key (`read:links`) |
+| GET | `/public/smartlinks/:code` | Get link | API key (`read:links`) |
+| PUT | `/public/smartlinks/:code` | Update link | API key (`update:links`) |
+| DELETE | `/public/smartlinks/:code` | Delete link | API key (`delete:links`) |
+| GET | `/public/smartlinks/:code/stats` | Link stats | API key (`read:analytics`) |
+| GET | `/public/smartlinks/:code/attribution` | Attribution data | API key (`read:analytics`) |
+| POST | `/public/smartlinks/batch` | Batch create | API key (`create:links`) |
+| GET | `/public/health` | Health check | None |
+
+### Redirects (root-level)
+
+| Method | Path | Description | Auth |
+|--------|------|-------------|------|
+| GET | `/l/:code` | Redirect short link | Public (IP rate limited) |
+| GET | `/resolve` | Resolve link context | Public (IP rate limited) |
+
+📖 [Full Kortex docs →](kortex/README.md)
+
+---
+
+## 🎨 Kreators
+
+**Files:** 12 in `api/kreators/` — routes split by concern (public, auth, profile, products, admin, test).
+
+### Public (no auth, rate-limited)
+
+| Method | Path | Description | Auth |
+|--------|------|-------------|------|
+| GET | `/kreators/health` | Health check | None |
+| POST | `/kreators/apply` | Submit application | Rate limited (5/hr) |
+| GET | `/kreators/applications/:id/status` | Check app status | Rate limited (10/min) |
+| POST | `/kreators/onboarding/verify` | Verify magic link | Rate limited (20/min) |
+| POST | `/kreators/onboarding/complete` | Set password | Rate limited (5/min) |
+
+### Auth (Google OAuth)
+
+| Method | Path | Description | Auth |
+|--------|------|-------------|------|
+| POST | `/kreators/auth/google/signin` | Google sign-in | None |
+| POST | `/kreators/auth/google/connect` | Link Google account | `requireKreatorAuth` |
+| POST | `/kreators/auth/google/disconnect` | Unlink Google | `requireKreatorAuth` + `requireActiveKreator` |
+
+### Profile
+
+| Method | Path | Description | Auth |
+|--------|------|-------------|------|
+| GET | `/kreators/me` | Get profile | `requireKreatorAuth` |
+| PUT | `/kreators/me` | Update profile | `requireKreatorAuth` + `requireActiveKreator` |
+| DELETE | `/kreators/me` | Delete account | `requireKreatorAuth` + `requireActiveKreator` |
+
+### Products
+
+| Method | Path | Description | Auth |
+|--------|------|-------------|------|
+| GET | `/kreators/products` | List products | `requireKreatorAuth` |
+| POST | `/kreators/products` | Create product (+ images) | `requireKreatorAuth` + `requireActiveKreator` |
+| GET | `/kreators/products/:productId` | Get product | `requireKreatorAuth` |
+| PUT | `/kreators/products/:productId` | Update product | `requireKreatorAuth` + `requireActiveKreator` |
+| DELETE | `/kreators/products/:productId` | Delete product | `requireKreatorAuth` + `requireActiveKreator` |
+
+### Admin (Kreator management)
+
+| Method | Path | Description | Auth |
+|--------|------|-------------|------|
+| GET | `/kreators/admin/applications` | List applications | `requireAuth` + `requireAdmin` |
+| GET | `/kreators/admin/applications/:id` | Get application | Same |
+| PUT | `/kreators/admin/applications/:id/approve` | Approve | Same |
+| PUT | `/kreators/admin/applications/:id/reject` | Reject | Same |
+| GET | `/kreators/admin/list` | List kreators | Same |
+| GET | `/kreators/admin/:uid` | Get kreator | Same |
+| GET | `/kreators/admin/stats` | Get statistics | Same |
+| POST | `/kreators/admin/:uid/resend-link` | Resend magic link | Same |
+
+### Test (emulator only)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/kreators/test/list-applications` | List all apps |
+| GET | `/kreators/test/list-kreators` | List all kreators |
+| POST | `/kreators/test/direct-approve` | Approve without magic link |
+| POST | `/kreators/test/create-test-kreator` | Create test kreator |
+| GET | `/kreators/test/application/:id` | Get application detail |
+| POST | `/kreators/test/login` | Login with email/password |
+
+📖 [Full kreator docs →](kreators/README.md)
+
+---
+
+## 🤖 AI / GPT Actions
+
+**Files:** `gptActions.js`, `gptActionHandlers.js`
+
+| Method | Path | Description | Auth |
+|--------|------|-------------|------|
+| GET | `/gptActions/paddleScore` | Paddle score for ChatGPT | Public |
+| GET | `/gptActions/forecast` | 3-day forecast for ChatGPT | Public |
+| GET | `/gptActions/locations` | All paddling locations | Public |
+| GET | `/gptActions/nearbyWater` | Nearby water bodies | Public |
+| POST | `/gptActions/findNearby` | Find spots by coordinates | Public |
+
+📖 [Full AI docs →](ai/README.md)
+
+---
+
+## 📚 Core / Docs
+
+**File:** `docs.js`
+
+| Method | Path | Description | Auth |
+|--------|------|-------------|------|
+| GET | `/docs` | Swagger UI documentation | Public |
+| GET | `/docs/spec.yaml` | OpenAPI spec (YAML) | Public |
+| GET | `/docs/spec.json` | OpenAPI spec (JSON) | Public |
+
+📖 [Full core docs →](core/README.md)
+
+---
+
+## 🩺 Health
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/helloWorld` | Simple health check (inline in index.js) |
+
+---
+
+## 🔒 Global Middleware Stack
+
+Applied to all requests in `index.js` (in order):
+
+1. **CORS** — all origins
+2. **Raw body** — only on `/stripe-webhook` (Stripe signature verification)
+3. **JSON parser** — `express.json()` for everything else
+
+Per-route middleware is documented in each module's README.
+
+---
+
+## 🏗️ Architecture
+
 ```
-GET    /api/smartlinks/r/:code          # Redirect
-POST   /api/smartlinks                   # Create structured link
-POST   /api/smartlinks/short             # Create short code
-GET    /api/smartlinks                   # List all
-GET    /api/smartlinks/:space/:id        # Get one
-PUT    /api/smartlinks/:space/:id        # Update
-DELETE /api/smartlinks/:space/:id        # Delete
-POST   /api/smartlinks/events/:type      # Track event
-GET    /api/smartlinks/stats              # Analytics
+Client Request
+  │
+  ▼
+┌─────────────────────┐
+│  Cloud Function: api │  (Express app, single export)
+│  512MiB, 300s timeout│
+└──────────┬──────────┘
+           │
+  ┌────────┼─────────────────────────────────────┐
+  │        │                                      │
+  ▼        ▼                                      ▼
+CORS → Raw Body (stripe-webhook only) → JSON parser
+           │
+           ▼
+  ┌─── Route Matching ───────────────────────────────┐
+  │  /paddleScore, /fastForecast, /forecast,         │
+  │  /paddlingOut, /nearbyWater, /products, /images,  │
+  │  /createPaymentIntent, /billing/*, /auth/*,       │
+  │  /admin/*, /admin-users/*, /smartlinks/*,         │
+  │  /public/*, /l/:code, /kreators/*, /gptActions/*, │
+  │  /docs/*, /helloWorld                             │
+  └──────────────────────────────────────────────────┘
+           │
+           ▼
+  Per-route middleware → Handler → Firestore / Stripe / ML Service
 ```
 
 ---
 
-## 🤖 AI & Chat APIs
-
-**Location:** `ai/`  
-**README:** [ai/README.md](ai/README.md)
-
-### APIs:
-1. **GPT Actions** - OpenAI Custom GPT integration (ChatGPT)
-
-### Key Features:
-- ✅ Paddle score and weather data for GPT
-- ✅ Location-based forecasts
-- ✅ Nearby paddling spot discovery
-- ✅ Optimized for ChatGPT consumption
-
-### Endpoints:
-```
-GET    /api/gptActions/paddleScore       # GPT action: paddle score
-GET    /api/gptActions/forecast          # GPT action: forecast
-GET    /api/gptActions/locations         # GPT action: locations
-POST   /api/gptActions/findNearby        # GPT action: nearby spots
-```
-
----
-
-## 🛍️ Products & Images APIs
-
-**Location:** `products/`  
-**README:** [products/README.md](products/README.md)
-
-### APIs:
-1. **Product Catalog** - T-shirt products with images
-2. **Image Proxy** - Image serving with fallback
-
-### Key Features:
-- ✅ Firebase Storage integration
-- ✅ 25+ product variants
-- ✅ Public image URLs
-- ✅ Auto-fallback to Storage
-
-### Endpoints:
-```
-GET /api/products                # List all products
-GET /api/products/:id            # Get single product
-GET /api/images?url=...          # Proxy image
-```
-
----
-
-## 📱 Deep Links APIs
-
-**Location:** `deepLinks/`  
-**README:** [deepLinks/README.md](deepLinks/README.md)
-
-### APIs:
-1. **Universal Links** - iOS app integration
-2. **Context Preservation** - Deferred deep linking
-3. **Smart Routing** - App vs web decision
-
-### Key Features:
-- ✅ Apple Universal Links support
-- ✅ Context preservation across app install
-- ✅ 30-minute context expiry
-- ✅ Secure cookie management
-
-### Endpoints:
-```
-GET /api/l/:id                   # Universal link handler
-GET /api/resolve?ctx=...         # Context restoration
-GET /api/health                  # Health check
-```
-
----
-
-## 📚 Core APIs
-
-**Location:** `core/`  
-**README:** [core/README.md](core/README.md)
-
-### APIs:
-1. **API Documentation** - Swagger UI
-2. **OpenAPI Spec** - YAML & JSON formats
-
-### Key Features:
-- ✅ Interactive documentation
-- ✅ Complete API specification (2,392 lines)
-- ✅ OpenAPI 3.0.3 compliant
-- ✅ Try-it-out functionality
-
-### Endpoints:
-```
-GET /api/docs                    # Swagger UI
-GET /api/docs/spec.yaml          # OpenAPI YAML
-GET /api/docs/spec.json          # OpenAPI JSON
-```
-
----
-
-## 📊 Complete Endpoint Overview
-
-| Category | Count | Response Time | Key Feature |
-|----------|-------|---------------|-------------|
-| **Weather** | 5 | 192ms-5s | ML-powered scores |
-| **Smart Links** | 12 | 50ms-200ms | Auto-enrichment |
-| **AI/Chat** | 7 | 2-5s | GPT-4o integration |
-| **Products** | 3 | 80ms-150ms | E-commerce catalog |
-| **Deep Links** | 3 | 80ms-150ms | iOS Universal Links |
-| **Core** | 3 | 50ms-200ms | Documentation |
-| **TOTAL** | 33 | - | - |
-
----
-
-## 🏗️ Architecture Overview
-
-### Request Flow:
-```
-User/App Request
-       ↓
-Firebase Cloud Functions
-       ↓
-API Router (index.js)
-       ↓
-Module Router (weather/, kortex/, etc.)
-       ↓
-Service Layer (mlService, kortexService, etc.)
-       ↓
-External Services (ML, Weather APIs, OpenAI)
-       ↓
-Firestore (caching, persistence)
-       ↓
-Response
-```
-
-### Shared Services:
-- **Firestore:** Data persistence, caching
-- **Cloud Run:** ML service (Docker)
-- **External APIs:** WeatherAPI, OpenStreetMap, OpenAI
-- **Firebase Storage:** Images, assets
-
----
-
-## 🔧 Development Setup
-
-### Start Local Development:
-```bash
-cd local-dev/scripts
-./start-local.sh
-```
-
-### Test All APIs:
-```bash
-cd local-dev/scripts
-./test-local.sh
-```
-
-### Test Specific Module:
-```bash
-# Test weather APIs
-curl "http://127.0.0.1:5001/kaaykostore/us-central1/api/paddleScore?lat=32.8309&lng=-96.7176"
-
-# Test smart links
-curl -X POST "http://127.0.0.1:5001/kaaykostore/us-central1/api/smartlinks/short" \
-  -H "Content-Type: application/json" \
-  -d '{"destination": "https://kaayko.com"}'
-
-# Test GPT Actions
-curl "http://127.0.0.1:5001/kaaykostore/us-central1/api/gptActions/paddleScore?latitude=30.3894&longitude=-97.9433"
-```
-
----
-
-## 📚 Documentation Hierarchy
-
-```
-📚 Documentation Structure:
-│
-├── 🗂️  api/functions/api/README.md (THIS FILE)
-│   └── Master overview of all API modules
-│
-├── 🌦️  api/functions/api/weather/README.md
-│   └── Complete weather APIs documentation
-│
-├── 🔗 api/functions/api/kortex/README.md
-│   └── Complete Smart Links documentation
-│
-├── 🤖 api/functions/api/ai/README.md
-│   └── Complete GPT Actions documentation
-│
-├── 🛍️  api/functions/api/products/README.md
-│   └── Complete products & images documentation
-│
-├── 📱 api/functions/api/deepLinks/README.md
-│   └── Complete deep links documentation
-│
-└── 📚 api/functions/api/core/README.md
-    └── Complete core APIs documentation
-```
-
----
-
-## 🚀 Deployment
-
-### Deploy All APIs:
-```bash
-cd api/deployment
-./deploy-full-stack.sh
-```
-
-### Deploy Functions Only:
-```bash
-cd api/deployment
-./deploy-firebase-functions.sh
-```
-
-### Verify Deployment:
-```bash
-# Check health endpoints
-curl https://us-central1-kaaykostore.cloudfunctions.net/api/smartlinks/health
-curl https://us-central1-kaaykostore.cloudfunctions.net/api/deepLinks/health
-```
-
----
-
-## 📈 Performance Benchmarks
-
-### Response Times:
-```
-paddleScore:       250-500ms
-fastForecast:      192ms (cached) / 3s (fresh)
-forecast:          2-5s
-paddlingout:       150ms
-nearbyWater:       800ms-2s
-kortex/create: 200ms (800ms with enrichment)
-kortex/get:    50ms
-gptActions:        500ms
-products:          150ms
-deepLinks:         100ms
-docs:              50ms
-```
-
-### Caching:
-- **Memory cache:** 1-5 minutes
-- **Firestore cache:** 6 hours
-- **Session cache:** 24 hours
-
----
-
-## 🔐 Security Features
-
-- ✅ **Rate limiting:** Per-endpoint limits
-- ✅ **CORS:** Configured domains
-- ✅ **Input validation:** All endpoints
-- ✅ **Authentication:** Firebase Auth ready
-- ✅ **API keys:** Secure environment variables
-- ✅ **Privacy:** Data minimization, auto-expiry
-
----
-
-## 🧪 Testing Coverage
-
-### Local Testing:
-- ✅ All 33 endpoints testable locally
-- ✅ Comprehensive test script: `test-local.sh`
-- ✅ Individual module tests
-- ✅ Integration tests
-
-### Production Monitoring:
-- ✅ Firebase metrics dashboard
-- ✅ Cloud Run logs
-- ✅ Error tracking
-- ✅ Performance monitoring
-
----
-
-## 📚 Additional Resources
-
-- **API Reference:** `../../docs/API-QUICK-REFERENCE-v2.1.0.md`
-- **OpenAPI Spec:** `../../docs/kaayko-paddling-api-swagger.yaml`
-- **Technical Docs:** `../../docs/`
-- **Deployment Guide:** `../../deployment/README.md`
-- **Local Dev Guide:** `../../../../local-dev/README.md`
-- **Navigation:** `../../../../NAVIGATION.md`
-
----
-
-## 🎯 Quick Reference
-
-### By Use Case:
-
-**Get paddle conditions:**
-→ `weather/README.md` → paddleScore, fastForecast
-
-**Create marketing links:**
-→ `kortex/README.md` → POST /smartlinks
-
-**ChatGPT integration:**
-→ `ai/README.md` → GET /gptActions/paddleScore
-
-**Display products:**
-→ `products/README.md` → GET /products
-
-**iOS app integration:**
-→ `deepLinks/README.md` → GET /l/:id
-
-**API documentation:**
-→ `core/README.md` → GET /docs
-
----
-
-**Total APIs:** 33 endpoints  
-**Total Documentation:** 6 comprehensive README files  
-**Status:** ✅ Production-ready  
-**Uptime:** 99.9%
-
----
-
-**Need help?** Check the README.md in each module directory for detailed documentation!
+**Last Updated:** February 2026  
+**Total Endpoints:** 99 · **Modules:** 11 · **Files:** 128 JS

@@ -1,247 +1,83 @@
-# 🛍️ Products & Images APIs
+# 📦 Products API
 
-**E-commerce product catalog and image serving**
+Public product catalog and image serving for the Kaayko store.
 
----
+## Files (2)
 
-## 📁 Files in this Module
-
-1. **`products.js`** - Product catalog API
-2. **`images.js`** - Image proxy service
-
----
-
-## 🛍️ API #1: Products
-
-**File:** `products.js`  
-**Endpoints:**
-- `GET /api/products` - List all products
-- `GET /api/products/:productId` - Get single product
-
-### Overview
-
-Serves Kaayko t-shirt catalog with Firebase Storage integration.
-
-### Features
-
-- ✅ Product catalog from Firestore
-- ✅ Firebase Storage image URLs
-- ✅ Auto-fallback to Storage if imgSrc missing
-- ✅ Public image URLs (no signed URLs needed)
-- ✅ 25+ product variants
+| File | Purpose |
+|------|---------|
+| `products.js` | Product listing, detail, and voting endpoints |
+| `images.js` | Firebase Storage image proxy with caching |
 
 ---
 
-## 📋 Endpoint #1: List Products
+## Endpoints (6)
 
-```
-GET /api/products
-```
+### Products
 
-### Response:
+| Method | Path | Description | Auth |
+|--------|------|-------------|------|
+| GET | `/products` | List all products with images | None |
+| GET | `/products/:id` | Single product by Firestore doc ID | None |
+| POST | `/products/:id/vote` | Atomic vote increment | None |
+
+### Images
+
+| Method | Path | Description | Auth |
+|--------|------|-------------|------|
+| GET | `/images` | Health check | None |
+| GET | `/images/` | API info/usage | None |
+| GET | `/images/:path` | Proxy image from Firebase Storage | None |
+
+---
+
+## Product Shape
+
 ```json
 {
-  "success": true,
-  "products": [
-    {
-      "id": "classic-navy-tee",
-      "name": "Classic Navy Kaayko Tee",
-      "price": 24.99,
-      "description": "Premium cotton t-shirt with Kaayko logo",
-      "sizes": ["S", "M", "L", "XL", "XXL"],
-      "colors": ["navy", "black", "white"],
-      "imgSrc": [
-        "https://firebasestorage.googleapis.com/.../front.jpg",
-        "https://firebasestorage.googleapis.com/.../back.jpg"
-      ],
-      "category": "apparel",
-      "inStock": true
-    }
-  ],
-  "total": 25
-}
-```
-
-### Image Handling:
-1. **Primary:** Read `imgSrc` array from Firestore
-2. **Fallback:** If `imgSrc` missing/empty, fetch from Storage
-3. **Path:** `kaaykoStoreTShirtImages/{productID}/`
-4. **Format:** Public URLs (no authentication needed)
-
----
-
-## 📋 Endpoint #2: Single Product
-
-```
-GET /api/products/classic-navy-tee
-```
-
-### Response:
-```json
-{
-  "success": true,
-  "product": {
-    "id": "classic-navy-tee",
-    "name": "Classic Navy Kaayko Tee",
-    "price": 24.99,
-    "description": "Premium cotton t-shirt with Kaayko logo",
-    "sizes": ["S", "M", "L", "XL", "XXL"],
-    "colors": ["navy", "black", "white"],
-    "imgSrc": [
-      "https://firebasestorage.googleapis.com/.../front.jpg",
-      "https://firebasestorage.googleapis.com/.../back.jpg",
-      "https://firebasestorage.googleapis.com/.../detail.jpg"
-    ],
-    "category": "apparel",
-    "inStock": true,
-    "details": {
-      "material": "100% cotton",
-      "fit": "Regular",
-      "care": "Machine wash cold"
-    }
-  }
-}
-```
-
----
-
-## 🖼️ API #2: Images
-
-**File:** `images.js`  
-**Endpoint:** `GET /api/images`
-
-### Overview
-
-Image proxy service with fallback support.
-
-### Features
-
-- ✅ Proxy external images
-- ✅ Fallback to placeholder
-- ✅ Cache headers
-- ✅ Error handling
-
----
-
-## 📋 Image Proxy
-
-```
-GET /api/images?url=https://example.com/image.jpg
-```
-
-### Query Parameters:
-```
-?url=https://...          # Image URL to proxy (required)
-?fallback=placeholder     # Fallback if image fails (optional)
-```
-
-### Response:
-- **Success:** Image binary (proxied)
-- **Failure:** Placeholder image or 404
-
-### Use Cases:
-1. **CORS bypass:** Proxy images from external sources
-2. **Fallback:** Show placeholder if original fails
-3. **Cache:** Browser caching via headers
-
----
-
-## 📊 Firestore Structure
-
-### **`kaaykoproducts` Collection**
-```javascript
-{
-  // Document ID: product ID (e.g., "classic-navy-tee")
-  "id": "classic-navy-tee",
-  "name": "Classic Navy Kaayko Tee",
-  "price": 24.99,
+  "id": "abc123",
+  "name": "Paddleboard X",
+  "price": 499.99,
   "description": "...",
-  "sizes": ["S", "M", "L", "XL", "XXL"],
-  "colors": ["navy", "black", "white"],
-  "imgSrc": [
-    "https://firebasestorage.googleapis.com/.../front.jpg",
-    "https://firebasestorage.googleapis.com/.../back.jpg"
+  "category": "boards",
+  "images": [
+    "https://firebasestorage.googleapis.com/v0/b/kaaykostore.appspot.com/o/..."
   ],
-  "category": "apparel",
-  "inStock": true,
-  "featured": false,
-  "tags": ["t-shirt", "casual", "logo"],
-  "created": Timestamp,
-  "updated": Timestamp
+  "voteCount": 42
 }
 ```
 
----
-
-## 💾 Firebase Storage Structure
-
-```
-kaaykoStoreTShirtImages/
-├── classic-navy-tee/
-│   ├── front.jpg
-│   ├── back.jpg
-│   └── detail.jpg
-├── vintage-black-tee/
-│   ├── front.jpg
-│   └── back.jpg
-└── ...
-```
-
-### Image URL Format:
-```
-https://firebasestorage.googleapis.com/v0/b/BUCKET_NAME/o/
-kaaykoStoreTShirtImages%2Fclassic-navy-tee%2Ffront.jpg?alt=media
-```
+Images are fetched at runtime from Firebase Storage under `product-images/{docId}/`.
 
 ---
 
-## 🧪 Testing
+## Image Proxy
 
-### Test Products Locally:
-```bash
-curl http://127.0.0.1:5001/kaaykostore/us-central1/api/products
-```
+`GET /images/:path` streams the image directly from Firebase Storage:
 
-### Test Single Product:
-```bash
-curl http://127.0.0.1:5001/kaaykostore/us-central1/api/products/classic-navy-tee
-```
+- **Content-Type:** `image/jpeg`
+- **Cache-Control:** `public, max-age=300` (5 minutes)
+- Bucket: `kaaykostore.appspot.com`
 
-### Test Image Proxy:
-```bash
-curl "http://127.0.0.1:5001/kaaykostore/us-central1/api/images?url=https://example.com/image.jpg"
+---
+
+## Firestore Collection
+
+| Collection | Purpose |
+|------------|---------|
+| `kaaykoproducts` | Product documents |
+
+---
+
+## Voting
+
+`POST /products/:id/vote` performs an atomic `FieldValue.increment(1)` on the product's `voteCount` field.
+
+**Request body:**
+```json
+{ "voteType": "up" }
 ```
 
 ---
 
-## 📈 Performance
-
-| Endpoint | Response Time | Notes |
-|----------|---------------|-------|
-| List Products | ~150ms | Firestore query |
-| Single Product | ~80ms | Single doc read |
-| Image Proxy | Variable | Depends on source |
-
----
-
-## 🚀 Deployment
-
-Deploy products APIs:
-```bash
-cd api/deployment
-./deploy-firebase-functions.sh
-```
-
----
-
-## 📚 Related Documentation
-
-- **API Reference:** `../../docs/API-QUICK-REFERENCE-v2.1.0.md`
-- **Store Frontend:** `../../../frontend/src/store.html`
-
----
-
-**Status:** ✅ Production-ready  
-**Products:** 25+  
-**Images:** Cloud-hosted  
-**Uptime:** 99.9%
+**Test suite:** `__tests__/products.test.js`

@@ -1,201 +1,159 @@
-# Kreator API
+# 🎨 Kreators API
 
-Enterprise-grade API for managing Kreators (Creators) in the Kaayko platform.
+Complete creator lifecycle — application, admin review, onboarding, authentication (password + Google OAuth), profile management, and product CRUD.
 
-## Overview
+## Files (12)
 
-The Kreator API handles the complete creator lifecycle:
-1. **Application** - Public form submission
-2. **Admin Review** - Approve/reject workflow
-3. **Onboarding** - Magic link → Password setup
-4. **Authentication** - Password + Google OAuth
-5. **Profile Management** - Settings & preferences
+| File | Purpose |
+|------|---------|
+| **Routers** | |
+| `kreatorRoutes.js` | Orchestrator — mounted at `/kreators`, delegates to sub-routers |
+| `publicRoutes.js` | Public endpoints (apply, check status, onboarding) |
+| `kreatorAuthRoutes.js` | Google OAuth (signin, connect, disconnect) |
+| `profileRoutes.js` | Profile CRUD (`/me`) |
+| `kreatorProductRoutes.js` | Product CRUD |
+| `adminRoutes.js` | Admin endpoints (list/approve/reject applications, manage kreators) |
+| `testRoutes.js` | Test-only endpoints (emulator only) |
+| **Handlers** | |
+| `publicHandlers.js` | Application submit, status check, onboarding |
+| `kreatorAuthHandlers.js` | Google OAuth handlers |
+| `kreatorProductHandlers.js` | Product CRUD + image upload (multer) |
+| `adminHandlers.js` | Admin review workflow |
+| `testHandlers.js` | Test helpers (emulator only) |
 
-## Endpoints
+**Global middleware on all `/kreators` routes:** `attachClientInfo` (IP, user-agent)
 
-### Public Endpoints (No Auth Required)
+---
 
-| Method | Endpoint | Description | Rate Limit |
-|--------|----------|-------------|------------|
-| `GET` | `/kreators/health` | Health check | None |
-| `POST` | `/kreators/apply` | Submit application | 5/hour |
-| `GET` | `/kreators/applications/:id/status?email=` | Check status | 10/min |
-| `POST` | `/kreators/onboarding/verify` | Verify magic link | 20/min |
-| `POST` | `/kreators/onboarding/complete` | Set password | 5/min |
+## Endpoints (27 total)
 
-### Authenticated Endpoints (Kreator Auth)
+### Public (no auth, rate-limited)
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/kreators/me` | Get profile |
-| `PUT` | `/kreators/me` | Update profile |
-| `POST` | `/kreators/auth/google/connect` | Link Google |
-| `POST` | `/kreators/auth/google/disconnect` | Unlink Google |
+| Method | Path | Description | Rate Limit |
+|--------|------|-------------|------------|
+| GET | `/kreators/health` | Health check | — |
+| POST | `/kreators/apply` | Submit creator application | 5/hour |
+| GET | `/kreators/applications/:id/status` | Check application status | 10/min |
+| POST | `/kreators/onboarding/verify` | Verify magic link token | 20/min |
+| POST | `/kreators/onboarding/complete` | Set password to complete setup | 5/min |
 
-### Admin Endpoints (Admin Auth Required)
+### Auth — Google OAuth
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/kreators/admin/applications` | List applications |
-| `GET` | `/kreators/admin/applications/:id` | Get application |
-| `PUT` | `/kreators/admin/applications/:id/approve` | Approve |
-| `PUT` | `/kreators/admin/applications/:id/reject` | Reject |
-| `GET` | `/kreators/admin/list` | List kreators |
-| `GET` | `/kreators/admin/:uid` | Get kreator |
-| `POST` | `/kreators/admin/:uid/resend-link` | Resend magic link |
-| `GET` | `/kreators/admin/stats` | Get statistics |
+| Method | Path | Description | Auth |
+|--------|------|-------------|------|
+| POST | `/kreators/auth/google/signin` | Sign in with Google | None (Google ID token in body) |
+| POST | `/kreators/auth/google/connect` | Link Google to existing account | `requireKreatorAuth` |
+| POST | `/kreators/auth/google/disconnect` | Unlink Google account | `requireKreatorAuth` + `requireActiveKreator` |
 
-## Request/Response Examples
+### Profile
 
-### Submit Application
+| Method | Path | Description | Auth |
+|--------|------|-------------|------|
+| GET | `/kreators/me` | Get kreator profile | `requireKreatorAuth` |
+| PUT | `/kreators/me` | Update profile | `requireKreatorAuth` + `requireActiveKreator` |
+| DELETE | `/kreators/me` | Delete account | `requireKreatorAuth` + `requireActiveKreator` |
 
-```bash
-POST /api/kreators/apply
-Content-Type: application/json
+### Products
 
-{
-  "email": "creator@example.com",
-  "displayName": "John Creator",
-  "applicationNote": "I create content about outdoor adventures and kayaking...",
-  "brandName": "Adventure Studio",
-  "website": "https://adventurestudio.com",
-  "socialLinks": {
-    "instagram": "@adventurestudio",
-    "youtube": "adventurestudio"
-  },
-  "consent": {
-    "dataProcessing": true,
-    "marketingEmails": false
-  }
-}
+| Method | Path | Description | Auth |
+|--------|------|-------------|------|
+| GET | `/kreators/products` | List kreator's products | `requireKreatorAuth` |
+| POST | `/kreators/products` | Create product (+ up to 5 images) | `requireKreatorAuth` + `requireActiveKreator` |
+| GET | `/kreators/products/:productId` | Get single product | `requireKreatorAuth` |
+| PUT | `/kreators/products/:productId` | Update product (+ images) | `requireKreatorAuth` + `requireActiveKreator` |
+| DELETE | `/kreators/products/:productId` | Delete product | `requireKreatorAuth` + `requireActiveKreator` |
+
+### Admin (Kreator management)
+
+All require `requireAuth` (Firebase) + `requireAdmin`.
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/kreators/admin/applications` | List all applications |
+| GET | `/kreators/admin/applications/:id` | Get application details |
+| PUT | `/kreators/admin/applications/:id/approve` | Approve application |
+| PUT | `/kreators/admin/applications/:id/reject` | Reject application |
+| GET | `/kreators/admin/list` | List all kreators |
+| GET | `/kreators/admin/:uid` | Get kreator profile |
+| GET | `/kreators/admin/stats` | Platform statistics |
+| POST | `/kreators/admin/:uid/resend-link` | Resend magic link |
+
+### Test (emulator only — not available in production)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/kreators/test/list-applications` | List all applications |
+| GET | `/kreators/test/list-kreators` | List all kreators |
+| POST | `/kreators/test/direct-approve` | Approve without magic link |
+| POST | `/kreators/test/create-test-kreator` | Create test kreator |
+| GET | `/kreators/test/application/:id` | Get application detail |
+| POST | `/kreators/test/login` | Login with email/password |
+
+---
+
+## Creator Lifecycle
+
+```
+1. APPLY        POST /kreators/apply
+                  ↓
+2. REVIEW       Admin: GET /kreators/admin/applications
+                Admin: PUT .../approve  or  .../reject
+                  ↓ (on approve)
+3. ONBOARD      Magic link email → kreator clicks link
+                POST /kreators/onboarding/verify  (validates token)
+                POST /kreators/onboarding/complete (sets password)
+                  ↓
+4. ACTIVE       POST /kreators/auth/google/signin  or  JWT login
+                GET/PUT /kreators/me
+                CRUD /kreators/products
 ```
 
-Response:
-```json
-{
-  "success": true,
-  "data": {
-    "id": "app_xYz789AbCd",
-    "email": "creator@example.com",
-    "status": "pending",
-    "submittedAt": "2025-01-26T10:30:00Z",
-    "expiresAt": "2025-02-25T10:30:00Z",
-    "message": "Your application has been submitted successfully..."
-  }
-}
-```
+---
 
-### Approve Application (Admin)
+## Auth System
 
-```bash
-PUT /api/kreators/admin/applications/app_xYz789AbCd/approve
-Authorization: Bearer <admin_token>
-Content-Type: application/json
+Kreators use a **separate JWT auth system** (not Firebase Auth for the admin panel):
 
-{
-  "notes": "Strong portfolio, active community"
-}
-```
+- **Password auth:** scrypt hashing via `kreatorCrypto.js`
+- **JWT tokens:** Signed with `JWT_SECRET`, verified by `kreatorAuthMiddleware.js`
+- **Google OAuth:** Connect/disconnect via `kreatorOAuthService.js`
+- **Magic links:** Scrypt-hashed tokens with 24h expiry for onboarding
 
-Response:
-```json
-{
-  "success": true,
-  "data": {
-    "applicationId": "app_xYz789AbCd",
-    "kreatorId": "kreator_uid_123",
-    "kreatorEmail": "creator@example.com",
-    "magicLinkCode": "ml_AbCdEfGhIjKl",
-    "magicLinkUrl": "https://kaayko.com/l/ml_AbCdEfGhIjKl",
-    "expiresAt": "2025-01-27T10:30:00Z"
-  }
-}
-```
+Tokens are sent as `Authorization: Bearer <jwt>` and stored in `localStorage` as `kreator_token`.
 
-### Complete Onboarding
+---
 
-```bash
-POST /api/kreators/onboarding/complete
-Content-Type: application/json
+## Services
 
-{
-  "token": "ml_AbCdEfGhIjKl",
-  "password": "SecureP@ssw0rd123"
-}
-```
+| Service | Purpose |
+|---------|---------|
+| `kreatorService.js` | Kreator CRUD, auth login |
+| `kreatorApplicationService.js` | Application submit, status check |
+| `applicationApprovalService.js` | Approve/reject workflow, magic link generation |
+| `applicationValidation.js` | Input validation for applications |
+| `kreatorOnboardingService.js` | Magic link verification + password setup |
+| `kreatorCrypto.js` | scrypt hashing, JWT sign/verify |
+| `kreatorOAuthService.js` | Google OAuth connect/disconnect |
 
-Response:
-```json
-{
-  "success": true,
-  "data": {
-    "kreatorId": "kreator_uid_123",
-    "email": "creator@example.com",
-    "status": "active",
-    "message": "Account setup complete! You can now log in."
-  }
-}
-```
+---
 
-## Error Codes
+## Firestore Collections
 
-| Code | HTTP Status | Description |
-|------|-------------|-------------|
-| `VALIDATION_ERROR` | 400 | Invalid input data |
-| `DUPLICATE_APPLICATION` | 409 | Email already has pending/approved app |
-| `NOT_FOUND` | 404 | Resource not found |
-| `ALREADY_CONSUMED` | 410 | Magic link already used |
-| `EXPIRED` | 410 | Magic link expired |
-| `INVALID_PASSWORD` | 400 | Password doesn't meet requirements |
-| `KREATOR_PENDING_PASSWORD` | 403 | Account setup incomplete |
-| `KREATOR_SUSPENDED` | 403 | Account suspended |
-| `PASSWORD_REQUIRED` | 400 | Need password to disconnect Google |
-| `RATE_LIMIT_EXCEEDED` | 429 | Too many requests |
+| Collection | Purpose |
+|------------|---------|
+| `kreator_applications` | Application submissions (status: pending/approved/rejected) |
+| `kreators` | Active kreator profiles |
+| `kaaykoproducts` | Products created by kreators |
+
+---
 
 ## Password Requirements
 
-- Minimum 8 characters
-- Maximum 128 characters
-- At least 1 uppercase letter
-- At least 1 lowercase letter
-- At least 1 number
-- At least 1 special character (!@#$%^&*...)
+- 8–128 characters
+- At least 1 uppercase, 1 lowercase, 1 number, 1 special character
 
-## Magic Link Behavior
+---
 
-1. **Single Use**: Each link can only be used once
-2. **24 Hour Expiry**: Links expire 24 hours after creation
-3. **Token Hashing**: Tokens stored as scrypt hashes (security)
-4. **Click Tracking**: Clicks tracked before consumption
-5. **Resend Capability**: Admins can resend (invalidates previous links)
-
-## Testing with Emulator
-
-```bash
-# Start Firebase emulator
-cd api/kaayko-api
-firebase emulators:start --only functions,firestore
-
-# Health check
-curl http://localhost:5001/kaaykostore/us-central1/api/kreators/health
-
-# Submit application
-curl -X POST http://localhost:5001/kaaykostore/us-central1/api/kreators/apply \
-  -H "Content-Type: application/json" \
-  -d '{"email":"test@example.com","displayName":"Test Creator","applicationNote":"This is my test application...","consent":{"dataProcessing":true}}'
-```
-
-## Files
-
-```
-api/kreators/
-├── README.md                  # This file
-└── kreatorRoutes.js           # Main router
-
-services/
-├── kreatorApplicationService.js  # Application CRUD + approval
-└── kreatorService.js             # Kreator CRUD + magic links
-
-middleware/
-└── kreatorAuthMiddleware.js      # Auth middleware
-```
+**Test suites:**
+- `__tests__/kreators.test.js` (52 tests)
+- `__tests__/integration/kreator-lifecycle.integration.test.js` (23 tests)

@@ -1,61 +1,87 @@
 # 👔 Admin API
 
-This folder contains server-side admin endpoints for order management and admin user management.
+Order management and admin user management endpoints.
 
-Important note (code-derived): index.js mounts some admin endpoints directly at `/admin/*`. Other admin routes are implemented in `admin/adminUsers.js` but are not mounted by default in `functions/index.js` (present but not mounted).
+## Files
 
-Files in this folder
-- `getOrder.js` — `GET /admin/getOrder` and `GET /admin/listOrders` helpers
-- `updateOrderStatus.js` — `POST /admin/updateOrderStatus` (updates order/fulfillment/tracking info)
-- `adminUsers.js` — Express router for admin user management (create/list/get/update/delete roles). This router is implemented but not registered in `index.js` by default — (present, verify mount)
+| File | Purpose |
+|------|---------|
+| `adminUsers.js` | Router — admin user CRUD (mounted at `/admin-users`) |
+| `adminUserHandlers.js` | Handler implementations for user CRUD |
+| `getOrder.js` | Handlers — `getOrder` + `listOrders` |
+| `updateOrderStatus.js` | Handler — update order status/tracking |
 
---------------------------------------------------------------------------------
-POST /admin/updateOrderStatus
-Method: POST
-Path: /admin/updateOrderStatus
-Description: Change order lifecycle and tracking information (status, fulfillment, tracking number, notes). Updates Firestore `orders` documents and may update `payment_intents` when all items share same status.
-Auth: **NO authorization enforced by index.js when mounted** — the route `apiApp.post('/admin/updateOrderStatus', require('./api/admin/updateOrderStatus'));` is mounted without `requireAuth` in `functions/index.js`. TODO: verify intended security posture in deployment and add `requireAuth`/`requireAdmin` if needed.
-Body (JSON): { orderId (required), orderStatus, fulfillmentStatus, trackingNumber, carrier, estimatedDelivery, internalNote, customerNote }
-Response: { success: true, orderId, updates }
-Errors: 400 missing orderId, 404 order not found, 500 internal error
-Side effects:
- - Writes to Firestore `orders/{orderId}` updates (status, timestamps, history)
- - Updates parent `payment_intents/{parentOrderId}` if all related orders changed
+---
 
---------------------------------------------------------------------------------
-GET /admin/getOrder
-Method: GET
-Path: /admin/getOrder
-Description: Fetch a single order by `orderId` or all orders for a `parentOrderId` (payment intent). Returns order(s) and (if parentOrderId provided) payment intent data.
-Auth: **No auth enforced by index.js** — index.js mounts handler directly as `apiApp.get('/admin/getOrder', getOrder)`; verify whether this should be protected.
-Query params:
- - orderId (optional) — single order document ID
- - parentOrderId (optional) — payment intent ID to return all child order items
-Responses:
- - orderId: { success: true, order }
- - parentOrderId: { success: true, paymentIntent, orders, totalItems }
-Errors: 400 missing both orderId/parentOrderId; 404 order not found; 500 internal error
+## Endpoints
 
---------------------------------------------------------------------------------
-GET /admin/listOrders
-Method: GET
-Path: /admin/listOrders
-Description: List orders with optional filters and pagination (status, fulfillmentStatus, paymentStatus). Uses Firestore queries.
-Auth: **No auth enforced by index.js** — review mount in production.
-Query params: orderStatus, fulfillmentStatus, paymentStatus, limit (default 50), startAfter (doc id for pagination)
-Response: { success: true, orders: [...], count, hasMore }
-Errors: 500 internal error
+### Order Management
 
---------------------------------------------------------------------------------
-Admin Users (implemented, not mounted by default)
-File: `adminUsers.js` — provides REST endpoints for admin user management (requires `requireAuth` and `requireRole('super-admin')` for most operations). Endpoints implemented include:
-- GET /admin/me — current user profile (requireAuth)
-- GET /admin/users — list users (super-admin)
-- GET /admin/users/:uid — get user (super-admin)
-- POST /admin/users — create admin user (super-admin)
-- PUT /admin/users/:uid — update admin user (super-admin)
-- DELETE /admin/users/:uid — delete (soft) admin user (super-admin)
-- GET /admin/roles — list available roles and permissions (requireAuth)
+Mounted directly in `index.js` with `requireAuth` + `requireAdmin`.
 
-Notes / TODOs:
-- Several admin routes are mounted without auth in `functions/index.js` (see getOrder/listOrders/updateOrderStatus). Please verify the intended public vs protected access and update mounts to include `requireAuth` or `requireAdmin` where appropriate.
+#### POST `/admin/updateOrderStatus`
+
+Update order lifecycle: status, fulfillment, tracking info, notes.
+
+**Auth:** `requireAuth` + `requireAdmin`  
+**Body:**
+```json
+{
+  "orderId": "pi_xxx_item1",
+  "orderStatus": "shipped",
+  "fulfillmentStatus": "shipped",
+  "trackingNumber": "9400111899223456789012",
+  "carrier": "USPS",
+  "estimatedDelivery": "2026-02-15",
+  "internalNote": "Priority shipped"
+}
+```
+**Response:** `{ success: true, orderId, updates }`  
+**Side effects:** Updates `orders/{orderId}` and syncs parent `payment_intents/{parentOrderId}` if all items share same status.
+
+#### GET `/admin/getOrder`
+
+Fetch a single order or all orders for a payment intent.
+
+**Auth:** `requireAuth` + `requireAdmin`  
+**Query params:** `orderId` OR `parentOrderId`  
+**Response (orderId):** `{ success: true, order }`  
+**Response (parentOrderId):** `{ success: true, paymentIntent, orders, totalItems }`
+
+#### GET `/admin/listOrders`
+
+List orders with filters and pagination.
+
+**Auth:** `requireAuth` + `requireAdmin`  
+**Query params:** `orderStatus`, `fulfillmentStatus`, `paymentStatus`, `limit` (default 50), `startAfter`  
+**Response:** `{ success: true, orders: [...], count, hasMore }`
+
+---
+
+### User Management
+
+Router mounted at `/admin-users` in `index.js`.
+
+| Method | Path | Description | Auth |
+|--------|------|-------------|------|
+| GET | `/admin-users/me` | Current admin profile | `requireAuth` |
+| GET | `/admin-users/users` | List all admin users | `requireAuth` + `requireRole('super-admin')` |
+| GET | `/admin-users/users/:uid` | Get admin user | `requireAuth` + `requireRole('super-admin')` |
+| POST | `/admin-users/users` | Create admin user | `requireAuth` + `requireRole('super-admin')` |
+| PUT | `/admin-users/users/:uid` | Update admin user | `requireAuth` + `requireRole('super-admin')` |
+| DELETE | `/admin-users/users/:uid` | Soft-delete admin user | `requireAuth` + `requireRole('super-admin')` |
+| GET | `/admin-users/roles` | List available roles & permissions | `requireAuth` |
+
+**Roles:** `super-admin`, `admin`, `manager`, `viewer`
+
+---
+
+## Firestore Collections
+
+- **`orders`** — Individual order items with status, tracking, shipping address
+- **`payment_intents`** — Parent payment records with item list and totals
+- **`admin_users`** — Admin user profiles with role, permissions, metadata
+
+---
+
+**Test suite:** `__tests__/admin.test.js` (36 tests)
