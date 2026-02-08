@@ -14,7 +14,7 @@ All admin endpoints now require:
 2. User must be in admin users list (verified via `requireAdmin` middleware)
 
 **Frontend Protection:**
-- Smart Links admin portal (`/admin/smartlinks.html`) now redirects unauthenticated users to `/admin/login.html`
+- Smart Links admin portal (`/admin/kortex.html`) now redirects unauthenticated users to `/admin/login.html`
 - Login page uses Firebase Authentication (production)
 - ID tokens are stored in localStorage and sent with API requests
 
@@ -180,7 +180,7 @@ kaayko-api/
 | Module | Endpoints | Documentation | Key Features |
 |--------|-----------|---------------|--------------|
 | **Weather** | 5 APIs | [`weather/README.md`](./functions/api/weather/README.md) | ML ratings, forecasts, locations |
-| **Smart Links** | 12 APIs | [`smartLinks/README.md`](./functions/api/smartLinks/README.md) | Link management, analytics |
+| **Smart Links** | 12 APIs | [`kortex/README.md`](./functions/api/kortex/README.md) | Link management, analytics |
 | **AI/Chat** | 4 APIs | [`ai/README.md`](./functions/api/ai/README.md) | GPT Actions (ChatGPT) |
 | **Products** | 3 APIs | [`products/README.md`](./functions/api/products/README.md) | E-commerce catalog |
 | **Deep Links** | 3 APIs | [`deepLinks/README.md`](./functions/api/deepLinks/README.md) | Universal links (iOS) |

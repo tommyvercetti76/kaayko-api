@@ -151,7 +151,7 @@ Update `frontend/src/admin/login.html` with production URLs:
 const API_BASE_URL = 'https://us-central1-kaaykostore.cloudfunctions.net/api';
 
 // Production redirect after login
-window.location.href = 'https://kaaykostore.web.app/admin/smartlinks.html';
+window.location.href = 'https://kaaykostore.web.app/admin/kortex.html';
 ```
 
 ### 4. Enable Required Firebase Services

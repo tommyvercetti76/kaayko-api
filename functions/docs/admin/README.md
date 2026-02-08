@@ -88,7 +88,7 @@
 ## 📁 Related Documentation
 
 ### API Documentation
-- **Smart Links API:** `/api/functions/api/smartLinks/README.md`
+- **Smart Links API:** `/api/functions/api/kortex/README.md`
 - **Admin Users API:** `/api/functions/api/admin/README.md` (if exists)
 
 ### Project-Wide Docs
@@ -119,7 +119,7 @@
 ### Production URLs
 ```
 Login:     https://kaaykostore.web.app/admin/login.html
-Dashboard: https://kaaykostore.web.app/admin/smartlinks.html
+Dashboard: https://kaaykostore.web.app/admin/kortex.html
 API:       https://us-central1-kaaykostore.cloudfunctions.net/api
 Console:   https://console.firebase.google.com/project/kaaykostore
 ```

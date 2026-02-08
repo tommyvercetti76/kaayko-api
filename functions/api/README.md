@@ -60,8 +60,8 @@ GET /api/nearbyWater?lat=32.8309&lng=-96.7176&radius=5000
 
 ## 🔗 Smart Links APIs
 
-**Location:** `smartLinks/`  
-**README:** [smartLinks/README.md](smartLinks/README.md)
+**Location:** `kortex/`  
+**README:** [kortex/README.md](kortex/README.md)
 
 ### APIs:
 1. **Smart Links CRUD** - Create, read, update, delete links
@@ -212,9 +212,9 @@ Firebase Cloud Functions
        ↓
 API Router (index.js)
        ↓
-Module Router (weather/, smartLinks/, etc.)
+Module Router (weather/, kortex/, etc.)
        ↓
-Service Layer (mlService, smartLinkService, etc.)
+Service Layer (mlService, kortexService, etc.)
        ↓
 External Services (ML, Weather APIs, OpenAI)
        ↓
@@ -272,7 +272,7 @@ curl "http://127.0.0.1:5001/kaaykostore/us-central1/api/gptActions/paddleScore?l
 ├── 🌦️  api/functions/api/weather/README.md
 │   └── Complete weather APIs documentation
 │
-├── 🔗 api/functions/api/smartLinks/README.md
+├── 🔗 api/functions/api/kortex/README.md
 │   └── Complete Smart Links documentation
 │
 ├── 🤖 api/functions/api/ai/README.md
@@ -322,8 +322,8 @@ fastForecast:      192ms (cached) / 3s (fresh)
 forecast:          2-5s
 paddlingout:       150ms
 nearbyWater:       800ms-2s
-smartLinks/create: 200ms (800ms with enrichment)
-smartLinks/get:    50ms
+kortex/create: 200ms (800ms with enrichment)
+kortex/get:    50ms
 gptActions:        500ms
 products:          150ms
 deepLinks:         100ms
@@ -383,7 +383,7 @@ docs:              50ms
 → `weather/README.md` → paddleScore, fastForecast
 
 **Create marketing links:**
-→ `smartLinks/README.md` → POST /smartlinks
+→ `kortex/README.md` → POST /smartlinks
 
 **ChatGPT integration:**
 → `ai/README.md` → GET /gptActions/paddleScore

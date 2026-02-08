@@ -19,9 +19,9 @@
 ## 📖 Core Documentation (`docs/`)
 
 ### **🎯 API Reference & Specifications**
-- **`OPENAPI_SMARTLINKS_V4.yaml`** - 🆕 **COMPLETE** SmartLinks + Admin OpenAPI 3.0 spec (1,800+ lines)
+- **`OPENAPI_KORTEX_V4.yaml`** - 🆕 **COMPLETE** Kortex + Admin OpenAPI 3.0 spec (1,800+ lines)
 - **`SWAGGER_USAGE_GUIDE.md`** - 🆕 **Comprehensive guide** to using Swagger/OpenAPI (500+ lines)
-- **`Kaayko_SmartLinks_API_v4.postman_collection.json`** - 🆕 **Postman collection** (25 ready-to-use requests)
+- **`Kaayko_Kortex_API_v4.postman_collection.json`** - 🆕 **Postman collection** (25 ready-to-use requests)
 - **`API-QUICK-REFERENCE-v2.1.0.md`** - Quick reference for all API endpoints
 - **`kaayko-paddling-api-swagger.yaml`** - Weather/Paddling APIs OpenAPI spec (2,392 lines)
 - **`FIREBASE_API.md`** - Firebase-specific API details
@@ -42,7 +42,7 @@
 | Module | File | Endpoints | Description |
 |--------|------|-----------|-------------|
 | **Weather** | `weather/README.md` | 5 APIs | paddleScore, fastForecast, forecast, paddlingOut, nearbyWater |
-| **Smart Links** | `smartLinks/README.md` | 12 endpoints | Link management, short codes, analytics, redirects |
+| **Smart Links** | `kortex/README.md` | 12 endpoints | Link management, short codes, analytics, redirects |
 | **AI/Chat** | `ai/README.md` | 7 endpoints | PaddleBot chat, session management, GPT Actions |
 | **Products** | `products/README.md` | 3 endpoints | Product catalog, images proxy |
 | **Deep Links** | `deepLinks/README.md` | 3 endpoints | Universal links, context preservation |
@@ -109,7 +109,7 @@
 
 ### **For Smart Links:**
 1. Complete guide: `SMART_LINKS_V2_README.md`
-2. API endpoints: `functions/api/smartLinks/README.md` (12 endpoints documented)
+2. API endpoints: `functions/api/kortex/README.md` (12 endpoints documented)
 
 ### **For ML/Weather:**
 1. ML integration: `docs/GOLD_STANDARD_IMPLEMENTATION.md`

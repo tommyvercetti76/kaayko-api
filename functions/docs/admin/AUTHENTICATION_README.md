@@ -115,7 +115,7 @@ Login with the credentials you created in Step 1.
 
 After login, you'll be redirected to:
 ```
-/admin/smartlinks.html
+/admin/kortex.html
 ```
 
 All API requests will now include your auth token automatically.

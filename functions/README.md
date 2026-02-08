@@ -12,7 +12,7 @@ Quick links:
 - **Admin Management:** [ADMIN_MANAGEMENT_GUIDE.md](./docs/admin/ADMIN_MANAGEMENT_GUIDE.md)
 
 ### API Documentation
-- **Smart Links API:** [`api/smartLinks/README.md`](./api/smartLinks/README.md)
+- **Smart Links API:** [`api/kortex/README.md`](./api/kortex/README.md)
 - **Main API Docs:** `/api/README.md`
 
 ---
@@ -68,7 +68,7 @@ functions/
 │       └── TESTING_GUIDE.md
 │
 ├── api/                    # API endpoints
-│   ├── smartLinks/         # Smart Links CRUD API
+│   ├── kortex/         # Smart Links CRUD API
 │   ├── admin/              # Admin management API
 │   └── ...                 # Other API modules
 │
@@ -150,7 +150,7 @@ curl http://localhost:5001/kaaykostore/us-central1/api/l/lkTEST
 
 **Production URLs:**
 - Login: https://kaaykostore.web.app/admin/login.html
-- Dashboard: https://kaaykostore.web.app/admin/smartlinks.html
+- Dashboard: https://kaaykostore.web.app/admin/kortex.html
 - API: https://us-central1-kaaykostore.cloudfunctions.net/api
 
 ---

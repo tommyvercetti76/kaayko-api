@@ -75,7 +75,7 @@ api/
 └── functions/api/                     ← API ENDPOINT DOCS
     ├── README.md                      ← API overview
     ├── weather/README.md              ← Weather APIs (5 endpoints)
-    ├── smartLinks/README.md           ← Smart Links (12 endpoints)
+    ├── kortex/README.md           ← Smart Links (12 endpoints)
     ├── ai/README.md                   ← PaddleBot + GPT (7 endpoints)
     ├── products/README.md             ← Products (3 endpoints)
     ├── deepLinks/README.md            ← Universal Links (3 endpoints)
