@@ -5,51 +5,7 @@
 // Generates weather-appropriate safety warnings based on actual conditions
 // No more fake "heat warnings" when it's cloudy and cool!
 
-/**
- * Estimate water temperature based on air temperature and location factors
- * Much more accurate than simple air_temp - 8 formula
- * @param {number} airTemp - Air temperature in Celsius
- * @param {object} locationData - Location information (lat, lng, etc.)
- * @returns {number} Estimated water temperature in Celsius
- */
-function estimateWaterTemperature(airTemp, locationData = {}) {
-  const currentMonth = new Date().getMonth(); // 0-11
-  const latitude = Math.abs(locationData.latitude || 40);
-  
-  // Base seasonal adjustment (water lags air temperature by ~6-8 weeks)
-  // October (month 9) should be warm water from summer heat storage
-  const seasonalOffset = Math.sin((currentMonth - 1) * Math.PI / 6) * 4; // Peaks in Sept, low in Mar
-  
-  // Latitude effect (warmer climates have smaller air-water temp differences)
-  const latitudeEffect = Math.max(0, (50 - latitude) / 10); // More difference in northern latitudes
-  
-  // Body of water size effect (assume medium lake for default)
-  const thermalMass = 1.2; // Lakes have more thermal mass than rivers
-  
-  // Calculate base water temperature
-  let waterTemp;
-  
-  if (airTemp >= 25) {
-    // Hot weather: water is cooler than air
-    waterTemp = airTemp - (8 + latitudeEffect) + seasonalOffset;
-  } else if (airTemp >= 15) {
-    // Moderate weather: smaller difference
-    waterTemp = airTemp - (5 + latitudeEffect * 0.7) + seasonalOffset;
-  } else if (airTemp >= 5) {
-    // Cool weather: water often warmer than air due to thermal mass
-    waterTemp = airTemp - (2 + latitudeEffect * 0.5) + seasonalOffset + thermalMass;
-  } else {
-    // Cold weather: water has thermal lag, usually warmer than air
-    waterTemp = airTemp + (2 + thermalMass) + seasonalOffset * 0.5;
-  }
-  
-  // Realistic bounds (water rarely goes below 0°C or above 35°C in most paddling locations)
-  waterTemp = Math.max(1, Math.min(35, waterTemp));
-  
-  console.log(`💧 Water temp estimation: Air ${airTemp}°C → Water ${waterTemp.toFixed(1)}°C (month: ${currentMonth}, lat: ${latitude})`);
-  
-  return waterTemp;
-}
+const { estimateWaterTemperature } = require('./waterTempEstimation');
 
 /**
  * Generate smart safety warnings based on actual weather conditions

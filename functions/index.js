@@ -35,8 +35,10 @@ apiApp.use("/paddleScore", require("./api/weather/paddleScore"));     // ML-POWE
 apiApp.use("/fastForecast", require("./api/weather/fastForecast"));   // PUBLIC: Fast cached forecasts for frontend
 apiApp.use("/forecast", require("./api/weather/forecast").router);    // PREMIUM: On-demand forecasts (requires $$ token)
 
-// 🔗 SMART LINKS - NEW!
-apiApp.use("/smartlinks", require("./api/smartLinks/smartLinks"));    // Smart link CRUD & analytics
+// 🔗 KORTEX - Smart Link Management
+apiApp.use("/smartlinks", require("./api/kortex/kortex"));    // Kortex link CRUD & analytics
+apiApp.use("/public", require("./api/kortex/publicApiRouter")); // External tenant API (API key auth)
+apiApp.use("/", require("./api/kortex/publicRouter"));        // /l/:id redirect + /resolve attribution
 
 // 🎨 KREATOR (CREATOR) MANAGEMENT - NEW!
 apiApp.use("/kreators", require("./api/kreators/kreatorRoutes"));     // Kreator onboarding, auth, profile
@@ -53,15 +55,15 @@ apiApp.use("/createPaymentIntent", require("./api/checkout/router")); // Stripe 
 // � BILLING & SUBSCRIPTIONS
 apiApp.use("/billing", require("./api/billing/router")); // Subscription management for Kortex
 
-// �👔 ADMIN ORDER MANAGEMENT - PROTECTED WITH AUTH
+// 👔 ADMIN ORDER MANAGEMENT - PROTECTED WITH AUTH
 const { requireAuth, requireAdmin } = require("./middleware/authMiddleware");
 apiApp.post("/admin/updateOrderStatus", requireAuth, requireAdmin, require("./api/admin/updateOrderStatus"));
 const { getOrder, listOrders } = require("./api/admin/getOrder");
 apiApp.get("/admin/getOrder", requireAuth, requireAdmin, getOrder);
 apiApp.get("/admin/listOrders", requireAuth, requireAdmin, listOrders);
 
-// Legacy deeplink routes
-apiApp.use("/", require("./api/deepLinks/deeplinkRoutes"));
+// 👥 ADMIN USER MANAGEMENT - Previously unmounted, now live
+apiApp.use("/admin", require("./api/admin/adminUsers"));
 
 // Export main API function
 exports.api = onRequest({
