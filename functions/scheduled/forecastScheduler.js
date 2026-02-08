@@ -10,7 +10,7 @@
 
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { logger } = require('firebase-functions');
-const { batchGenerateForecasts, getPaddlingLocations } = require('../api/weather/forecast');
+const { batchGenerateForecasts, getPaddlingLocations } = require('../api/weather/forecastService');
 
 /**
  * 🌅 EARLY MORNING FORECAST (5am)
