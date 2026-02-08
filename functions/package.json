@@ -12,6 +12,16 @@
     "deploy": "firebase deploy --only functions",
     "deploy:fast": "firebase deploy --only functions:fastForecast,functions:cacheManager",
     "deploy:scheduled": "firebase deploy --only functions:precomputeForecasts,functions:cleanupCache",
+    "test": "jest --verbose --forceExit --detectOpenHandles",
+    "test:ci": "jest --ci --forceExit --detectOpenHandles --coverage",
+    "test:watch": "jest --watch --forceExit",
+    "test:integration": "jest --config jest.integration.config.js --forceExit --detectOpenHandles",
+    "test:integration:verbose": "jest --config jest.integration.config.js --forceExit --detectOpenHandles --verbose",
+    "test:all": "npm test && npm run test:integration",
+    "emulators": "firebase emulators:start --only firestore,auth",
+    "emulators:bg": "firebase emulators:start --only firestore,auth &",
+    "emulators:full": "firebase emulators:start --only functions,firestore,auth",
+    "seed": "node scripts/seed-emulator.js",
     "test:performance": "node ../tests/firebase_performance_test.js",
     "install-python": "pip3 install -r requirements.txt",
     "postinstall": "pip3 install -r requirements.txt || echo 'Python dependencies installation failed, will fallback to JS'"
@@ -28,5 +38,9 @@
     "stripe": "^17.5.0",
     "uuid": "^9.0.1",
     "yaml": "^2.8.1"
+  },
+  "devDependencies": {
+    "jest": "^30.2.0",
+    "supertest": "^7.2.2"
   }
 }
