@@ -57,3 +57,4 @@ functions/firestore-debug.log
 functions/*.log
 firebase-debug.log
 firestore-debug.log
+firestore-debug.log

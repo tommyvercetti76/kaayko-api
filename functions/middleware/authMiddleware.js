@@ -31,16 +31,23 @@ function requireAdmin(req, res, next) {
   const adminKey = req.headers['x-admin-key'];
   const isEmulator = process.env.FUNCTIONS_EMULATOR === 'true';
   const PASSPHRASE = isEmulator ? (process.env.ADMIN_PASSPHRASE || 'dev-admin-local-only') : process.env.ADMIN_PASSPHRASE;
-  if (!PASSPHRASE && !isEmulator) return authError(res, 503, 'Service Unavailable', 'Admin auth not configured', 'ADMIN_NOT_CONFIGURED');
+
+  // Path 1: Admin key authentication (if passphrase is configured)
   if (adminKey && PASSPHRASE && adminKey === PASSPHRASE) {
     req.user = req.user || { uid: 'admin-key-user', email: 'admin@kaayko.com', role: 'admin' };
     req.user.role = 'admin'; req.user.authMethod = 'admin-key'; return next();
   }
-  if (!req.user) return authError(res, 401, 'Unauthorized', 'Provide Bearer token or X-Admin-Key.', 'AUTH_REQUIRED');
-  if (!req.user.role) return authError(res, 403, 'Forbidden', 'Not authorized as admin.', 'NOT_ADMIN_USER');
-  if (!['super-admin', 'admin'].includes(req.user.role))
-    return authError(res, 403, 'Forbidden', `Required: admin. Yours: ${req.user.role}`, 'INSUFFICIENT_PERMISSIONS');
-  next();
+
+  // Path 2: Firebase Auth role-based authentication
+  if (req.user) {
+    if (!req.user.role) return authError(res, 403, 'Forbidden', 'Not authorized as admin.', 'NOT_ADMIN_USER');
+    if (!['super-admin', 'admin'].includes(req.user.role))
+      return authError(res, 403, 'Forbidden', `Required: admin. Yours: ${req.user.role}`, 'INSUFFICIENT_PERMISSIONS');
+    return next();
+  }
+
+  // No auth method succeeded
+  return authError(res, 401, 'Unauthorized', 'Provide Bearer token or X-Admin-Key.', 'AUTH_REQUIRED');
 }
 
 module.exports = { requireAuth, requireAdmin };

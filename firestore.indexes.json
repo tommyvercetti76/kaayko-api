@@ -101,13 +101,6 @@
       ]
     },
     {
-      "collectionGroup": "kreators",
-      "queryScope": "COLLECTION",
-      "fields": [
-        { "fieldPath": "email", "order": "ASCENDING" }
-      ]
-    },
-    {
       "collectionGroup": "admin_audit_logs",
       "queryScope": "COLLECTION",
       "fields": [

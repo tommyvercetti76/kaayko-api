@@ -2,52 +2,13 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Admin users collection - API-only writes, authenticated reads
+    // ========================================
+    // ADMIN & AUTH
+    // ========================================
+    
+    // Admin users - authenticated reads for own profile, API-only writes
     match /admin_users/{userId} {
-      // Users can read their own profile
       allow read: if request.auth != null && request.auth.uid == userId;
-      // Only Cloud Functions can write (via Admin SDK)
-      allow write: if false;
-    }
-    
-    // Short links collection - Public reads for redirects, API-only writes
-    match /short_links/{linkId} {
-      // Public read access (needed for redirect functionality)
-      allow read: if true;
-      // Only Cloud Functions can write
-      allow write: if false;
-    }
-    
-    // Link analytics - Write by authenticated users, read by admins
-    match /link_analytics/{analyticsId} {
-      // Anyone can write analytics (for tracking)
-      allow create: if true;
-      // Only Cloud Functions can read/update/delete
-      allow read, update, delete: if false;
-    }
-    
-    // Forecast cache - Public reads, API-only writes
-    match /forecast_cache/{cacheId} {
-      allow read: if true;
-      allow write: if false;
-    }
-    
-    // ========================================
-    // KREATOR COLLECTIONS
-    // ========================================
-    
-    // Kreator applications - API-only access
-    match /kreator_applications/{applicationId} {
-      // Public can check their own application status via API
-      // All writes go through Cloud Functions
-      allow read, write: if false;
-    }
-    
-    // Kreators collection - API-only writes, kreators can read own
-    match /kreators/{kreatorId} {
-      // Kreators can read their own profile
-      allow read: if request.auth != null && request.auth.uid == kreatorId;
-      // Only Cloud Functions can write
       allow write: if false;
     }
     
@@ -56,7 +17,185 @@ service cloud.firestore {
       allow read, write: if false;
     }
     
-    // All other collections - deny by default
+    // Security logs - API-only access
+    match /security_logs/{logId} {
+      allow read, write: if false;
+    }
+    
+    // ========================================
+    // KORTEX / SMART LINKS
+    // ========================================
+    
+    // Short links - Public reads for redirects, API-only writes
+    match /short_links/{linkId} {
+      allow read: if true;
+      allow write: if false;
+    }
+    
+    // Link analytics - Public create for tracking, API-only read/update/delete
+    match /link_analytics/{analyticsId} {
+      allow create: if true;
+      allow read, update, delete: if false;
+    }
+    
+    // Click events - Public create for tracking, API-only read
+    match /click_events/{eventId} {
+      allow create: if true;
+      allow read, update, delete: if false;
+    }
+    
+    // Install events - Public create for attribution, API-only read
+    match /install_events/{eventId} {
+      allow create: if true;
+      allow read, update, delete: if false;
+    }
+    
+    // Custom events - Public create for tracking, API-only read
+    match /custom_events/{eventId} {
+      allow create: if true;
+      allow read, update, delete: if false;
+    }
+    
+    // Context tokens - API-only (used for deferred deep linking)
+    match /ctx_tokens/{tokenId} {
+      allow read, write: if false;
+    }
+    
+    // ========================================
+    // TENANTS & API KEYS
+    // ========================================
+    
+    // Tenants - API-only access
+    match /tenants/{tenantId} {
+      allow read, write: if false;
+    }
+    
+    // Pending tenant registrations - API-only access
+    match /pending_tenant_registrations/{regId} {
+      allow read, write: if false;
+    }
+    
+    // API keys - API-only access
+    match /api_keys/{keyId} {
+      allow read, write: if false;
+    }
+    
+    // API key rate limits - API-only access
+    match /api_key_rate_limits/{limitId} {
+      allow read, write: if false;
+    }
+    
+    // Rate limits - API-only access
+    match /rate_limits/{limitId} {
+      allow read, write: if false;
+    }
+    
+    // Webhook subscriptions - API-only access
+    match /webhook_subscriptions/{subId} {
+      allow read, write: if false;
+    }
+    
+    // Webhook deliveries - API-only access
+    match /webhook_deliveries/{deliveryId} {
+      allow read, write: if false;
+    }
+    
+    // ========================================
+    // KREATORS
+    // ========================================
+    
+    // Kreator applications - API-only access
+    match /kreator_applications/{applicationId} {
+      allow read, write: if false;
+    }
+    
+    // Kreators - authenticated reads for own profile, API-only writes
+    match /kreators/{kreatorId} {
+      allow read: if request.auth != null && request.auth.uid == kreatorId;
+      allow write: if false;
+    }
+    
+    // ========================================
+    // PRODUCTS & ORDERS
+    // ========================================
+    
+    // Products - Public reads, API-only writes
+    match /kaaykoproducts/{productId} {
+      allow read: if true;
+      allow write: if false;
+    }
+    
+    // Orders - API-only access (admin reads through Cloud Functions)
+    match /orders/{orderId} {
+      allow read, write: if false;
+    }
+    
+    // Payment intents - API-only access
+    match /payment_intents/{intentId} {
+      allow read, write: if false;
+    }
+    
+    // Mail (triggered emails) - API-only access
+    match /mail/{mailId} {
+      allow read, write: if false;
+    }
+    
+    // ========================================
+    // WEATHER & PADDLING
+    // ========================================
+    
+    // Paddling spots - Public reads, API-only writes
+    match /paddlingSpots/{spotId} {
+      allow read: if true;
+      allow write: if false;
+    }
+    
+    // Paddling out spots - Public reads, API-only writes
+    match /paddlingOutSpots/{spotId} {
+      allow read: if true;
+      allow write: if false;
+    }
+    
+    // Forecast cache - Public reads, API-only writes
+    match /forecast_cache/{cacheId} {
+      allow read: if true;
+      allow write: if false;
+    }
+    
+    // Current conditions cache - Public reads, API-only writes
+    match /current_conditions_cache/{cacheId} {
+      allow read: if true;
+      allow write: if false;
+    }
+    
+    // Unified weather cache - Public reads, API-only writes
+    match /unified_weather_cache/{cacheId} {
+      allow read: if true;
+      allow write: if false;
+    }
+    
+    // Known locations - API-only access (scheduled poller)
+    match /known_locations/{locationId} {
+      allow read, write: if false;
+    }
+    
+    // ========================================
+    // SYSTEM
+    // ========================================
+    
+    // System health - API-only access
+    match /systemHealth/{docId} {
+      allow read, write: if false;
+    }
+    
+    // API usage tracking - API-only access
+    match /api_usage/{usageId} {
+      allow read, write: if false;
+    }
+    
+    // ========================================
+    // DEFAULT: Deny everything else
+    // ========================================
     match /{document=**} {
       allow read, write: if false;
     }
