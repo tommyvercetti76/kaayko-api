@@ -47,6 +47,31 @@ router.get('/:code',       getLink);
 router.put('/:code',       requireAuth, requireAdmin, updateLink);
 router.delete('/:code',    requireAuth, requireAdmin, deleteLink);
 
+// ── ROOTS sync proxy (keeps sync key server-side) ───────────────────
+const ROOTS_API_BASE = 'https://cool-schools-api-420407869747.us-central1.run.app/api/v1/roots';
+
+router.post('/roots-sync', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const syncKey = process.env.KORTEX_SYNC_KEY;
+    if (!syncKey) return res.status(500).json({ error: 'KORTEX_SYNC_KEY not configured' });
+
+    const response = await fetch(`${ROOTS_API_BASE}/invites/kortex-sync`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Kortex-Sync-Key': syncKey,
+      },
+      body: JSON.stringify(req.body),
+    });
+
+    const data = await response.json().catch(() => ({}));
+    res.status(response.status).json(data);
+  } catch (err) {
+    console.error('[roots-sync] proxy error:', err.message);
+    res.status(502).json({ error: 'ROOTS sync proxy failed' });
+  }
+});
+
 // ── Event tracking ───────────────────────────────────────────────────
 router.post('/events/:type', trackEvent);
 
