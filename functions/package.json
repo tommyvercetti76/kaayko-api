@@ -9,9 +9,13 @@
   "main": "index.js",
   "scripts": {
     "serve": "firebase emulators:start --only functions,firestore,storage",
-    "deploy": "firebase deploy --only functions",
-    "deploy:fast": "firebase deploy --only functions:fastForecast,functions:cacheManager",
-    "deploy:scheduled": "firebase deploy --only functions:precomputeForecasts,functions:cleanupCache",
+    "deploy": "firebase deploy --config ../firebase.json --only functions:api,functions:earlyMorningForecast,functions:morningForecastUpdate,functions:afternoonForecastUpdate,functions:eveningForecastUpdate,functions:emergencyForecastRefresh,functions:forecastSchedulerHealth",
+    "deploy:api": "firebase deploy --config ../firebase.json --only functions:api",
+    "deploy:fast": "npm run deploy:api",
+    "deploy:scheduled": "firebase deploy --config ../firebase.json --only functions:earlyMorningForecast,functions:morningForecastUpdate,functions:afternoonForecastUpdate,functions:eveningForecastUpdate,functions:emergencyForecastRefresh,functions:forecastSchedulerHealth",
+    "test": "node ./node_modules/jest/bin/jest.js --runInBand __tests__/camera-api.test.js --forceExit --detectOpenHandles",
+    "test:smoke": "node ./node_modules/jest/bin/jest.js --runInBand __tests__/camera-api.test.js --forceExit --detectOpenHandles",
+    "predeploy:check": "node scripts/predeploy-check.js && npm run test:smoke",
     "test:performance": "node ../tests/firebase_performance_test.js",
     "install-python": "pip3 install -r requirements.txt",
     "postinstall": "pip3 install -r requirements.txt || echo 'Python dependencies installation failed, will fallback to JS'"
@@ -28,5 +32,9 @@
     "stripe": "^17.5.0",
     "uuid": "^9.0.1",
     "yaml": "^2.8.1"
+  },
+  "devDependencies": {
+    "jest": "^30.2.0",
+    "supertest": "^7.2.2"
   }
 }
