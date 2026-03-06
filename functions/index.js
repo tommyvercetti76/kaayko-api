@@ -60,6 +60,12 @@ const { getOrder, listOrders } = require("./api/admin/getOrder");
 apiApp.get("/admin/getOrder", requireAuth, requireAdmin, getOrder);
 apiApp.get("/admin/listOrders", requireAuth, requireAdmin, listOrders);
 
+// 📷 KAMERA QUEST - Camera/lens data & photography presets
+apiApp.use("/cameras", require("./api/cameras/camerasRoutes"));
+apiApp.use("/lenses", require("./api/cameras/lensesRoutes"));
+apiApp.use("/presets/smart", require("./api/cameras/smartRoutes"));
+apiApp.use("/presets", require("./api/cameras/presetsRoutes"));
+
 // Legacy deeplink routes
 apiApp.use("/", require("./api/deepLinks/deeplinkRoutes"));
 
