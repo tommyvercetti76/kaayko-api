@@ -1,189 +1,114 @@
-# 🏄‍♂️ Kaayko API
+# Kaayko API
 
-**Fast paddling weather forecasts with ML-powered ratings for kayakers and paddlers**
+Production backend for the Kaayko product portfolio. The `main` branch in this repository currently serves commerce, paddling intelligence, smart links, creator workflows, and Kamera Quest photography guidance from a single Firebase Functions v2 deployment.
 
-## 🔒 Security Update (Dec 6, 2025)
+## What this repo powers
 
-**Admin Endpoints Now Protected:**
-- `/admin/updateOrderStatus` - Requires authentication + admin role
-- `/admin/getOrder` - Requires authentication + admin role  
-- `/admin/listOrders` - Requires authentication + admin role
+| Product | Purpose | Mounted base paths on `api` | Primary frontend consumers | Product guide |
+| --- | --- | --- | --- | --- |
+| Store / Commerce | Product catalog, image delivery, checkout, order ops | `/products`, `/images`, `/createPaymentIntent`, `/admin/*` | `kaayko/src/index.html`, `store.html`, `cart.html`, `order-success.html` | [`docs/products/STORE.md`](./docs/products/STORE.md) |
+| Paddling Out | Weather, scoring, nearby water discovery, forecast caching | `/paddlingOut`, `/nearbyWater`, `/paddleScore`, `/fastForecast`, `/forecast`, `/gptActions` | `kaayko/src/paddlingout.html` and weather JS modules | [`docs/products/PADDLING_OUT.md`](./docs/products/PADDLING_OUT.md) |
+| KORTEX | Smart links, redirects, tenant onboarding, billing, auth | `/smartlinks`, `/billing`, `/auth`, `/l/:id`, `/resolve` | `kaayko/src/kortex.html`, `create-kortex-link.html`, `src/admin/*` | [`docs/products/KORTEX.md`](./docs/products/KORTEX.md) |
+| Kreator | Creator applications, onboarding, profile, admin review | `/kreators` | `kaayko/src/kreator/*` | [`docs/products/KREATOR.md`](./docs/products/KREATOR.md) |
+| Kamera Quest | Camera catalog, lenses, presets, session optimization | `/cameras`, `/lenses`, `/presets`, `/presets/smart` | `kaayko/src/karma/kameras/*` | [`docs/products/KAMERA_QUEST.md`](./docs/products/KAMERA_QUEST.md) |
+| Shared Platform | Auth middleware, API docs, admin controls, deployment rails | `/docs`, `/auth`, `/admin/*`, scheduled functions | Shared site shell and product ops flows | [`docs/products/PLATFORM_SHARED.md`](./docs/products/PLATFORM_SHARED.md) |
 
-All admin endpoints now require:
-1. Valid Firebase ID token in `Authorization: Bearer <token>` header
-2. User must be in admin users list (verified via `requireAdmin` middleware)
+## Architecture
 
-**Frontend Protection:**
-- Smart Links admin portal (`/admin/smartlinks.html`) now redirects unauthenticated users to `/admin/login.html`
-- Login page uses Firebase Authentication (production)
-- ID tokens are stored in localStorage and sent with API requests
+- Runtime: Firebase Functions v2, Node.js 22, Express app exported as `api`.
+- Storage and state: Firebase Admin, Firestore, Cloud Storage, Firebase Auth.
+- Payments: Stripe checkout/payment intent and webhook flows.
+- Weather intelligence: cached forecasts plus an auxiliary Cloud Run ML service under [`ml-service`](./ml-service).
+- Camera intelligence: catalog maintenance, audit, validation packet, and session-advice engine in [`functions/api/cameras`](./functions/api/cameras).
+- Scheduled jobs: forecast warming and health jobs exported from [`functions/scheduled/forecastScheduler.js`](./functions/scheduled/forecastScheduler.js).
 
-## 📁 Directory Structure
+The live API function is mounted in [`functions/index.js`](./functions/index.js). Treat that file as the source of truth for what is actually shipped from `main`.
 
-```
-api/
-├── functions/        # ☁️ Firebase Cloud Functions
-│   └── api/         # API endpoints (7 modules, 33 endpoints documented)
-├── ml-service/      # 🧠 ML inference service (Cloud Run)
-├── docs/            # 📚 Technical documentation & OpenAPI spec
-├── archive/         # 📦 Archived/legacy code (if exists)
-└── README.md        # 📘 This file
-```
+## Repository layout
 
-**Quick Navigation:**
-- **API Endpoints** → [`functions/api/README.md`](./functions/api/README.md) (7 comprehensive READMEs)
-- **API Reference** → [`API-QUICK-REFERENCE-v2.1.0.md`](./API-QUICK-REFERENCE-v2.1.0.md)
-- **ML Implementation** → [`GOLD_STANDARD_IMPLEMENTATION.md`](./GOLD_STANDARD_IMPLEMENTATION.md)
-
-## 🚀 Production APIs
-
-NOTE: The list below is derived from the current `functions/index.js`. Most API modules are mounted; some pieces (e.g., adminUsers router) still exist in-code but are not automatically mounted and are marked in the module READMEs when relevant.
-
-### **FastForecast** - `/api/fastForecast` 
-**Public API for frontend - Super fast cached responses**
-
-- **Purpose**: Serves pre-computed weather forecasts to frontend users
-- **Speed**: ~192ms (cache-first architecture)
-- **Rate Limit**: 60 requests/minute
-- **Usage**: 
-  - `GET /api/fastForecast?location=Malibu,CA`
-  - `GET /api/fastForecast?spotId=malibu_surfrider`
-- **Returns**: Weather + ML paddle ratings (1-5 scale) + safety levels
-- **Status**: mounted and available at `/api/fastForecast` (ensure ML/Cache services are configured before heavy load)
-
-### **Forecast** - `/api/forecast`
-**Internal API for scheduled jobs and premium users**
-
-- **Purpose**: Generates comprehensive real-time forecasts with full ML predictions
-- **Speed**: ~2-5 seconds (real-time generation)
-- **Rate Limit**: 10 requests/minute (internal use)
-- **Usage**: 
-  - `GET /api/forecast?location=Lake Tahoe`
-  - `POST /api/forecast/batch` (processes all paddling spots)
-- **Returns**: Deep weather analysis + ML ratings + caches results for FastForecast
-- **Status**: mounted and available at `/api/forecast` (internal/premium — rate-limited)
-
-### Scheduled Functions (forecast warming & maintenance)
-The scheduled forecast jobs are enabled. They run on the following schedule (America/Los_Angeles):
-- `earlyMorningForecast` — 05:00 daily
-- `morningForecastUpdate` — 09:00 daily
-- `afternoonForecastUpdate` — 13:00 daily
-- `eveningForecastUpdate` — 17:00 daily
-- `emergencyForecastRefresh` — Every 4 hours (backup)
-- `forecastSchedulerHealth` — Weekly health check (Sunday midnight)
-
-These scheduled functions are exported from `functions/scheduled/forecastScheduler.js` and will populate the `forecast_cache` Firestore collection used by `fastForecast`.
-
-### **NearbyWater** - `/api/nearbyWater` 
-**Find nearby lakes and rivers for paddling using OpenStreetMap**
-
-- **Purpose**: Discover real water bodies (lakes, rivers, reservoirs) near any location
-- **Speed**: ~2-4 seconds (Overpass API query)
-- **Rate Limit**: 60 requests/minute
-- **Usage**: 
-  - `GET /api/nearbyWater?lat=32.7767&lng=-96.7970&radius=20`
-  - `GET /api/nearbyWater?lat=33.1487&lng=-96.7005&radius=50&publicOnly=true`
-- **Returns**: Real water bodies with coordinates, type (Lake/River/Reservoir), distance
-- **Status**: mounted and available at `/api/nearbyWater`
-
----
-
-## 📍 Location APIs
-
-### **PaddlingOut** - `/api/paddlingOut`
-**Paddling spots directory with images and details**
-
-- **Purpose**: Manages paddling location database
-- **Usage**: 
-  - `GET /api/paddlingOut` → List all paddling spots
-  - `GET /api/paddlingOut/:id` → Get spot details + images
-- **Returns**: Spot info, amenities (parking/restrooms), coordinates, YouTube videos, photos
- - **Status**: mounted and active (see `functions/index.js` → apiApp.use('/paddlingOut', require('./api/weather/paddlingout')))
-
-### **DeepLink** - `/api/l`
-**Universal link routing with context preservation**
-
-- **Purpose**: Smart app/web routing with location context
-- **Usage**: 
-  - `GET /api/l/:id` → Redirect with preserved context (e.g., `/api/l/antero456`)
-  - `GET /api/resolve` → Restore context after app install
-- **Features**: Platform detection, app store redirects, context cookies
-
----
-
-## 🛍️ Store APIs
-
-### **Products** - `/api/products`
-**E-commerce for Kaayko merchandise**
-
-- **Purpose**: Kaayko store product catalog
-- **Usage**: 
-  - `GET /api/products` → List all products with images
-  - `GET /api/products/:id` → Product details
-  - `POST /api/products/:id/vote` → Vote on products
-- **Returns**: T-shirts, gear with images, pricing, availability, voting
-
-### Admin endpoints (important security note)
-Some admin endpoints are mounted directly in `functions/index.js` without authentication wrappers (see `apiApp.post('/admin/updateOrderStatus', ...)` and `apiApp.get('/admin/getOrder', ...)`). Confirm this is intended for your deployment; otherwise add `requireAuth` or `requireAdmin` where appropriate.
-
-### **Images** - `/api/images`
-**Secure image proxy for store products**
-
-- **Purpose**: Proxies product images from Cloud Storage
-- **Usage**: `GET /api/images/:productId/:fileName`
-- **Features**: Referer checking, caching, secure image delivery
-
----
-
-## 🏗️ Project Structure
-
-```
-```
+```text
 kaayko-api/
-├── functions/                    # 🎯 Core Firebase Functions
-│   ├── api/                      # API endpoints
-│   ├── config/                   # Configuration
-│   ├── cache/                    # Caching logic
-│   └── package.json              # Dependencies
-├── ml-service/                   # 🧠 ML Prediction Service
-└── docs/                         # 📚 Technical Documentation
-    ├── API-QUICK-REFERENCE-v2.1.0.md
-    ├── GOLD_STANDARD_IMPLEMENTATION.md
-    ├── HOW_SCHEDULED_FUNCTIONS_WORK.md
-    └── kaayko-paddling-api-swagger.yaml
+├── functions/
+│   ├── api/                  # Product route modules
+│   ├── middleware/           # Auth, security, kreator guards
+│   ├── scheduled/            # Scheduled forecast jobs
+│   ├── services/             # Shared domain services
+│   ├── scripts/              # Camera catalog, audit, predeploy checks
+│   └── __tests__/            # Current checked-in automated suite
+├── docs/                     # Repo and product documentation
+├── ml-service/               # Weather ML service for Cloud Run
+├── firebase.json             # Functions runtime + predeploy hooks
+└── README.md
 ```
+
+## Local development
+
+Prerequisites:
+
+- Node.js 22
+- Firebase CLI
+- Python 3.9 for optional weather tooling dependencies
+- Access to the `kaaykostore` Firebase project or emulator equivalents
+
+From [`functions`](./functions):
+
+```bash
+npm install
+firebase emulators:start --config ../firebase.json --only functions,firestore,storage
 ```
 
----
+Useful commands:
 
-## �🔧 Architecture
+```bash
+npm run test:smoke
+npm run predeploy:check
+npm run deploy:api
+npm run deploy:scheduled
+npm run deploy
+```
 
-**Two-Tier Weather System:**
-- **FastForecast**: Public → Cache → 192ms responses
-- **Forecast**: Internal → Real-time ML → Caches for FastForecast
+## Quality gates
 
-**Scheduled Jobs** (6am, 12pm, 6pm, 10pm):
-- Pre-compute all paddling locations using `/forecast/batch`
-- Store results in Firestore cache
-- FastForecast serves cached data instantly
+Primary enforced gate:
 
-**ML Service**: Cloud Run deployment provides dynamic paddle ratings (1-5 scale) based on weather conditions
+- [`npm run predeploy:check`](./functions/package.json) regenerates camera catalog artifacts, review packet, audit report, validation checks, predeploy assertions, and smoke tests before deployment.
 
-**Water Discovery**: Overpass API integration finds real lakes/rivers using OpenStreetMap data
+Current reality on `main`:
 
----
+- The only checked-in automated test target wired in `functions/package.json` is the camera API smoke suite in [`functions/__tests__/camera-api.test.js`](./functions/__tests__/camera-api.test.js).
+- Commerce, weather, KORTEX, and Kreator do not yet have first-class regression suites in this repository.
+- Existing module README files under [`functions/api`](./functions/api) are helpful, but they do not replace product-level docs or route verification against [`functions/index.js`](./functions/index.js).
 
-## 📊 Quick Reference
+## Deployment
 
-**33 endpoints across 6 modules** - Full docs in [`functions/api/README.md`](./functions/api/README.md)
+This repo is configured for the Firebase project `kaaykostore`.
 
-| Module | Endpoints | Documentation | Key Features |
-|--------|-----------|---------------|--------------|
-| **Weather** | 5 APIs | [`weather/README.md`](./functions/api/weather/README.md) | ML ratings, forecasts, locations |
-| **Smart Links** | 12 APIs | [`smartLinks/README.md`](./functions/api/smartLinks/README.md) | Link management, analytics |
-| **AI/Chat** | 4 APIs | [`ai/README.md`](./functions/api/ai/README.md) | GPT Actions (ChatGPT) |
-| **Products** | 3 APIs | [`products/README.md`](./functions/api/products/README.md) | E-commerce catalog |
-| **Deep Links** | 3 APIs | [`deepLinks/README.md`](./functions/api/deepLinks/README.md) | Universal links (iOS) |
-| **Core** | 3 APIs | [`core/README.md`](./functions/api/core/README.md) | API documentation |
+- API only: `npm run deploy:api`
+- Scheduled functions only: `npm run deploy:scheduled`
+- API plus scheduled functions: `npm run deploy`
 
-**Production**: Firebase Functions + Cloud Run ML Service + Firestore caching + Cloud Storage + OpenStreetMap
+The deploy surface is defined in [`functions/package.json`](./functions/package.json) and runtime settings live in [`firebase.json`](./firebase.json).
+
+## Security model
+
+- `cors()` is enabled at the API app level in [`functions/index.js`](./functions/index.js).
+- Admin order routes use `requireAuth` and `requireAdmin` from [`functions/middleware/authMiddleware.js`](./functions/middleware/authMiddleware.js).
+- KORTEX routes mix public analytics/redirect endpoints with authenticated admin CRUD and tenant access.
+- Kreator routes use dedicated middleware from [`functions/middleware/kreatorAuthMiddleware.js`](./functions/middleware/kreatorAuthMiddleware.js).
+- Stripe webhook handling requires raw-body processing and is mounted before JSON middleware.
+
+## Known gaps to keep visible
+
+- [`functions/api/kreators/kreatorProductRoutes.js`](./functions/api/kreators/kreatorProductRoutes.js) exists, but it is not mounted from [`functions/index.js`](./functions/index.js) on `main`.
+- [`functions/api/smartLinks/publicApiRouter.js`](./functions/api/smartLinks/publicApiRouter.js) and [`functions/api/smartLinks/publicRouter.js`](./functions/api/smartLinks/publicRouter.js) exist, but they are not mounted from `main`.
+- Some frontend experiences in the companion `kaayko` repo still reference capabilities that depend on those unmounted routes. Call that out during integration work instead of assuming parity.
+
+## Documentation map
+
+- Product index: [`docs/products/README.md`](./docs/products/README.md)
+- Store backend: [`docs/products/STORE.md`](./docs/products/STORE.md)
+- Paddling Out backend: [`docs/products/PADDLING_OUT.md`](./docs/products/PADDLING_OUT.md)
+- KORTEX backend: [`docs/products/KORTEX.md`](./docs/products/KORTEX.md)
+- Kreator backend: [`docs/products/KREATOR.md`](./docs/products/KREATOR.md)
+- Kamera Quest backend: [`docs/products/KAMERA_QUEST.md`](./docs/products/KAMERA_QUEST.md)
+- Shared platform: [`docs/products/PLATFORM_SHARED.md`](./docs/products/PLATFORM_SHARED.md)
