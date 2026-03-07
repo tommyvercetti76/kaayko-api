@@ -64,11 +64,54 @@ describe('Camera API', () => {
     expect(res.body.preset.condition).toBe('SUNNY_OUTDOOR');
     expect(res.body.preset.camera.modelName).toBe(CANON_CAMERA_MODEL);
     expect(res.body.preset.lens.lensName).toBe(CANON_LENS_NAME);
+    expect(res.body.preset.audienceMode).toBe('enthusiast');
     expect(res.body.preset.sessionOptimization).toBeDefined();
+    expect(res.body.preset.sessionOptimization.meta.detailLevel).toBe('guided');
+    expect(res.body.preset.sessionOptimization.validity).toBeDefined();
+    expect(res.body.preset.sessionOptimization.briefing).toBeDefined();
     expect(res.body.preset.sessionOptimization.exposure.whiteBalance).toBeDefined();
     expect(res.body.preset.sessionOptimization.qualityControls).toBeDefined();
     expect(res.body.preset.sessionOptimization.composition).toBeDefined();
     expect(Array.isArray(res.body.preset.sessionOptimization.checklist)).toBe(true);
+  });
+
+  test('POST /presets/classic shapes the session brief by audience mode', async () => {
+    const app = buildTestApp('/presets', require('../api/cameras/presetsRoutes'));
+    const requestBody = {
+      brand: 'canon',
+      cameraModel: CANON_CAMERA_MODEL,
+      lensName: CANON_LENS_NAME,
+      genre: 'portrait',
+      condition: 'SUNNY_OUTDOOR',
+    };
+
+    const apprentice = await request(app)
+      .post('/presets/classic')
+      .send({ ...requestBody, mode: 'apprentice' });
+
+    const professional = await request(app)
+      .post('/presets/classic')
+      .send({ ...requestBody, mode: 'professional' });
+
+    expect(apprentice.status).toBe(200);
+    expect(professional.status).toBe(200);
+
+    expect(apprentice.body.preset.sessionOptimization.meta.detailLevel).toBe('concise');
+    expect(apprentice.body.preset.sessionOptimization.briefing.primaryActions.length).toBeLessThanOrEqual(3);
+    expect(apprentice.body.preset.sessionOptimization.briefing.advancedSections).toHaveLength(0);
+    expect(apprentice.body.preset.sessionOptimization.validity.checks).toHaveLength(0);
+    expect(apprentice.body.preset.sessionOptimization.scienceNotes).toBeUndefined();
+
+    expect(professional.body.preset.sessionOptimization.meta.detailLevel).toBe('expert');
+    expect(professional.body.preset.sessionOptimization.briefing.primaryActions.length).toBeGreaterThan(
+      apprentice.body.preset.sessionOptimization.briefing.primaryActions.length
+    );
+    expect(professional.body.preset.sessionOptimization.briefing.advancedSections.length).toBeGreaterThan(0);
+    expect(professional.body.preset.sessionOptimization.validity.checks.length).toBeGreaterThan(0);
+    expect(Array.isArray(professional.body.preset.sessionOptimization.scienceNotes)).toBe(true);
+    expect(professional.body.preset.sessionOptimization.checklist.length).toBeGreaterThan(
+      apprentice.body.preset.sessionOptimization.checklist.length
+    );
   });
 
   test('POST /presets/smart resolves gear-aware presets', async () => {

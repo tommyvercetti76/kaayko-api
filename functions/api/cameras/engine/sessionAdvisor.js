@@ -1,10 +1,46 @@
 const { parseShutterToSeconds } = require('./evCalc');
 
 const MODE_DETAIL = {
-  apprentice: { checklistLimit: 6, includeScience: false },
-  enthusiast: { checklistLimit: 8, includeScience: true },
-  craftsperson: { checklistLimit: 10, includeScience: true },
-  professional: { checklistLimit: 12, includeScience: true },
+  apprentice: {
+    checklistLimit: 4,
+    includeScience: false,
+    detailLevel: 'concise',
+    watchoutLimit: 2,
+    primaryActionLimit: 3,
+    advancedSectionLimit: 0,
+    includeSettingReasons: false,
+    includeValidityBands: false,
+  },
+  enthusiast: {
+    checklistLimit: 6,
+    includeScience: false,
+    detailLevel: 'guided',
+    watchoutLimit: 3,
+    primaryActionLimit: 4,
+    advancedSectionLimit: 1,
+    includeSettingReasons: true,
+    includeValidityBands: true,
+  },
+  craftsperson: {
+    checklistLimit: 8,
+    includeScience: true,
+    detailLevel: 'technical',
+    watchoutLimit: 4,
+    primaryActionLimit: 5,
+    advancedSectionLimit: 3,
+    includeSettingReasons: true,
+    includeValidityBands: true,
+  },
+  professional: {
+    checklistLimit: 10,
+    includeScience: true,
+    detailLevel: 'expert',
+    watchoutLimit: 5,
+    primaryActionLimit: 5,
+    advancedSectionLimit: 4,
+    includeSettingReasons: true,
+    includeValidityBands: true,
+  },
 };
 
 const ACTION_GENRES = new Set(['wildlife', 'sports', 'automotive', 'concert']);
@@ -481,6 +517,297 @@ function buildCaveats(flags, camera, lens, lensFit, preset) {
   return caveats;
 }
 
+function titleCaseWords(value) {
+  return String(value || '')
+    .replace(/[_-]+/g, ' ')
+    .replace(/\b\w/g, (match) => match.toUpperCase())
+    .trim();
+}
+
+function firstSentence(value) {
+  if (!value) return undefined;
+  const match = String(value).trim().match(/^.+?[.!?](?:\s|$)/);
+  return match ? match[0].trim() : String(value).trim();
+}
+
+function joinDefined(parts, separator = ' · ') {
+  return parts.filter(Boolean).join(separator);
+}
+
+function cleanEdgePunctuation(value) {
+  return value ? String(value).trim().replace(/[. ]+$/, '') : value;
+}
+
+function briefLensAssessment(assessment) {
+  const text = String(assessment || '');
+  if (!text) return 'Unknown fit';
+  if (text.includes('fits this session well')) return 'Good fit';
+  if (text.includes('short for wildlife')) return 'Short for wildlife';
+  if (text.includes('not especially wide')) return 'Limited width for large scenes';
+  if (text.includes('classic portrait band')) return 'Workable, not classic portrait framing';
+  if (text.includes('not a dedicated macro lens')) return 'Limited macro capability';
+  return firstSentence(text);
+}
+
+function shortWhiteBalance(flags) {
+  if (flags.astro) return 'Manual 3800-4300K';
+  if (flags.snowBeach) return 'Daylight / 5600K';
+  if (flags.backlit) return 'Daylight or Cloudy';
+  if (flags.lowLight && flags.event) return 'Auto WB unless the room stays stable';
+  if (flags.lowLight) return 'Auto or 3000-4200K';
+  return flags.colorCritical ? 'Locked WB with a gray target' : 'Daylight / Auto as needed';
+}
+
+function exposureReason(flags) {
+  if (flags.action) return 'Freeze subject motion first and let ISO climb sooner than shutter drops.';
+  if (flags.portrait) return 'Protect skin tone and keep enough shutter speed for subject movement, not just camera shake.';
+  if (flags.product || flags.documentation) return 'Repeatability matters more than creative drift, so keep the baseline fixed.';
+  if (flags.astro) return 'Keep stars from trailing and avoid needless color drift between frames.';
+  if (flags.macro) return 'Critical sharpness depends more on focus placement and stability than extreme stop-down.';
+  return 'Start from a safe baseline and adjust from the histogram, not the LCD brightness.';
+}
+
+function focusReason(flags) {
+  if (flags.action || flags.wildlife) return 'Tracking earns its keep only if it stays glued to the subject through a short test burst.';
+  if (flags.portrait || flags.event) return 'Bias the system toward eyes or faces, but verify that it is landing on the near eye.';
+  if (flags.product || flags.macro || flags.astro) return 'Precision beats automation here, so use the smallest controllable focus area.';
+  return 'Use the least-complex focus mode that stays reliable for the subject.';
+}
+
+function supportReason(flags, stabilization) {
+  if (flags.tripod) return 'A tripod solves the actual problem here more cleanly than trying to lean on stabilization.';
+  if (stabilization && stabilization.stabilizedStaticFloor) {
+    return 'Stabilization helps only with camera shake; once the subject moves, shutter speed still wins.';
+  }
+  return 'Handheld limits are real, so treat the shutter floor as a guardrail rather than a target to flirt with.';
+}
+
+function lightReason(flags) {
+  if (flags.product || flags.documentation) return 'Lighting shape and color control matter more than tiny third-stop exposure changes.';
+  if (flags.portrait) return 'Let the subject set the exposure priority, not the brightness of the background.';
+  if (flags.event) return 'Keep the room ambience alive instead of flattening it with brute-force flash.';
+  if (flags.astro) return 'Control any added light carefully so the sky stays believable.';
+  return 'Solve light direction and quality before you start chasing settings.';
+}
+
+function confidenceHeadline(checks) {
+  const gear = checks.find((check) => check.label === 'Gear limits');
+  const style = checks.find((check) => check.label === 'Composition and aesthetics');
+  return joinDefined([
+    gear ? `Gear ${gear.confidence}` : null,
+    style ? `Style ${style.confidence}` : null,
+  ], ' / ');
+}
+
+function buildValidity(flags, detail) {
+  const checks = [
+    {
+      label: 'Gear limits',
+      confidence: 'high',
+      note: 'Driven by official camera and lens fields such as aperture limits, stabilization flags, crop format, and flash sync where present.',
+    },
+    {
+      label: 'Exposure baseline',
+      confidence: 'medium-high',
+      note: 'Built from preset data plus shutter, crop-factor, and stabilization heuristics. It is a strong starting point, not a scene meter reading.',
+    },
+    {
+      label: flags.colorCritical || flags.documentation ? 'Color and repeatability' : 'Color control',
+      confidence: flags.colorCritical || flags.documentation ? 'medium-high' : 'medium',
+      note: flags.colorCritical || flags.documentation
+        ? 'Backed by documentation and technical-photography standards when the scene and lighting are controlled.'
+        : 'Useful guidance, but mixed lighting and uncontrolled environments can move this from precise to approximate quickly.',
+    },
+    {
+      label: 'Composition and aesthetics',
+      confidence: 'medium',
+      note: 'Research-backed tendencies help, but framing rules are not universal and must yield to the actual scene.',
+    },
+    {
+      label: 'Genre field advice',
+      confidence: 'medium',
+      note: 'Rule-based recommendations are practical, but the final validation layer is still real photographer review on live sessions.',
+    },
+  ];
+
+  return {
+    summary: 'Reliable on gear limits, strong as an exposure starting point, and less absolute on aesthetics or genre-specific style choices.',
+    action: flags.action
+      ? 'Validate the first burst for motion blur, tracking accuracy, and clipping before trusting the preset for the full session.'
+      : 'Treat the first few frames as calibration: check blur, highlights, and color, then adjust one variable at a time.',
+    checks: detail.includeValidityBands ? checks : [],
+    headline: confidenceHeadline(checks),
+  };
+}
+
+function buildPrimaryActions(detail, flags, preset, optimization, camera) {
+  const actions = [
+    `Start with ${joinDefined([preset.mode, `f/${preset.aperture}`, preset.shutterSpeed, `ISO ${preset.ISO}`])}.`,
+    `Set focus to ${joinDefined([
+      cleanEdgePunctuation(optimization.focus.autofocusMode),
+      cleanEdgePunctuation(optimization.focus.focusArea),
+    ], ' / ')}.`,
+    flags.colorCritical
+      ? 'Lock white balance and capture a gray or color target before the real sequence.'
+      : 'Shoot three test frames and read the histogram before the real sequence starts.',
+    flags.tripod
+      ? 'Use a timer or remote release and verify that stabilization is not fighting the tripod.'
+      : optimization.stabilization.staticHandheldFloor
+        ? `Treat ${optimization.stabilization.staticHandheldFloor} as the rough handheld floor for static subjects.`
+        : 'Raise shutter speed before blaming focus if the first frames look soft.',
+    camera.maxFlashSync
+      ? `Keep flash work at or below ${camera.maxFlashSync} unless you intentionally switch to HSS.`
+      : null,
+  ];
+
+  if (flags.action) {
+    actions.push('Run a short test burst before the decisive moment and confirm that motion is actually frozen.');
+  }
+
+  return actions.filter(Boolean).slice(0, detail.primaryActionLimit);
+}
+
+function buildCoreSettings(detail, flags, optimization, lensFit, validity) {
+  const settings = [
+    {
+      label: 'Exposure baseline',
+      value: joinDefined([
+        optimization.exposure.mode,
+        optimization.exposure.aperture,
+        optimization.exposure.shutterSpeed,
+        optimization.exposure.ISO ? `ISO ${optimization.exposure.ISO}` : null,
+        optimization.exposure.autoIsoCeiling ? `Auto ISO to ${optimization.exposure.autoIsoCeiling}` : null,
+      ]),
+      reason: detail.includeSettingReasons ? exposureReason(flags) : undefined,
+    },
+    {
+      label: 'Focus setup',
+      value: joinDefined([
+        cleanEdgePunctuation(optimization.focus.autofocusMode),
+        cleanEdgePunctuation(optimization.focus.focusArea),
+        cleanEdgePunctuation(optimization.focus.subjectDetection),
+      ]),
+      reason: detail.includeSettingReasons ? focusReason(flags) : undefined,
+    },
+    {
+      label: 'Support and shutter floor',
+      value: joinDefined([
+        optimization.stabilization.support,
+        optimization.stabilization.staticHandheldFloor ? `Static floor ${optimization.stabilization.staticHandheldFloor}` : null,
+        optimization.stabilization.stabilizedStaticFloor ? `Stabilized ${optimization.stabilization.stabilizedStaticFloor}` : null,
+      ]),
+      reason: detail.includeSettingReasons ? supportReason(flags, optimization.stabilization) : undefined,
+    },
+    {
+      label: 'Light and color',
+      value: joinDefined([
+        shortWhiteBalance(flags),
+        titleCaseWords(optimization.exposure.metering),
+        briefLensAssessment(lensFit.assessment),
+      ]),
+      reason: detail.includeSettingReasons ? lightReason(flags) : undefined,
+    },
+  ];
+
+  return settings.map((setting) => ({
+    ...setting,
+    confidence: validity.headline,
+  }));
+}
+
+function buildAdvancedSections(detail, optimization, validity) {
+  if (!detail.advancedSectionLimit) return [];
+
+  const sections = [
+    {
+      title: 'Quality control',
+      items: [
+        optimization.qualityControls.colorAccuracy,
+        optimization.qualityControls.repeatability,
+        optimization.qualityControls.hiddenChoiceAwareness,
+      ].filter(Boolean),
+    },
+    {
+      title: 'Composition',
+      items: [
+        optimization.composition.placement,
+        optimization.composition.ruleBreaking,
+        optimization.composition.backgroundStrategy,
+        optimization.composition.depthOfFieldUse,
+      ].filter(Boolean),
+    },
+    {
+      title: 'Lens fit',
+      items: [
+        optimization.lensFit.focalRange ? `Lens range: ${optimization.lensFit.focalRange}` : null,
+        optimization.lensFit.equivalentRange ? `Equivalent framing: ${optimization.lensFit.equivalentRange}` : null,
+        optimization.lensFit.assessment,
+      ].filter(Boolean),
+    },
+    {
+      title: 'Reliability notes',
+      items: [
+        validity.summary,
+        ...validity.checks.map((check) => `${titleCaseWords(check.label)}: ${check.confidence}. ${check.note}`),
+      ].filter(Boolean),
+    },
+  ];
+
+  if (Array.isArray(optimization.scienceNotes) && optimization.scienceNotes.length) {
+    sections.splice(3, 0, {
+      title: 'Science notes',
+      items: optimization.scienceNotes,
+    });
+  }
+
+  return sections
+    .filter((section) => Array.isArray(section.items) && section.items.length)
+    .slice(0, detail.advancedSectionLimit);
+}
+
+function buildCoachTip(mode, preset, flags) {
+  if (mode === 'apprentice') {
+    return firstSentence(preset.proTip) || 'If the first frames fail, change one variable at a time so you can see what actually fixed the shot.';
+  }
+
+  if (mode === 'enthusiast') {
+    return firstSentence(preset.proTip) || 'Shoot a short safety sequence, review it at 100%, and then decide whether the shutter, focus mode, or light is the first thing to change.';
+  }
+
+  if (flags.documentation || flags.colorCritical) {
+    return 'Lock the repeatable variables first. Creative variation comes after the deliverable set is secure.';
+  }
+
+  return firstSentence(preset.proTip) || 'Use the preset as a baseline, but let the first controlled test sequence tell you where the real risk sits.';
+}
+
+function buildBriefing(mode, detail, flags, preset, optimization, lensFit, validity) {
+  return {
+    audienceMode: mode,
+    detailLevel: detail.detailLevel,
+    heading: `${titleCaseWords(preset.genre)} Session Brief`,
+    summary: flags.action
+      ? 'Prioritize motion control and tracking reliability first. If the subject is moving, protect shutter speed before almost everything else.'
+      : flags.portrait
+        ? 'Bias toward clean subject separation, reliable eye focus, and consistent skin exposure instead of chasing dramatic settings for their own sake.'
+        : flags.documentation || flags.product
+          ? 'Keep the setup repeatable and color-stable. Locked variables beat clever improvisation for deliverable work.'
+          : flags.astro
+            ? 'Build the frame around stability, star control, and consistent color. Small setup errors compound quickly in night work.'
+            : 'Use the preset as a disciplined starting point, confirm it on the first frames, and then refine from the actual light.',
+    scorecard: [
+      { label: 'Audience', value: titleCaseWords(mode) },
+      { label: 'Lens fit', value: briefLensAssessment(lensFit.assessment) },
+      { label: 'Confidence', value: validity.headline },
+    ],
+    primaryActions: buildPrimaryActions(detail, flags, preset, optimization, preset.camera || {}),
+    coreSettings: buildCoreSettings(detail, flags, optimization, lensFit, validity),
+    watchouts: optimization.caveats.slice(0, detail.watchoutLimit),
+    coachTip: buildCoachTip(mode, preset, flags),
+    advancedSections: buildAdvancedSections(detail, optimization, validity),
+  };
+}
+
 function buildSessionOptimization(camera, lens, preset, mode) {
   const detail = MODE_DETAIL[mode] || MODE_DETAIL.apprentice;
   const brand = inferBrand(camera, lens);
@@ -501,6 +828,10 @@ function buildSessionOptimization(camera, lens, preset, mode) {
     : undefined;
 
   const optimization = {
+    meta: {
+      audienceMode: mode,
+      detailLevel: detail.detailLevel,
+    },
     foundation: {
       fileFormat: fileFormatAdvice(flags),
       pictureStyle: pictureStyleAdvice(flags),
@@ -585,6 +916,9 @@ function buildSessionOptimization(camera, lens, preset, mode) {
   if (detail.includeScience) {
     optimization.scienceNotes = scienceNotes(flags, camera, lens, factor, bestStops, preset);
   }
+
+  optimization.validity = buildValidity(flags, detail);
+  optimization.briefing = buildBriefing(mode, detail, flags, preset, optimization, lensFit, optimization.validity);
 
   return optimization;
 }

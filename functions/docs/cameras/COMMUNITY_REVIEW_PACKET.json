@@ -289,8 +289,7 @@
         "Photograph a gray card or color target when the lighting setup changes and lock white balance for the actual series.",
         "Lock camera position, focal length, and background before shooting the sequence so the set stays comparable frame to frame.",
         "Use full-resolution capture for the master files and create smaller derivatives only after review.",
-        "Keep flash work at or below 1/250 unless you intentionally switch to HSS.",
-        "Use the strengths of Canon RF 15-35mm f/2.8L IS USM instead of forcing it into a role it does not naturally cover."
+        "Keep flash work at or below 1/250 unless you intentionally switch to HSS."
       ],
       "caveats": [
         "Auto white balance, auto exposure drift, and casual recomposition can quietly destroy cross-frame consistency in a deliverable series."

@@ -35,6 +35,7 @@ function resolvePreset(camera, lens, genre, condition, mode) {
   const preset = Object.assign({}, base);
   preset.genre = genre;
   preset.condition = conditionKey;
+  preset.audienceMode = mode;
 
   // ── Lens constraint clamping ────────────────────────────────────────────────
   // Ensure aperture doesn't exceed what the lens can physically achieve.
