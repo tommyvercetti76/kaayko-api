@@ -9,6 +9,7 @@
 
 const allPresets = require('../data_presets/index');
 const { applyIBISBonus, parseShutterToSeconds, parseMaxShutter } = require('./evCalc');
+const { buildSessionOptimization } = require('./sessionAdvisor');
 
 // Controls which educational fields are included per skill level
 const MODE_FIELD_CONFIG = {
@@ -85,15 +86,26 @@ function resolvePreset(camera, lens, genre, condition, mode) {
   // Attach gear info to the response
   preset.camera = {
     modelName:     camera.modelName,
+    sensorFormat:  camera.sensorFormat,
     IBIS:          camera.IBIS,
     ibisStops:     camera.ibisStops || 0,
+    maxFlashSync:  camera.maxFlashSync,
     weatherSealed: camera.weatherSealed || false,
   };
   preset.lens = {
     lensName: lens.lensName,
+    focalRange: lens.minFocalLength && lens.maxFocalLength
+      ? (
+        lens.minFocalLength === lens.maxFocalLength
+          ? `${lens.minFocalLength}mm`
+          : `${lens.minFocalLength}-${lens.maxFocalLength}mm`
+      )
+      : undefined,
+    maxAperture: lens.maxAperture,
     hasOIS:   lens.hasOIS,
     oisStops: lens.oisStops || 0,
   };
+  preset.sessionOptimization = buildSessionOptimization(camera, lens, preset, mode);
 
   return { preset };
 }

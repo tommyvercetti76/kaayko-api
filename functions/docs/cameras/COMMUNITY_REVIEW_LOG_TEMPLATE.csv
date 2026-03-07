@@ -1,0 +1,9 @@
+reviewer_name,review_date,reviewer_track,brand,camera_model,lens_name,genre,condition,verdict,first_change,failure_mode,notes
+"","","portrait / wedding","canon","Canon EOS R6 Mark III","Canon RF 24-70mm f/2.8L IS USM","portrait","SUNNY_OUTDOOR","","","",""
+"","","sports / action","sony","Sony Alpha a1 II","Sony FE 70-200mm f/2.8 GM OSS II","sports","NIGHT_STADIUM","","","",""
+"","","wildlife / birding","sony","Sony Alpha a1 II","Sony FE 200-600mm f/5.6-6.3 G OSS","wildlife","BIRDS_IN_FLIGHT","","","",""
+"","","landscape / travel","canon","Canon EOS R5 Mark II","Canon RF 15-35mm f/2.8L IS USM","landscape","GOLDEN_HOUR_TRIPOD","","","",""
+"","","commercial product / food","sony","Sony Alpha a7 V","Sony FE 90mm f/2.8 Macro G OSS","product","PRODUCT_WHITE_BACKGROUND","","","",""
+"","","real estate / architecture","canon","Canon EOS R5 Mark II","Canon RF 15-35mm f/2.8L IS USM","realestate","REALESTATE_HDR_BASE_FRAME","","","",""
+"","","concert / event","sony","Sony Alpha a7 V","Sony FE 24-70mm f/2.8 GM II","concert","CONCERT_LARGE_ARENA","","","",""
+"","","astro / night","sony","Sony Alpha a7 V","Sony FE 20mm f/1.8 G","astro","MILKY_WAY_WIDE","","","",""

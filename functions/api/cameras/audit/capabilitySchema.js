@@ -1,0 +1,126 @@
+const BODY_CAPABILITY_SCHEMA = {
+  identity: [
+    'modelName',
+    'brand',
+    'productLine',
+    'releaseDate',
+    'lensMount',
+    'status',
+  ],
+  sensor: [
+    'sensorType',
+    'sensorFormat',
+    'effectiveMegapixels',
+    'nativeIsoMin',
+    'nativeIsoMax',
+    'expandedIsoMin',
+    'expandedIsoMax',
+    'dynamicRange',
+  ],
+  shutterAndBurst: [
+    'shutterSpeed',
+    'mechanicalShutterMax',
+    'electronicShutterMax',
+    'continuousFpsMechanical',
+    'continuousFpsElectronic',
+    'preCapture',
+  ],
+  autofocus: [
+    'autofocus',
+    'afPointsPhase',
+    'afPointsContrast',
+    'subjectDetection',
+    'eyeAfHumans',
+    'eyeAfAnimals',
+    'vehicleDetection',
+  ],
+  stabilization: [
+    'IBIS',
+    'ibisStops',
+    'coordinatedIS',
+    'movieIS',
+  ],
+  flash: [
+    'maxFlashSync',
+    'electronicFlashSync',
+    'hssSupport',
+    'pcSyncPort',
+  ],
+  storagePowerBuild: [
+    'cardSlots',
+    'batteryModel',
+    'weatherSealed',
+    'weatherResistanceLevel',
+    'weightGrams',
+  ],
+  displayConnectivity: [
+    'evfResolutionDots',
+    'rearScreenType',
+    'wifi',
+    'bluetooth',
+    'usbPort',
+  ],
+  video: [
+    'maxVideoMode',
+    'openGate',
+    'logProfiles',
+    'rawVideo',
+    'recordLimitMinutes',
+  ],
+  provenance: [
+    'sourceUrls',
+    'verifiedAt',
+    'verifiedBy',
+    'verificationScope',
+    'validationTier',
+  ],
+};
+
+const LENS_CAPABILITY_SCHEMA = {
+  identity: [
+    'lensName',
+    'brand',
+    'mountType',
+    'releaseDate',
+    'status',
+  ],
+  optical: [
+    'minFocalLength',
+    'maxFocalLength',
+    'maxAperture',
+    'maxApertureAtTele',
+    'minFocusDistanceMeters',
+    'maxMagnification',
+    'filterThread',
+  ],
+  autofocusAndStabilization: [
+    'focusMotor',
+    'hasOIS',
+    'oisStops',
+    'focusBreathingCompSupport',
+  ],
+  build: [
+    'weatherSealed',
+    'weightGrams',
+    'lengthMm',
+    'diameterMm',
+  ],
+  compatibility: [
+    'compatibleCameras',
+    'fullFrameCoverage',
+    'apscCoverage',
+    'teleconverterCompatibility',
+  ],
+  provenance: [
+    'sourceUrls',
+    'verifiedAt',
+    'verifiedBy',
+    'verificationScope',
+    'validationTier',
+  ],
+};
+
+module.exports = {
+  BODY_CAPABILITY_SCHEMA,
+  LENS_CAPABILITY_SCHEMA,
+};

@@ -2,6 +2,8 @@
   "lenses": [
     {
       "lensName": "Sony FE 24-70mm f/2.8 GM II",
+      "brand": "sony",
+      "status": "official-category-reference",
       "mountType": "E-mount",
       "minFocalLength": 24,
       "maxFocalLength": 70,
@@ -10,6 +12,8 @@
       "hasOIS": false,
       "oisStops": 0,
       "filterThread": 82,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Sony Alpha a9",
         "Sony Alpha a9 II",
@@ -24,11 +28,24 @@
         "Sony Alpha a7C",
         "Sony Alpha a7C II",
         "Sony Alpha a7CR",
-        "Sony ZV-E1"
-      ]
+        "Sony ZV-E1",
+        "Sony Alpha a1 II",
+        "Sony Alpha a7 V"
+      ],
+      "sourceUrls": [
+        "https://electronics.sony.com/imaging/lenses/c/all-e-mount",
+        "https://support.d-imaging.sony.co.jp/www/cscs/lens_body/",
+        "https://www.sony.com/electronics/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Sony FE 70-200mm f/2.8 GM OSS II",
+      "brand": "sony",
+      "status": "official-category-reference",
       "mountType": "E-mount",
       "minFocalLength": 70,
       "maxFocalLength": 200,
@@ -37,6 +54,8 @@
       "hasOIS": true,
       "oisStops": 4,
       "filterThread": 82,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Sony Alpha a9",
         "Sony Alpha a9 II",
@@ -51,11 +70,24 @@
         "Sony Alpha a7C",
         "Sony Alpha a7C II",
         "Sony Alpha a7CR",
-        "Sony ZV-E1"
-      ]
+        "Sony ZV-E1",
+        "Sony Alpha a1 II",
+        "Sony Alpha a7 V"
+      ],
+      "sourceUrls": [
+        "https://electronics.sony.com/imaging/lenses/c/all-e-mount",
+        "https://support.d-imaging.sony.co.jp/www/cscs/lens_body/",
+        "https://www.sony.com/electronics/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Sony FE 16-35mm f/2.8 GM",
+      "brand": "sony",
+      "status": "official-category-reference",
       "mountType": "E-mount",
       "minFocalLength": 16,
       "maxFocalLength": 35,
@@ -64,6 +96,8 @@
       "hasOIS": false,
       "oisStops": 0,
       "filterThread": 82,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Sony Alpha a9",
         "Sony Alpha a9 II",
@@ -78,11 +112,24 @@
         "Sony Alpha a7C",
         "Sony Alpha a7C II",
         "Sony Alpha a7CR",
-        "Sony ZV-E1"
-      ]
+        "Sony ZV-E1",
+        "Sony Alpha a1 II",
+        "Sony Alpha a7 V"
+      ],
+      "sourceUrls": [
+        "https://electronics.sony.com/imaging/lenses/c/all-e-mount",
+        "https://support.d-imaging.sony.co.jp/www/cscs/lens_body/",
+        "https://www.sony.com/electronics/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Sony FE 85mm f/1.4 GM",
+      "brand": "sony",
+      "status": "official-category-reference",
       "mountType": "E-mount",
       "minFocalLength": 85,
       "maxFocalLength": 85,
@@ -91,6 +138,8 @@
       "hasOIS": false,
       "oisStops": 0,
       "filterThread": 77,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Sony Alpha a9",
         "Sony Alpha a9 II",
@@ -105,11 +154,24 @@
         "Sony Alpha a7C",
         "Sony Alpha a7C II",
         "Sony Alpha a7CR",
-        "Sony ZV-E1"
-      ]
+        "Sony ZV-E1",
+        "Sony Alpha a1 II",
+        "Sony Alpha a7 V"
+      ],
+      "sourceUrls": [
+        "https://electronics.sony.com/imaging/lenses/c/all-e-mount",
+        "https://support.d-imaging.sony.co.jp/www/cscs/lens_body/",
+        "https://www.sony.com/electronics/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Sony FE 135mm f/1.8 GM",
+      "brand": "sony",
+      "status": "official-category-reference",
       "mountType": "E-mount",
       "minFocalLength": 135,
       "maxFocalLength": 135,
@@ -118,6 +180,8 @@
       "hasOIS": false,
       "oisStops": 0,
       "filterThread": 82,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Sony Alpha a9",
         "Sony Alpha a9 II",
@@ -132,11 +196,24 @@
         "Sony Alpha a7C",
         "Sony Alpha a7C II",
         "Sony Alpha a7CR",
-        "Sony ZV-E1"
-      ]
+        "Sony ZV-E1",
+        "Sony Alpha a1 II",
+        "Sony Alpha a7 V"
+      ],
+      "sourceUrls": [
+        "https://electronics.sony.com/imaging/lenses/c/all-e-mount",
+        "https://support.d-imaging.sony.co.jp/www/cscs/lens_body/",
+        "https://www.sony.com/electronics/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Sony FE 24mm f/1.4 GM",
+      "brand": "sony",
+      "status": "official-category-reference",
       "mountType": "E-mount",
       "minFocalLength": 24,
       "maxFocalLength": 24,
@@ -145,6 +222,8 @@
       "hasOIS": false,
       "oisStops": 0,
       "filterThread": 67,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Sony Alpha a9",
         "Sony Alpha a9 II",
@@ -159,11 +238,24 @@
         "Sony Alpha a7C",
         "Sony Alpha a7C II",
         "Sony Alpha a7CR",
-        "Sony ZV-E1"
-      ]
+        "Sony ZV-E1",
+        "Sony Alpha a1 II",
+        "Sony Alpha a7 V"
+      ],
+      "sourceUrls": [
+        "https://electronics.sony.com/imaging/lenses/c/all-e-mount",
+        "https://support.d-imaging.sony.co.jp/www/cscs/lens_body/",
+        "https://www.sony.com/electronics/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Sony FE 200-600mm f/5.6-6.3 G OSS",
+      "brand": "sony",
+      "status": "official-category-reference",
       "mountType": "E-mount",
       "minFocalLength": 200,
       "maxFocalLength": 600,
@@ -172,6 +264,8 @@
       "hasOIS": true,
       "oisStops": 4,
       "filterThread": 95,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Sony Alpha a9",
         "Sony Alpha a9 II",
@@ -186,11 +280,24 @@
         "Sony Alpha a7C",
         "Sony Alpha a7C II",
         "Sony Alpha a7CR",
-        "Sony ZV-E1"
-      ]
+        "Sony ZV-E1",
+        "Sony Alpha a1 II",
+        "Sony Alpha a7 V"
+      ],
+      "sourceUrls": [
+        "https://electronics.sony.com/imaging/lenses/c/all-e-mount",
+        "https://support.d-imaging.sony.co.jp/www/cscs/lens_body/",
+        "https://www.sony.com/electronics/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Sony FE 12-24mm f/2.8 GM",
+      "brand": "sony",
+      "status": "official-category-reference",
       "mountType": "E-mount",
       "minFocalLength": 12,
       "maxFocalLength": 24,
@@ -199,6 +306,8 @@
       "hasOIS": false,
       "oisStops": 0,
       "filterThread": 0,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Sony Alpha a9",
         "Sony Alpha a9 II",
@@ -213,11 +322,24 @@
         "Sony Alpha a7C",
         "Sony Alpha a7C II",
         "Sony Alpha a7CR",
-        "Sony ZV-E1"
-      ]
+        "Sony ZV-E1",
+        "Sony Alpha a1 II",
+        "Sony Alpha a7 V"
+      ],
+      "sourceUrls": [
+        "https://electronics.sony.com/imaging/lenses/c/all-e-mount",
+        "https://support.d-imaging.sony.co.jp/www/cscs/lens_body/",
+        "https://www.sony.com/electronics/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Sony FE 20mm f/1.8 G",
+      "brand": "sony",
+      "status": "official-category-reference",
       "mountType": "E-mount",
       "minFocalLength": 20,
       "maxFocalLength": 20,
@@ -226,6 +348,8 @@
       "hasOIS": false,
       "oisStops": 0,
       "filterThread": 67,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Sony Alpha a9",
         "Sony Alpha a9 II",
@@ -240,11 +364,24 @@
         "Sony Alpha a7C",
         "Sony Alpha a7C II",
         "Sony Alpha a7CR",
-        "Sony ZV-E1"
-      ]
+        "Sony ZV-E1",
+        "Sony Alpha a1 II",
+        "Sony Alpha a7 V"
+      ],
+      "sourceUrls": [
+        "https://electronics.sony.com/imaging/lenses/c/all-e-mount",
+        "https://support.d-imaging.sony.co.jp/www/cscs/lens_body/",
+        "https://www.sony.com/electronics/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Sony FE 50mm f/1.2 GM",
+      "brand": "sony",
+      "status": "official-category-reference",
       "mountType": "E-mount",
       "minFocalLength": 50,
       "maxFocalLength": 50,
@@ -253,6 +390,8 @@
       "hasOIS": false,
       "oisStops": 0,
       "filterThread": 72,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Sony Alpha a9",
         "Sony Alpha a9 II",
@@ -267,11 +406,24 @@
         "Sony Alpha a7C",
         "Sony Alpha a7C II",
         "Sony Alpha a7CR",
-        "Sony ZV-E1"
-      ]
+        "Sony ZV-E1",
+        "Sony Alpha a1 II",
+        "Sony Alpha a7 V"
+      ],
+      "sourceUrls": [
+        "https://electronics.sony.com/imaging/lenses/c/all-e-mount",
+        "https://support.d-imaging.sony.co.jp/www/cscs/lens_body/",
+        "https://www.sony.com/electronics/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Sony FE 35mm f/1.4 GM",
+      "brand": "sony",
+      "status": "official-category-reference",
       "mountType": "E-mount",
       "minFocalLength": 35,
       "maxFocalLength": 35,
@@ -280,6 +432,8 @@
       "hasOIS": false,
       "oisStops": 0,
       "filterThread": 67,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Sony Alpha a9",
         "Sony Alpha a9 II",
@@ -294,11 +448,24 @@
         "Sony Alpha a7C",
         "Sony Alpha a7C II",
         "Sony Alpha a7CR",
-        "Sony ZV-E1"
-      ]
+        "Sony ZV-E1",
+        "Sony Alpha a1 II",
+        "Sony Alpha a7 V"
+      ],
+      "sourceUrls": [
+        "https://electronics.sony.com/imaging/lenses/c/all-e-mount",
+        "https://support.d-imaging.sony.co.jp/www/cscs/lens_body/",
+        "https://www.sony.com/electronics/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Sony FE PZ 16-35mm f/4 G",
+      "brand": "sony",
+      "status": "official-category-reference",
       "mountType": "E-mount",
       "minFocalLength": 16,
       "maxFocalLength": 35,
@@ -307,6 +474,8 @@
       "hasOIS": false,
       "oisStops": 0,
       "filterThread": 72,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Sony Alpha a9",
         "Sony Alpha a9 II",
@@ -321,11 +490,24 @@
         "Sony Alpha a7C",
         "Sony Alpha a7C II",
         "Sony Alpha a7CR",
-        "Sony ZV-E1"
-      ]
+        "Sony ZV-E1",
+        "Sony Alpha a1 II",
+        "Sony Alpha a7 V"
+      ],
+      "sourceUrls": [
+        "https://electronics.sony.com/imaging/lenses/c/all-e-mount",
+        "https://support.d-imaging.sony.co.jp/www/cscs/lens_body/",
+        "https://www.sony.com/electronics/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Sony FE 90mm f/2.8 Macro G OSS",
+      "brand": "sony",
+      "status": "official-category-reference",
       "mountType": "E-mount",
       "minFocalLength": 90,
       "maxFocalLength": 90,
@@ -334,6 +516,8 @@
       "hasOIS": true,
       "oisStops": 4,
       "filterThread": 62,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Sony Alpha a9",
         "Sony Alpha a9 II",
@@ -348,11 +532,24 @@
         "Sony Alpha a7C",
         "Sony Alpha a7C II",
         "Sony Alpha a7CR",
-        "Sony ZV-E1"
-      ]
+        "Sony ZV-E1",
+        "Sony Alpha a1 II",
+        "Sony Alpha a7 V"
+      ],
+      "sourceUrls": [
+        "https://electronics.sony.com/imaging/lenses/c/all-e-mount",
+        "https://support.d-imaging.sony.co.jp/www/cscs/lens_body/",
+        "https://www.sony.com/electronics/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Sony FE 14mm f/1.8 GM",
+      "brand": "sony",
+      "status": "official-category-reference",
       "mountType": "E-mount",
       "minFocalLength": 14,
       "maxFocalLength": 14,
@@ -361,6 +558,8 @@
       "hasOIS": false,
       "oisStops": 0,
       "filterThread": 0,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Sony Alpha a9",
         "Sony Alpha a9 II",
@@ -375,11 +574,24 @@
         "Sony Alpha a7C",
         "Sony Alpha a7C II",
         "Sony Alpha a7CR",
-        "Sony ZV-E1"
-      ]
+        "Sony ZV-E1",
+        "Sony Alpha a1 II",
+        "Sony Alpha a7 V"
+      ],
+      "sourceUrls": [
+        "https://electronics.sony.com/imaging/lenses/c/all-e-mount",
+        "https://support.d-imaging.sony.co.jp/www/cscs/lens_body/",
+        "https://www.sony.com/electronics/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Sony FE 28-60mm f/4-5.6",
+      "brand": "sony",
+      "status": "official-category-reference",
       "mountType": "E-mount",
       "minFocalLength": 28,
       "maxFocalLength": 60,
@@ -388,6 +600,8 @@
       "hasOIS": false,
       "oisStops": 0,
       "filterThread": 40.5,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Sony Alpha a7C",
         "Sony Alpha a7C II",
@@ -397,11 +611,24 @@
         "Sony Alpha a7R IV",
         "Sony Alpha a7R V",
         "Sony Alpha a7S III",
-        "Sony ZV-E1"
-      ]
+        "Sony ZV-E1",
+        "Sony Alpha a1 II",
+        "Sony Alpha a7 V"
+      ],
+      "sourceUrls": [
+        "https://electronics.sony.com/imaging/lenses/c/all-e-mount",
+        "https://support.d-imaging.sony.co.jp/www/cscs/lens_body/",
+        "https://www.sony.com/electronics/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Sony FE 70-300mm f/4.5-5.6 G OSS",
+      "brand": "sony",
+      "status": "official-category-reference",
       "mountType": "E-mount",
       "minFocalLength": 70,
       "maxFocalLength": 300,
@@ -410,6 +637,8 @@
       "hasOIS": true,
       "oisStops": 4,
       "filterThread": 72,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Sony Alpha a9",
         "Sony Alpha a9 II",
@@ -424,11 +653,24 @@
         "Sony Alpha a7C",
         "Sony Alpha a7C II",
         "Sony Alpha a7CR",
-        "Sony ZV-E1"
-      ]
+        "Sony ZV-E1",
+        "Sony Alpha a1 II",
+        "Sony Alpha a7 V"
+      ],
+      "sourceUrls": [
+        "https://electronics.sony.com/imaging/lenses/c/all-e-mount",
+        "https://support.d-imaging.sony.co.jp/www/cscs/lens_body/",
+        "https://www.sony.com/electronics/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Sony FE 600mm f/4 GM OSS",
+      "brand": "sony",
+      "status": "official-category-reference",
       "mountType": "E-mount",
       "minFocalLength": 600,
       "maxFocalLength": 600,
@@ -437,6 +679,8 @@
       "hasOIS": true,
       "oisStops": 4,
       "filterThread": 0,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Sony Alpha a9",
         "Sony Alpha a9 II",
@@ -447,11 +691,24 @@
         "Sony Alpha a7R IV",
         "Sony Alpha a7R V",
         "Sony Alpha a7S III",
-        "Sony Alpha a1"
-      ]
+        "Sony Alpha a1",
+        "Sony Alpha a1 II",
+        "Sony Alpha a7 V"
+      ],
+      "sourceUrls": [
+        "https://electronics.sony.com/imaging/lenses/c/all-e-mount",
+        "https://support.d-imaging.sony.co.jp/www/cscs/lens_body/",
+        "https://www.sony.com/electronics/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Sony FE 24-240mm f/3.5-6.3 OSS",
+      "brand": "sony",
+      "status": "official-category-reference",
       "mountType": "E-mount",
       "minFocalLength": 24,
       "maxFocalLength": 240,
@@ -460,6 +717,8 @@
       "hasOIS": true,
       "oisStops": 3,
       "filterThread": 72,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Sony Alpha a9",
         "Sony Alpha a9 II",
@@ -473,11 +732,24 @@
         "Sony Alpha a7C",
         "Sony Alpha a7C II",
         "Sony Alpha a7CR",
-        "Sony ZV-E1"
-      ]
+        "Sony ZV-E1",
+        "Sony Alpha a1 II",
+        "Sony Alpha a7 V"
+      ],
+      "sourceUrls": [
+        "https://electronics.sony.com/imaging/lenses/c/all-e-mount",
+        "https://support.d-imaging.sony.co.jp/www/cscs/lens_body/",
+        "https://www.sony.com/electronics/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Sony FE 28mm f/2",
+      "brand": "sony",
+      "status": "official-category-reference",
       "mountType": "E-mount",
       "minFocalLength": 28,
       "maxFocalLength": 28,
@@ -486,6 +758,8 @@
       "hasOIS": false,
       "oisStops": 0,
       "filterThread": 49,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Sony Alpha a9",
         "Sony Alpha a9 II",
@@ -500,11 +774,24 @@
         "Sony Alpha a7C",
         "Sony Alpha a7C II",
         "Sony Alpha a7CR",
-        "Sony ZV-E1"
-      ]
+        "Sony ZV-E1",
+        "Sony Alpha a1 II",
+        "Sony Alpha a7 V"
+      ],
+      "sourceUrls": [
+        "https://electronics.sony.com/imaging/lenses/c/all-e-mount",
+        "https://support.d-imaging.sony.co.jp/www/cscs/lens_body/",
+        "https://www.sony.com/electronics/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Sony FE 35mm f/2.8 ZA Sonnar T*",
+      "brand": "sony",
+      "status": "official-category-reference",
       "mountType": "E-mount",
       "minFocalLength": 35,
       "maxFocalLength": 35,
@@ -513,6 +800,8 @@
       "hasOIS": false,
       "oisStops": 0,
       "filterThread": 49,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Sony Alpha a9",
         "Sony Alpha a9 II",
@@ -527,11 +816,24 @@
         "Sony Alpha a7C",
         "Sony Alpha a7C II",
         "Sony Alpha a7CR",
-        "Sony ZV-E1"
-      ]
+        "Sony ZV-E1",
+        "Sony Alpha a1 II",
+        "Sony Alpha a7 V"
+      ],
+      "sourceUrls": [
+        "https://electronics.sony.com/imaging/lenses/c/all-e-mount",
+        "https://support.d-imaging.sony.co.jp/www/cscs/lens_body/",
+        "https://www.sony.com/electronics/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Sony FE 24mm f/2.8 G",
+      "brand": "sony",
+      "status": "official-category-reference",
       "mountType": "E-mount",
       "minFocalLength": 24,
       "maxFocalLength": 24,
@@ -540,6 +842,8 @@
       "hasOIS": false,
       "oisStops": 0,
       "filterThread": 49,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Sony Alpha a9",
         "Sony Alpha a9 II",
@@ -554,11 +858,24 @@
         "Sony Alpha a7C",
         "Sony Alpha a7C II",
         "Sony Alpha a7CR",
-        "Sony ZV-E1"
-      ]
+        "Sony ZV-E1",
+        "Sony Alpha a1 II",
+        "Sony Alpha a7 V"
+      ],
+      "sourceUrls": [
+        "https://electronics.sony.com/imaging/lenses/c/all-e-mount",
+        "https://support.d-imaging.sony.co.jp/www/cscs/lens_body/",
+        "https://www.sony.com/electronics/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Sony FE 40mm f/2.5 G",
+      "brand": "sony",
+      "status": "official-category-reference",
       "mountType": "E-mount",
       "minFocalLength": 40,
       "maxFocalLength": 40,
@@ -567,6 +884,8 @@
       "hasOIS": false,
       "oisStops": 0,
       "filterThread": 49,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Sony Alpha a9",
         "Sony Alpha a9 II",
@@ -581,11 +900,24 @@
         "Sony Alpha a7C",
         "Sony Alpha a7C II",
         "Sony Alpha a7CR",
-        "Sony ZV-E1"
-      ]
+        "Sony ZV-E1",
+        "Sony Alpha a1 II",
+        "Sony Alpha a7 V"
+      ],
+      "sourceUrls": [
+        "https://electronics.sony.com/imaging/lenses/c/all-e-mount",
+        "https://support.d-imaging.sony.co.jp/www/cscs/lens_body/",
+        "https://www.sony.com/electronics/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Sony FE 50mm f/2.5 G",
+      "brand": "sony",
+      "status": "official-category-reference",
       "mountType": "E-mount",
       "minFocalLength": 50,
       "maxFocalLength": 50,
@@ -594,6 +926,8 @@
       "hasOIS": false,
       "oisStops": 0,
       "filterThread": 49,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Sony Alpha a9",
         "Sony Alpha a9 II",
@@ -608,19 +942,34 @@
         "Sony Alpha a7C",
         "Sony Alpha a7C II",
         "Sony Alpha a7CR",
-        "Sony ZV-E1"
-      ]
+        "Sony ZV-E1",
+        "Sony Alpha a1 II",
+        "Sony Alpha a7 V"
+      ],
+      "sourceUrls": [
+        "https://electronics.sony.com/imaging/lenses/c/all-e-mount",
+        "https://support.d-imaging.sony.co.jp/www/cscs/lens_body/",
+        "https://www.sony.com/electronics/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Sony FE 70-200mm f/4 G OSS",
+      "brand": "sony",
+      "status": "official-category-reference",
       "mountType": "E-mount",
       "minFocalLength": 70,
       "maxFocalLength": 200,
-      "maxAperture": 4.0,
-      "maxApertureAtTele": 4.0,
+      "maxAperture": 4,
+      "maxApertureAtTele": 4,
       "hasOIS": true,
       "oisStops": 4,
       "filterThread": 77,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Sony Alpha a9",
         "Sony Alpha a9 II",
@@ -635,19 +984,34 @@
         "Sony Alpha a7C",
         "Sony Alpha a7C II",
         "Sony Alpha a7CR",
-        "Sony ZV-E1"
-      ]
+        "Sony ZV-E1",
+        "Sony Alpha a1 II",
+        "Sony Alpha a7 V"
+      ],
+      "sourceUrls": [
+        "https://electronics.sony.com/imaging/lenses/c/all-e-mount",
+        "https://support.d-imaging.sony.co.jp/www/cscs/lens_body/",
+        "https://www.sony.com/electronics/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Sony FE 24-70mm f/4 ZA OSS Vario-Tessar T*",
+      "brand": "sony",
+      "status": "official-category-reference",
       "mountType": "E-mount",
       "minFocalLength": 24,
       "maxFocalLength": 70,
-      "maxAperture": 4.0,
-      "maxApertureAtTele": 4.0,
+      "maxAperture": 4,
+      "maxApertureAtTele": 4,
       "hasOIS": true,
       "oisStops": 4,
       "filterThread": 77,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Sony Alpha a9",
         "Sony Alpha a9 II",
@@ -662,11 +1026,24 @@
         "Sony Alpha a7C",
         "Sony Alpha a7C II",
         "Sony Alpha a7CR",
-        "Sony ZV-E1"
-      ]
+        "Sony ZV-E1",
+        "Sony Alpha a1 II",
+        "Sony Alpha a7 V"
+      ],
+      "sourceUrls": [
+        "https://electronics.sony.com/imaging/lenses/c/all-e-mount",
+        "https://support.d-imaging.sony.co.jp/www/cscs/lens_body/",
+        "https://www.sony.com/electronics/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Sony FE 55mm f/1.8 ZA Sonnar T*",
+      "brand": "sony",
+      "status": "official-category-reference",
       "mountType": "E-mount",
       "minFocalLength": 55,
       "maxFocalLength": 55,
@@ -675,6 +1052,8 @@
       "hasOIS": false,
       "oisStops": 0,
       "filterThread": 67,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Sony Alpha a9",
         "Sony Alpha a9 II",
@@ -689,19 +1068,34 @@
         "Sony Alpha a7C",
         "Sony Alpha a7C II",
         "Sony Alpha a7CR",
-        "Sony ZV-E1"
-      ]
+        "Sony ZV-E1",
+        "Sony Alpha a1 II",
+        "Sony Alpha a7 V"
+      ],
+      "sourceUrls": [
+        "https://electronics.sony.com/imaging/lenses/c/all-e-mount",
+        "https://support.d-imaging.sony.co.jp/www/cscs/lens_body/",
+        "https://www.sony.com/electronics/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Sony FE 12-24mm f/4 G",
+      "brand": "sony",
+      "status": "official-category-reference",
       "mountType": "E-mount",
       "minFocalLength": 12,
       "maxFocalLength": 24,
-      "maxAperture": 4.0,
-      "maxApertureAtTele": 4.0,
+      "maxAperture": 4,
+      "maxApertureAtTele": 4,
       "hasOIS": false,
       "oisStops": 0,
       "filterThread": 82,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Sony Alpha a9",
         "Sony Alpha a9 II",
@@ -716,11 +1110,24 @@
         "Sony Alpha a7C",
         "Sony Alpha a7C II",
         "Sony Alpha a7CR",
-        "Sony ZV-E1"
-      ]
+        "Sony ZV-E1",
+        "Sony Alpha a1 II",
+        "Sony Alpha a7 V"
+      ],
+      "sourceUrls": [
+        "https://electronics.sony.com/imaging/lenses/c/all-e-mount",
+        "https://support.d-imaging.sony.co.jp/www/cscs/lens_body/",
+        "https://www.sony.com/electronics/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Sony FE 100-400mm f/4.5-5.6 GM OSS",
+      "brand": "sony",
+      "status": "official-category-reference",
       "mountType": "E-mount",
       "minFocalLength": 100,
       "maxFocalLength": 400,
@@ -729,6 +1136,8 @@
       "hasOIS": true,
       "oisStops": 4,
       "filterThread": 67,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Sony Alpha a9",
         "Sony Alpha a9 II",
@@ -743,11 +1152,24 @@
         "Sony Alpha a7C",
         "Sony Alpha a7C II",
         "Sony Alpha a7CR",
-        "Sony ZV-E1"
-      ]
+        "Sony ZV-E1",
+        "Sony Alpha a1 II",
+        "Sony Alpha a7 V"
+      ],
+      "sourceUrls": [
+        "https://electronics.sony.com/imaging/lenses/c/all-e-mount",
+        "https://support.d-imaging.sony.co.jp/www/cscs/lens_body/",
+        "https://www.sony.com/electronics/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Sony FE 70-200mm f/2.8 GM OSS",
+      "brand": "sony",
+      "status": "official-category-reference",
       "mountType": "E-mount",
       "minFocalLength": 70,
       "maxFocalLength": 200,
@@ -756,6 +1178,8 @@
       "hasOIS": true,
       "oisStops": 4,
       "filterThread": 77,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Sony Alpha a9",
         "Sony Alpha a9 II",
@@ -770,11 +1194,24 @@
         "Sony Alpha a7C",
         "Sony Alpha a7C II",
         "Sony Alpha a7CR",
-        "Sony ZV-E1"
-      ]
+        "Sony ZV-E1",
+        "Sony Alpha a1 II",
+        "Sony Alpha a7 V"
+      ],
+      "sourceUrls": [
+        "https://electronics.sony.com/imaging/lenses/c/all-e-mount",
+        "https://support.d-imaging.sony.co.jp/www/cscs/lens_body/",
+        "https://www.sony.com/electronics/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Sony FE 400mm f/2.8 GM OSS",
+      "brand": "sony",
+      "status": "official-category-reference",
       "mountType": "E-mount",
       "minFocalLength": 400,
       "maxFocalLength": 400,
@@ -783,6 +1220,8 @@
       "hasOIS": true,
       "oisStops": 4,
       "filterThread": 77,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Sony Alpha a9",
         "Sony Alpha a9 II",
@@ -797,11 +1236,24 @@
         "Sony Alpha a7C",
         "Sony Alpha a7C II",
         "Sony Alpha a7CR",
-        "Sony ZV-E1"
-      ]
+        "Sony ZV-E1",
+        "Sony Alpha a1 II",
+        "Sony Alpha a7 V"
+      ],
+      "sourceUrls": [
+        "https://electronics.sony.com/imaging/lenses/c/all-e-mount",
+        "https://support.d-imaging.sony.co.jp/www/cscs/lens_body/",
+        "https://www.sony.com/electronics/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Sony E 18-135mm f/3.5-5.6 OSS",
+      "brand": "sony",
+      "status": "official-category-reference",
       "mountType": "E-mount",
       "minFocalLength": 18,
       "maxFocalLength": 135,
@@ -810,17 +1262,32 @@
       "hasOIS": true,
       "oisStops": 4,
       "filterThread": 77,
+      "fullFrameCoverage": false,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Sony Alpha a6600",
         "Sony Alpha a6700",
         "Sony Alpha a6400",
         "Sony Alpha a6500",
         "Sony ZV-E10",
-        "Sony Alpha a6300"
-      ]
+        "Sony Alpha a6300",
+        "Sony Alpha a6100",
+        "Sony ZV-E10 II"
+      ],
+      "sourceUrls": [
+        "https://electronics.sony.com/imaging/lenses/c/all-e-mount",
+        "https://support.d-imaging.sony.co.jp/www/cscs/lens_body/",
+        "https://www.sony.com/electronics/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Sony E 70-350mm f/4.5-6.3 G OSS",
+      "brand": "sony",
+      "status": "official-category-reference",
       "mountType": "E-mount",
       "minFocalLength": 70,
       "maxFocalLength": 350,
@@ -829,17 +1296,32 @@
       "hasOIS": true,
       "oisStops": 4,
       "filterThread": 67,
+      "fullFrameCoverage": false,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Sony Alpha a6600",
         "Sony Alpha a6700",
         "Sony Alpha a6400",
         "Sony Alpha a6500",
         "Sony ZV-E10",
-        "Sony Alpha a6300"
-      ]
+        "Sony Alpha a6300",
+        "Sony Alpha a6100",
+        "Sony ZV-E10 II"
+      ],
+      "sourceUrls": [
+        "https://electronics.sony.com/imaging/lenses/c/all-e-mount",
+        "https://support.d-imaging.sony.co.jp/www/cscs/lens_body/",
+        "https://www.sony.com/electronics/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Sony FE 50mm f/2.8 Macro",
+      "brand": "sony",
+      "status": "official-category-reference",
       "mountType": "E-mount",
       "minFocalLength": 50,
       "maxFocalLength": 50,
@@ -848,6 +1330,8 @@
       "hasOIS": false,
       "oisStops": 0,
       "filterThread": 72,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Sony Alpha a9",
         "Sony Alpha a9 II",
@@ -868,19 +1352,34 @@
         "Sony Alpha a6400",
         "Sony Alpha a6500",
         "Sony ZV-E10",
-        "Sony Alpha a6300"
-      ]
+        "Sony Alpha a6300",
+        "Sony Alpha a1 II",
+        "Sony Alpha a7 V"
+      ],
+      "sourceUrls": [
+        "https://electronics.sony.com/imaging/lenses/c/all-e-mount",
+        "https://support.d-imaging.sony.co.jp/www/cscs/lens_body/",
+        "https://www.sony.com/electronics/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Sony FE 24-105mm f/4 G OSS",
+      "brand": "sony",
+      "status": "official-category-reference",
       "mountType": "FE",
       "minFocalLength": 24,
       "maxFocalLength": 105,
-      "maxAperture": 4.0,
-      "maxApertureAtTele": 4.0,
+      "maxAperture": 4,
+      "maxApertureAtTele": 4,
       "hasOIS": true,
       "oisStops": 4,
       "filterThread": 77,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Sony Alpha a7 III",
         "Sony Alpha a7R IV",
@@ -889,11 +1388,24 @@
         "Sony Alpha a7 IV",
         "Sony Alpha a1",
         "Sony Alpha a9 II",
-        "Sony Alpha a7R V"
-      ]
+        "Sony Alpha a7R V",
+        "Sony Alpha a1 II",
+        "Sony Alpha a7 V"
+      ],
+      "sourceUrls": [
+        "https://electronics.sony.com/imaging/lenses/c/all-e-mount",
+        "https://support.d-imaging.sony.co.jp/www/cscs/lens_body/",
+        "https://www.sony.com/electronics/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Sony FE 85mm f/1.8",
+      "brand": "sony",
+      "status": "official-category-reference",
       "mountType": "FE",
       "minFocalLength": 85,
       "maxFocalLength": 85,
@@ -902,6 +1414,8 @@
       "hasOIS": false,
       "oisStops": 0,
       "filterThread": 67,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Sony Alpha a7 III",
         "Sony Alpha a7R IV",
@@ -910,11 +1424,24 @@
         "Sony Alpha a7 IV",
         "Sony Alpha a1",
         "Sony Alpha a9 II",
-        "Sony Alpha a7R V"
-      ]
+        "Sony Alpha a7R V",
+        "Sony Alpha a1 II",
+        "Sony Alpha a7 V"
+      ],
+      "sourceUrls": [
+        "https://electronics.sony.com/imaging/lenses/c/all-e-mount",
+        "https://support.d-imaging.sony.co.jp/www/cscs/lens_body/",
+        "https://www.sony.com/electronics/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Sony FE 35mm f/1.8",
+      "brand": "sony",
+      "status": "official-category-reference",
       "mountType": "FE",
       "minFocalLength": 35,
       "maxFocalLength": 35,
@@ -923,6 +1450,8 @@
       "hasOIS": false,
       "oisStops": 0,
       "filterThread": 58,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Sony Alpha a7 III",
         "Sony Alpha a7R IV",
@@ -931,11 +1460,24 @@
         "Sony Alpha a7 IV",
         "Sony Alpha a1",
         "Sony Alpha a9 II",
-        "Sony Alpha a7R V"
-      ]
+        "Sony Alpha a7R V",
+        "Sony Alpha a1 II",
+        "Sony Alpha a7 V"
+      ],
+      "sourceUrls": [
+        "https://electronics.sony.com/imaging/lenses/c/all-e-mount",
+        "https://support.d-imaging.sony.co.jp/www/cscs/lens_body/",
+        "https://www.sony.com/electronics/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Sony FE 50mm f/1.8",
+      "brand": "sony",
+      "status": "official-category-reference",
       "mountType": "FE",
       "minFocalLength": 50,
       "maxFocalLength": 50,
@@ -944,6 +1486,8 @@
       "hasOIS": false,
       "oisStops": 0,
       "filterThread": 67,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Sony Alpha a7 III",
         "Sony Alpha a7R IV",
@@ -952,19 +1496,34 @@
         "Sony Alpha a7 IV",
         "Sony Alpha a1",
         "Sony Alpha a9 II",
-        "Sony Alpha a7R V"
-      ]
+        "Sony Alpha a7R V",
+        "Sony Alpha a1 II",
+        "Sony Alpha a7 V"
+      ],
+      "sourceUrls": [
+        "https://electronics.sony.com/imaging/lenses/c/all-e-mount",
+        "https://support.d-imaging.sony.co.jp/www/cscs/lens_body/",
+        "https://www.sony.com/electronics/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Sony FE 16-35mm f/4 ZA OSS Vario-Tessar T*",
+      "brand": "sony",
+      "status": "official-category-reference",
       "mountType": "FE",
       "minFocalLength": 16,
       "maxFocalLength": 35,
-      "maxAperture": 4.0,
-      "maxApertureAtTele": 4.0,
+      "maxAperture": 4,
+      "maxApertureAtTele": 4,
       "hasOIS": true,
       "oisStops": 4,
       "filterThread": 77,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Sony Alpha a7 III",
         "Sony Alpha a7R IV",
@@ -973,11 +1532,24 @@
         "Sony Alpha a7 IV",
         "Sony Alpha a1",
         "Sony Alpha a9 II",
-        "Sony Alpha a7R V"
-      ]
+        "Sony Alpha a7R V",
+        "Sony Alpha a1 II",
+        "Sony Alpha a7 V"
+      ],
+      "sourceUrls": [
+        "https://electronics.sony.com/imaging/lenses/c/all-e-mount",
+        "https://support.d-imaging.sony.co.jp/www/cscs/lens_body/",
+        "https://www.sony.com/electronics/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Sony FE 300mm f/2.8 GM OSS",
+      "brand": "sony",
+      "status": "official-category-reference",
       "mountType": "FE",
       "minFocalLength": 300,
       "maxFocalLength": 300,
@@ -986,6 +1558,8 @@
       "hasOIS": true,
       "oisStops": 4,
       "filterThread": 77,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Sony Alpha a7 III",
         "Sony Alpha a7R IV",
@@ -994,11 +1568,24 @@
         "Sony Alpha a7 IV",
         "Sony Alpha a1",
         "Sony Alpha a9 II",
-        "Sony Alpha a7R V"
-      ]
+        "Sony Alpha a7R V",
+        "Sony Alpha a1 II",
+        "Sony Alpha a7 V"
+      ],
+      "sourceUrls": [
+        "https://electronics.sony.com/imaging/lenses/c/all-e-mount",
+        "https://support.d-imaging.sony.co.jp/www/cscs/lens_body/",
+        "https://www.sony.com/electronics/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Sony FE 100mm f/2.8 STF GM OSS",
+      "brand": "sony",
+      "status": "official-category-reference",
       "mountType": "FE",
       "minFocalLength": 100,
       "maxFocalLength": 100,
@@ -1007,6 +1594,8 @@
       "hasOIS": true,
       "oisStops": 4,
       "filterThread": 77,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Sony Alpha a7 III",
         "Sony Alpha a7R IV",
@@ -1015,19 +1604,34 @@
         "Sony Alpha a7 IV",
         "Sony Alpha a1",
         "Sony Alpha a9 II",
-        "Sony Alpha a7R V"
-      ]
+        "Sony Alpha a7R V",
+        "Sony Alpha a1 II",
+        "Sony Alpha a7 V"
+      ],
+      "sourceUrls": [
+        "https://electronics.sony.com/imaging/lenses/c/all-e-mount",
+        "https://support.d-imaging.sony.co.jp/www/cscs/lens_body/",
+        "https://www.sony.com/electronics/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Sony FE PZ 28-135mm f/4 G OSS",
+      "brand": "sony",
+      "status": "official-category-reference",
       "mountType": "FE",
       "minFocalLength": 28,
       "maxFocalLength": 135,
-      "maxAperture": 4.0,
-      "maxApertureAtTele": 4.0,
+      "maxAperture": 4,
+      "maxApertureAtTele": 4,
       "hasOIS": true,
       "oisStops": 4,
       "filterThread": 77,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Sony Alpha a7 III",
         "Sony Alpha a7R IV",
@@ -1036,19 +1640,34 @@
         "Sony Alpha a7 IV",
         "Sony Alpha a1",
         "Sony Alpha a9 II",
-        "Sony Alpha a7R V"
-      ]
+        "Sony Alpha a7R V",
+        "Sony Alpha a1 II",
+        "Sony Alpha a7 V"
+      ],
+      "sourceUrls": [
+        "https://electronics.sony.com/imaging/lenses/c/all-e-mount",
+        "https://support.d-imaging.sony.co.jp/www/cscs/lens_body/",
+        "https://www.sony.com/electronics/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Sony E 10-18mm f/4 OSS",
+      "brand": "sony",
+      "status": "official-category-reference",
       "mountType": "E",
       "minFocalLength": 10,
       "maxFocalLength": 18,
-      "maxAperture": 4.0,
-      "maxApertureAtTele": 4.0,
+      "maxAperture": 4,
+      "maxApertureAtTele": 4,
       "hasOIS": true,
       "oisStops": 4,
       "filterThread": 82,
+      "fullFrameCoverage": false,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Sony Alpha a7 III",
         "Sony Alpha a7R IV",
@@ -1060,19 +1679,34 @@
         "Sony Alpha a7R V",
         "Sony Alpha a6700",
         "Sony Alpha a6600",
-        "Sony Alpha a6400"
-      ]
+        "Sony Alpha a6400",
+        "Sony Alpha a6100",
+        "Sony ZV-E10 II"
+      ],
+      "sourceUrls": [
+        "https://electronics.sony.com/imaging/lenses/c/all-e-mount",
+        "https://support.d-imaging.sony.co.jp/www/cscs/lens_body/",
+        "https://www.sony.com/electronics/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Sony E 16-70mm f/4 ZA OSS",
+      "brand": "sony",
+      "status": "official-category-reference",
       "mountType": "E",
       "minFocalLength": 16,
       "maxFocalLength": 70,
-      "maxAperture": 4.0,
-      "maxApertureAtTele": 4.0,
+      "maxAperture": 4,
+      "maxApertureAtTele": 4,
       "hasOIS": true,
       "oisStops": 4,
       "filterThread": 77,
+      "fullFrameCoverage": false,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Sony Alpha a7 III",
         "Sony Alpha a7R IV",
@@ -1084,11 +1718,24 @@
         "Sony Alpha a7R V",
         "Sony Alpha a6700",
         "Sony Alpha a6600",
-        "Sony Alpha a6400"
-      ]
+        "Sony Alpha a6400",
+        "Sony Alpha a6100",
+        "Sony ZV-E10 II"
+      ],
+      "sourceUrls": [
+        "https://electronics.sony.com/imaging/lenses/c/all-e-mount",
+        "https://support.d-imaging.sony.co.jp/www/cscs/lens_body/",
+        "https://www.sony.com/electronics/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Sony E 30mm f/3.5 Macro",
+      "brand": "sony",
+      "status": "official-category-reference",
       "mountType": "E",
       "minFocalLength": 30,
       "maxFocalLength": 30,
@@ -1097,6 +1744,8 @@
       "hasOIS": false,
       "oisStops": 0,
       "filterThread": 77,
+      "fullFrameCoverage": false,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Sony Alpha a7 III",
         "Sony Alpha a7R IV",
@@ -1108,11 +1757,24 @@
         "Sony Alpha a7R V",
         "Sony Alpha a6700",
         "Sony Alpha a6600",
-        "Sony Alpha a6400"
-      ]
+        "Sony Alpha a6400",
+        "Sony Alpha a6100",
+        "Sony ZV-E10 II"
+      ],
+      "sourceUrls": [
+        "https://electronics.sony.com/imaging/lenses/c/all-e-mount",
+        "https://support.d-imaging.sony.co.jp/www/cscs/lens_body/",
+        "https://www.sony.com/electronics/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Sony E 50mm f/1.8 OSS",
+      "brand": "sony",
+      "status": "official-category-reference",
       "mountType": "E",
       "minFocalLength": 50,
       "maxFocalLength": 50,
@@ -1121,6 +1783,8 @@
       "hasOIS": true,
       "oisStops": 4,
       "filterThread": 67,
+      "fullFrameCoverage": false,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Sony Alpha a7 III",
         "Sony Alpha a7R IV",
@@ -1132,11 +1796,24 @@
         "Sony Alpha a7R V",
         "Sony Alpha a6700",
         "Sony Alpha a6600",
-        "Sony Alpha a6400"
-      ]
+        "Sony Alpha a6400",
+        "Sony Alpha a6100",
+        "Sony ZV-E10 II"
+      ],
+      "sourceUrls": [
+        "https://electronics.sony.com/imaging/lenses/c/all-e-mount",
+        "https://support.d-imaging.sony.co.jp/www/cscs/lens_body/",
+        "https://www.sony.com/electronics/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Sony FE 24-70mm f/2.8 GM",
+      "brand": "sony",
+      "status": "official-category-reference",
       "mountType": "FE",
       "minFocalLength": 24,
       "maxFocalLength": 70,
@@ -1145,6 +1822,8 @@
       "hasOIS": false,
       "oisStops": 0,
       "filterThread": 82,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Sony Alpha a7 III",
         "Sony Alpha a7R IV",
@@ -1153,19 +1832,34 @@
         "Sony Alpha a7 IV",
         "Sony Alpha a1",
         "Sony Alpha a9 II",
-        "Sony Alpha a7R V"
-      ]
+        "Sony Alpha a7R V",
+        "Sony Alpha a1 II",
+        "Sony Alpha a7 V"
+      ],
+      "sourceUrls": [
+        "https://electronics.sony.com/imaging/lenses/c/all-e-mount",
+        "https://support.d-imaging.sony.co.jp/www/cscs/lens_body/",
+        "https://www.sony.com/electronics/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Sony FE 500mm f/4 GM OSS",
+      "brand": "sony",
+      "status": "official-category-reference",
       "mountType": "FE",
       "minFocalLength": 500,
       "maxFocalLength": 500,
-      "maxAperture": 4.0,
-      "maxApertureAtTele": 4.0,
+      "maxAperture": 4,
+      "maxApertureAtTele": 4,
       "hasOIS": true,
       "oisStops": 4,
       "filterThread": 77,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Sony Alpha a7 III",
         "Sony Alpha a7R IV",
@@ -1174,19 +1868,34 @@
         "Sony Alpha a7 IV",
         "Sony Alpha a1",
         "Sony Alpha a9 II",
-        "Sony Alpha a7R V"
-      ]
+        "Sony Alpha a7R V",
+        "Sony Alpha a1 II",
+        "Sony Alpha a7 V"
+      ],
+      "sourceUrls": [
+        "https://electronics.sony.com/imaging/lenses/c/all-e-mount",
+        "https://support.d-imaging.sony.co.jp/www/cscs/lens_body/",
+        "https://www.sony.com/electronics/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Sony FE 70-400mm f/4-5.6 G SSM II",
+      "brand": "sony",
+      "status": "official-category-reference",
       "mountType": "FE",
       "minFocalLength": 70,
       "maxFocalLength": 400,
-      "maxAperture": 4.0,
+      "maxAperture": 4,
       "maxApertureAtTele": 5.6,
       "hasOIS": false,
       "oisStops": 0,
       "filterThread": 77,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Sony Alpha a7 III",
         "Sony Alpha a7R IV",
@@ -1195,19 +1904,34 @@
         "Sony Alpha a7 IV",
         "Sony Alpha a1",
         "Sony Alpha a9 II",
-        "Sony Alpha a7R V"
-      ]
+        "Sony Alpha a7R V",
+        "Sony Alpha a1 II",
+        "Sony Alpha a7 V"
+      ],
+      "sourceUrls": [
+        "https://electronics.sony.com/imaging/lenses/c/all-e-mount",
+        "https://support.d-imaging.sony.co.jp/www/cscs/lens_body/",
+        "https://www.sony.com/electronics/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Sony E PZ 18-105mm f/4 G OSS",
+      "brand": "sony",
+      "status": "official-category-reference",
       "mountType": "E",
       "minFocalLength": 18,
       "maxFocalLength": 105,
-      "maxAperture": 4.0,
-      "maxApertureAtTele": 4.0,
+      "maxAperture": 4,
+      "maxApertureAtTele": 4,
       "hasOIS": true,
       "oisStops": 4,
       "filterThread": 77,
+      "fullFrameCoverage": false,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Sony Alpha a7 III",
         "Sony Alpha a7R IV",
@@ -1219,19 +1943,34 @@
         "Sony Alpha a7R V",
         "Sony Alpha a6700",
         "Sony Alpha a6600",
-        "Sony Alpha a6400"
-      ]
+        "Sony Alpha a6400",
+        "Sony Alpha a6100",
+        "Sony ZV-E10 II"
+      ],
+      "sourceUrls": [
+        "https://electronics.sony.com/imaging/lenses/c/all-e-mount",
+        "https://support.d-imaging.sony.co.jp/www/cscs/lens_body/",
+        "https://www.sony.com/electronics/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Sony FE 20-70mm f/4 G",
+      "brand": "sony",
+      "status": "official-category-reference",
       "mountType": "FE",
       "minFocalLength": 20,
       "maxFocalLength": 70,
-      "maxAperture": 4.0,
-      "maxApertureAtTele": 4.0,
+      "maxAperture": 4,
+      "maxApertureAtTele": 4,
       "hasOIS": false,
       "oisStops": 0,
       "filterThread": 77,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Sony Alpha a7 III",
         "Sony Alpha a7R IV",
@@ -1240,8 +1979,19 @@
         "Sony Alpha a7 IV",
         "Sony Alpha a1",
         "Sony Alpha a9 II",
-        "Sony Alpha a7R V"
-      ]
+        "Sony Alpha a7R V",
+        "Sony Alpha a1 II",
+        "Sony Alpha a7 V"
+      ],
+      "sourceUrls": [
+        "https://electronics.sony.com/imaging/lenses/c/all-e-mount",
+        "https://support.d-imaging.sony.co.jp/www/cscs/lens_body/",
+        "https://www.sony.com/electronics/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     }
   ]
 }

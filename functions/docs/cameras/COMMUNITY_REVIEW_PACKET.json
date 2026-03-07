@@ -1,0 +1,407 @@
+[
+  {
+    "reviewerTrack": "portrait / wedding",
+    "brand": "canon",
+    "cameraModel": "Canon EOS R6 Mark III",
+    "lensName": "Canon RF 24-70mm f/2.8L IS USM",
+    "genre": "portrait",
+    "condition": "SUNNY_OUTDOOR",
+    "mode": "professional",
+    "presetSummary": {
+      "mode": "Av",
+      "ISO": 100,
+      "aperture": "f/2.8",
+      "shutterSpeed": "1/400",
+      "metering": "evaluative",
+      "autofocusMode": "AF-S / One Shot",
+      "focusArea": "Wide or zone area with tracking.",
+      "whiteBalance": "Daylight for sun, Cloudy/Shade for overcast; use custom WB when color accuracy matters more than speed.",
+      "flashGuidance": "Stay at or below 1/250 for conventional flash sync unless you intentionally move into HSS.",
+      "lensFit": "The selected lens range fits this session well.",
+      "qualityControls": {
+        "colorAccuracy": "If color consistency matters across a set, avoid letting Auto WB drift from frame to frame.",
+        "repeatability": "When building a series, change one variable at a time so you can trace what improved or degraded the result.",
+        "hiddenChoiceAwareness": "Exposure, focal length, viewpoint, processing, and tone mapping all change the meaning of the image. Treat them as deliberate decisions rather than invisible defaults."
+      },
+      "composition": {
+        "placement": "Default to slightly off-center placement unless the face or object is intentionally formal, frontal, or symmetric.",
+        "ruleBreaking": "Treat composition rules as priors, not laws. Break them when the frame gains clarity, balance, or emphasis.",
+        "backgroundStrategy": "Reduce background clutter and hue count. Cleaner separation and selective blur usually improve perceived quality when the subject is the story.",
+        "depthOfFieldUse": "Use depth of field as a subject-isolation tool, not a default aesthetic. Blur helps when it removes distractions without sacrificing critical detail."
+      },
+      "checklist": [
+        "Set the camera to Av with RAW capture and highlight warnings enabled.",
+        "Use evaluative metering and confirm exposure from the histogram before the session starts.",
+        "Confirm single autofocus behavior and your focus area before the key moment begins.",
+        "Check card space, battery status, and front-element cleanliness before shooting.",
+        "Use full-resolution capture for the master files and create smaller derivatives only after review.",
+        "Keep flash work at or below 1/250 unless you intentionally switch to HSS.",
+        "Use the strengths of Canon RF 24-70mm f/2.8L IS USM instead of forcing it into a role it does not naturally cover."
+      ],
+      "caveats": [
+        "Shutter 1/400 exceeds flash sync 1/250. Use M mode or HSS flash."
+      ],
+      "scienceNotes": [
+        "A static handheld starting floor with this lens is about 1/80 before stabilization or subject motion changes the equation.",
+        "The best available stabilization gives roughly 8.5 stops of buffer, so static subjects may hold around 4s if your technique is clean.",
+        "On full-frame, f/16 and smaller apertures are a depth-of-field tool, not a default choice, because diffraction builds quickly there too.",
+        "Photo-quality studies consistently reward clearer subject isolation, simpler backgrounds, and lower color clutter when the image depends on one primary subject."
+      ]
+    }
+  },
+  {
+    "reviewerTrack": "sports / action",
+    "brand": "sony",
+    "cameraModel": "Sony Alpha a1 II",
+    "lensName": "Sony FE 70-200mm f/2.8 GM OSS II",
+    "genre": "sports",
+    "condition": "NIGHT_STADIUM",
+    "mode": "professional",
+    "presetSummary": {
+      "mode": "M",
+      "ISO": 6400,
+      "aperture": "f/2.8",
+      "shutterSpeed": "1/1000",
+      "metering": "evaluative",
+      "autofocusMode": "AF-C / Servo",
+      "focusArea": "Wide or zone area with tracking.",
+      "whiteBalance": "Tungsten/Auto or roughly 3000-4200K depending on how warm you want the scene.",
+      "flashGuidance": "Stay at or below 1/400 for conventional flash sync unless you intentionally move into HSS.",
+      "lensFit": "The selected lens range fits this session well.",
+      "qualityControls": {
+        "colorAccuracy": "Mixed lighting makes perfect color control unrealistic. Prioritize skin or subject color over background lighting gimmicks.",
+        "repeatability": "When building a series, change one variable at a time so you can trace what improved or degraded the result.",
+        "hiddenChoiceAwareness": "Exposure, focal length, viewpoint, processing, and tone mapping all change the meaning of the image. Treat them as deliberate decisions rather than invisible defaults."
+      },
+      "composition": {
+        "placement": "Rule-of-thirds placement is a good starting point, but do not force it if the scene becomes weaker.",
+        "ruleBreaking": "Treat composition rules as priors, not laws. Break them when the frame gains clarity, balance, or emphasis.",
+        "backgroundStrategy": "Keep the background intentional. Every bright edge or extra color competes with the main subject.",
+        "depthOfFieldUse": "Choose depth of field based on what must stay legible in the frame, not because a wide aperture is automatically better."
+      },
+      "checklist": [
+        "Set the camera to M with RAW capture and highlight warnings enabled.",
+        "Use evaluative metering and confirm exposure from the histogram before the session starts.",
+        "Confirm continuous autofocus behavior and your focus area before the key moment begins.",
+        "Check card space, battery status, and front-element cleanliness before shooting.",
+        "Pre-focus, keep both eyes open, and start tracking before the peak action enters the frame.",
+        "Use full-resolution capture for the master files and create smaller derivatives only after review.",
+        "Keep flash work at or below 1/400 unless you intentionally switch to HSS.",
+        "Use the strengths of Sony FE 70-200mm f/2.8 GM OSS II instead of forcing it into a role it does not naturally cover."
+      ],
+      "caveats": [],
+      "scienceNotes": [
+        "A static handheld starting floor with this lens is about 1/200 before stabilization or subject motion changes the equation.",
+        "The best available stabilization gives roughly 8.5 stops of buffer, so static subjects may hold around 2s if your technique is clean.",
+        "On full-frame, f/16 and smaller apertures are a depth-of-field tool, not a default choice, because diffraction builds quickly there too."
+      ]
+    }
+  },
+  {
+    "reviewerTrack": "wildlife / birding",
+    "brand": "sony",
+    "cameraModel": "Sony Alpha a1 II",
+    "lensName": "Sony FE 200-600mm f/5.6-6.3 G OSS",
+    "genre": "wildlife",
+    "condition": "BIRDS_IN_FLIGHT",
+    "mode": "professional",
+    "presetSummary": {
+      "mode": "Tv",
+      "ISO": 400,
+      "aperture": "f/6.3",
+      "shutterSpeed": "1/2000",
+      "metering": "evaluative",
+      "autofocusMode": "AF-C / Servo",
+      "focusArea": "Wide or zone area with tracking.",
+      "whiteBalance": "Daylight for sun, Cloudy/Shade for overcast; use custom WB when color accuracy matters more than speed.",
+      "flashGuidance": "Stay at or below 1/400 for conventional flash sync unless you intentionally move into HSS.",
+      "lensFit": "The selected lens range fits this session well.",
+      "qualityControls": {
+        "colorAccuracy": "If color consistency matters across a set, avoid letting Auto WB drift from frame to frame.",
+        "repeatability": "When building a series, change one variable at a time so you can trace what improved or degraded the result.",
+        "hiddenChoiceAwareness": "Exposure, focal length, viewpoint, processing, and tone mapping all change the meaning of the image. Treat them as deliberate decisions rather than invisible defaults."
+      },
+      "composition": {
+        "placement": "Rule-of-thirds placement is a good starting point, but do not force it if the scene becomes weaker.",
+        "ruleBreaking": "Treat composition rules as priors, not laws. Break them when the frame gains clarity, balance, or emphasis.",
+        "backgroundStrategy": "Keep the background intentional. Every bright edge or extra color competes with the main subject.",
+        "depthOfFieldUse": "Choose depth of field based on what must stay legible in the frame, not because a wide aperture is automatically better."
+      },
+      "checklist": [
+        "Set the camera to Tv with RAW capture and highlight warnings enabled.",
+        "Use evaluative metering and confirm exposure from the histogram before the session starts.",
+        "Confirm continuous autofocus behavior and your focus area before the key moment begins.",
+        "Check card space, battery status, and front-element cleanliness before shooting.",
+        "Test electronic shutter for banding or skew before trusting it for the whole session.",
+        "Pre-focus, keep both eyes open, and start tracking before the peak action enters the frame.",
+        "Use full-resolution capture for the master files and create smaller derivatives only after review.",
+        "Keep flash work at or below 1/400 unless you intentionally switch to HSS.",
+        "Use the strengths of Sony FE 200-600mm f/5.6-6.3 G OSS instead of forcing it into a role it does not naturally cover."
+      ],
+      "caveats": [
+        "Shutter 1/2000 exceeds flash sync 1/400. Use M mode or HSS flash."
+      ],
+      "scienceNotes": [
+        "A static handheld starting floor with this lens is about 1/640 before stabilization or subject motion changes the equation.",
+        "The best available stabilization gives roughly 8.5 stops of buffer, so static subjects may hold around 1/2 if your technique is clean.",
+        "On full-frame, f/16 and smaller apertures are a depth-of-field tool, not a default choice, because diffraction builds quickly there too."
+      ]
+    }
+  },
+  {
+    "reviewerTrack": "landscape / travel",
+    "brand": "canon",
+    "cameraModel": "Canon EOS R5 Mark II",
+    "lensName": "Canon RF 15-35mm f/2.8L IS USM",
+    "genre": "landscape",
+    "condition": "GOLDEN_HOUR_TRIPOD",
+    "mode": "professional",
+    "presetSummary": {
+      "mode": "M",
+      "ISO": 100,
+      "aperture": "f/11",
+      "shutterSpeed": "1/15",
+      "metering": "evaluative",
+      "autofocusMode": "AF-S / One Shot",
+      "focusArea": "Use the smallest area that stays fast enough for the subject.",
+      "whiteBalance": "Daylight for sun, Cloudy/Shade for overcast; use custom WB when color accuracy matters more than speed.",
+      "flashGuidance": "Stay at or below 1/250 for conventional flash sync unless you intentionally move into HSS.",
+      "lensFit": "The selected lens range fits this session well.",
+      "qualityControls": {
+        "colorAccuracy": "If color consistency matters across a set, avoid letting Auto WB drift from frame to frame.",
+        "repeatability": "When building a series, change one variable at a time so you can trace what improved or degraded the result.",
+        "hiddenChoiceAwareness": "Exposure, focal length, viewpoint, processing, and tone mapping all change the meaning of the image. Treat them as deliberate decisions rather than invisible defaults."
+      },
+      "composition": {
+        "placement": "Start with thirds or an offset horizon, but let strong leading lines or a vanishing point dictate the final placement if they read more clearly.",
+        "ruleBreaking": "Treat composition rules as priors, not laws. Break them when the frame gains clarity, balance, or emphasis.",
+        "backgroundStrategy": "Use layering, scale, and directional lines before relying on shallow depth of field to create depth.",
+        "depthOfFieldUse": "Bias toward enough depth of field to preserve informative detail. Add blur only when it serves the story more than the information."
+      },
+      "checklist": [
+        "Set the camera to M with RAW capture and highlight warnings enabled.",
+        "Use evaluative metering and confirm exposure from the histogram before the session starts.",
+        "Confirm single autofocus behavior and your focus area before the key moment begins.",
+        "Check card space, battery status, and front-element cleanliness before shooting.",
+        "Use a timer or remote release and turn stabilization off only if tripod-induced drift appears.",
+        "Use full-resolution capture for the master files and create smaller derivatives only after review.",
+        "Keep flash work at or below 1/250 unless you intentionally switch to HSS.",
+        "Use the strengths of Canon RF 15-35mm f/2.8L IS USM instead of forcing it into a role it does not naturally cover."
+      ],
+      "caveats": [],
+      "scienceNotes": [
+        "A static handheld starting floor with this lens is about 1/40 before stabilization or subject motion changes the equation.",
+        "The best available stabilization gives roughly 8 stops of buffer, so static subjects may hold around 4s if your technique is clean.",
+        "On full-frame, f/16 and smaller apertures are a depth-of-field tool, not a default choice, because diffraction builds quickly there too."
+      ]
+    }
+  },
+  {
+    "reviewerTrack": "commercial product / food",
+    "brand": "sony",
+    "cameraModel": "Sony Alpha a7 V",
+    "lensName": "Sony FE 90mm f/2.8 Macro G OSS",
+    "genre": "product",
+    "condition": "PRODUCT_WHITE_BACKGROUND",
+    "mode": "professional",
+    "presetSummary": {
+      "mode": "M",
+      "ISO": 100,
+      "aperture": "f/16",
+      "shutterSpeed": "1/160",
+      "metering": "evaluative",
+      "autofocusMode": "AF-S / One Shot",
+      "focusArea": "Single point or small flexible spot for precise placement.",
+      "whiteBalance": "Daylight for sun, Cloudy/Shade for overcast; use custom WB when color accuracy matters more than speed.",
+      "flashGuidance": "Stay at or below 1/250 for conventional flash sync unless you intentionally move into HSS.",
+      "lensFit": "The selected lens range fits this session well.",
+      "qualityControls": {
+        "colorAccuracy": "For color-critical work, lock white balance and record a neutral gray or color target whenever the lighting setup changes.",
+        "repeatability": "For repeatable deliverable sets, keep focal length, camera height, camera-to-subject distance, background, aperture, exposure, and white balance fixed across the sequence.",
+        "hiddenChoiceAwareness": "Exposure, focal length, viewpoint, processing, and tone mapping all change the meaning of the image. Treat them as deliberate decisions rather than invisible defaults."
+      },
+      "composition": {
+        "placement": "Default to slightly off-center placement unless the face or object is intentionally formal, frontal, or symmetric.",
+        "ruleBreaking": "Treat composition rules as priors, not laws. Break them when the frame gains clarity, balance, or emphasis.",
+        "backgroundStrategy": "Reduce background clutter and hue count. Cleaner separation and selective blur usually improve perceived quality when the subject is the story.",
+        "depthOfFieldUse": "Use depth of field as a subject-isolation tool, not a default aesthetic. Blur helps when it removes distractions without sacrificing critical detail."
+      },
+      "checklist": [
+        "Set the camera to M with RAW capture and highlight warnings enabled.",
+        "Use evaluative metering and confirm exposure from the histogram before the session starts.",
+        "Confirm single autofocus behavior and your focus area before the key moment begins.",
+        "Check card space, battery status, and front-element cleanliness before shooting.",
+        "Use a timer or remote release and turn stabilization off only if tripod-induced drift appears.",
+        "Photograph a gray card or color target when the lighting setup changes and lock white balance for the actual series.",
+        "Lock camera position, focal length, and background before shooting the sequence so the set stays comparable frame to frame.",
+        "Use full-resolution capture for the master files and create smaller derivatives only after review.",
+        "Keep flash work at or below 1/250 unless you intentionally switch to HSS.",
+        "Use the strengths of Sony FE 90mm f/2.8 Macro G OSS instead of forcing it into a role it does not naturally cover."
+      ],
+      "caveats": [
+        "Auto white balance, auto exposure drift, and casual recomposition can quietly destroy cross-frame consistency in a deliverable series."
+      ],
+      "scienceNotes": [
+        "A static handheld starting floor with this lens is about 1/100 before stabilization or subject motion changes the equation.",
+        "The best available stabilization gives roughly 7.5 stops of buffer, so static subjects may hold around 2s if your technique is clean.",
+        "On full-frame, f/16 and smaller apertures are a depth-of-field tool, not a default choice, because diffraction builds quickly there too.",
+        "Photo-quality studies consistently reward clearer subject isolation, simpler backgrounds, and lower color clutter when the image depends on one primary subject."
+      ]
+    }
+  },
+  {
+    "reviewerTrack": "real estate / architecture",
+    "brand": "canon",
+    "cameraModel": "Canon EOS R5 Mark II",
+    "lensName": "Canon RF 15-35mm f/2.8L IS USM",
+    "genre": "realestate",
+    "condition": "REALESTATE_HDR_BASE_FRAME",
+    "mode": "professional",
+    "presetSummary": {
+      "mode": "M",
+      "ISO": 100,
+      "aperture": "f/8",
+      "shutterSpeed": "1/4",
+      "metering": "evaluative",
+      "autofocusMode": "AF-S / One Shot",
+      "focusArea": "Use the smallest area that stays fast enough for the subject.",
+      "whiteBalance": "Daylight for sun, Cloudy/Shade for overcast; use custom WB when color accuracy matters more than speed.",
+      "flashGuidance": "Stay at or below 1/250 for conventional flash sync unless you intentionally move into HSS.",
+      "lensFit": "The selected lens range fits this session well.",
+      "qualityControls": {
+        "colorAccuracy": "For color-critical work, lock white balance and record a neutral gray or color target whenever the lighting setup changes.",
+        "repeatability": "For repeatable deliverable sets, keep focal length, camera height, camera-to-subject distance, background, aperture, exposure, and white balance fixed across the sequence.",
+        "hiddenChoiceAwareness": "Exposure, focal length, viewpoint, processing, and tone mapping all change the meaning of the image. Treat them as deliberate decisions rather than invisible defaults."
+      },
+      "composition": {
+        "placement": "Start with thirds or an offset horizon, but let strong leading lines or a vanishing point dictate the final placement if they read more clearly.",
+        "ruleBreaking": "Treat composition rules as priors, not laws. Break them when the frame gains clarity, balance, or emphasis.",
+        "backgroundStrategy": "Use layering, scale, and directional lines before relying on shallow depth of field to create depth.",
+        "depthOfFieldUse": "Bias toward enough depth of field to preserve informative detail. Add blur only when it serves the story more than the information."
+      },
+      "checklist": [
+        "Set the camera to M with RAW capture and highlight warnings enabled.",
+        "Use evaluative metering and confirm exposure from the histogram before the session starts.",
+        "Confirm single autofocus behavior and your focus area before the key moment begins.",
+        "Check card space, battery status, and front-element cleanliness before shooting.",
+        "Use a timer or remote release and turn stabilization off only if tripod-induced drift appears.",
+        "Bracket the first high-contrast frame set before the light changes.",
+        "Photograph a gray card or color target when the lighting setup changes and lock white balance for the actual series.",
+        "Lock camera position, focal length, and background before shooting the sequence so the set stays comparable frame to frame.",
+        "Use full-resolution capture for the master files and create smaller derivatives only after review.",
+        "Keep flash work at or below 1/250 unless you intentionally switch to HSS.",
+        "Use the strengths of Canon RF 15-35mm f/2.8L IS USM instead of forcing it into a role it does not naturally cover."
+      ],
+      "caveats": [
+        "Auto white balance, auto exposure drift, and casual recomposition can quietly destroy cross-frame consistency in a deliverable series."
+      ],
+      "scienceNotes": [
+        "A static handheld starting floor with this lens is about 1/40 before stabilization or subject motion changes the equation.",
+        "The best available stabilization gives roughly 8 stops of buffer, so static subjects may hold around 4s if your technique is clean.",
+        "On full-frame, f/16 and smaller apertures are a depth-of-field tool, not a default choice, because diffraction builds quickly there too."
+      ]
+    }
+  },
+  {
+    "reviewerTrack": "concert / event",
+    "brand": "sony",
+    "cameraModel": "Sony Alpha a7 V",
+    "lensName": "Sony FE 24-70mm f/2.8 GM II",
+    "genre": "concert",
+    "condition": "CONCERT_LARGE_ARENA",
+    "mode": "professional",
+    "presetSummary": {
+      "mode": "M",
+      "ISO": 12800,
+      "aperture": "f/2.8",
+      "shutterSpeed": "1/500",
+      "metering": "spot",
+      "autofocusMode": "AF-C / Servo",
+      "focusArea": "Wide or zone area with tracking.",
+      "whiteBalance": "Auto WB is fine for mixed event lighting; lock a manual Kelvin value if the room light is stable.",
+      "flashGuidance": "Stay at or below 1/250 for conventional flash sync unless you intentionally move into HSS.",
+      "lensFit": "The selected lens range fits this session well.",
+      "qualityControls": {
+        "colorAccuracy": "Mixed lighting makes perfect color control unrealistic. Prioritize skin or subject color over background lighting gimmicks.",
+        "repeatability": "When building a series, change one variable at a time so you can trace what improved or degraded the result.",
+        "hiddenChoiceAwareness": "Exposure, focal length, viewpoint, processing, and tone mapping all change the meaning of the image. Treat them as deliberate decisions rather than invisible defaults."
+      },
+      "composition": {
+        "placement": "Rule-of-thirds placement is a good starting point, but do not force it if the scene becomes weaker.",
+        "ruleBreaking": "Treat composition rules as priors, not laws. Break them when the frame gains clarity, balance, or emphasis.",
+        "backgroundStrategy": "Keep the background intentional. Every bright edge or extra color competes with the main subject.",
+        "depthOfFieldUse": "Choose depth of field based on what must stay legible in the frame, not because a wide aperture is automatically better."
+      },
+      "checklist": [
+        "Set the camera to M with RAW capture and highlight warnings enabled.",
+        "Use spot metering and confirm exposure from the histogram before the session starts.",
+        "Confirm continuous autofocus behavior and your focus area before the key moment begins.",
+        "Check card space, battery status, and front-element cleanliness before shooting.",
+        "Enable anti-flicker or variable shutter if the venue is LED-heavy.",
+        "Pre-focus, keep both eyes open, and start tracking before the peak action enters the frame.",
+        "Use full-resolution capture for the master files and create smaller derivatives only after review.",
+        "Keep flash work at or below 1/250 unless you intentionally switch to HSS.",
+        "Use the strengths of Sony FE 24-70mm f/2.8 GM II instead of forcing it into a role it does not naturally cover."
+      ],
+      "caveats": [
+        "Indoor LED and discharge lighting can break otherwise good-looking presets; always test for banding at the real venue."
+      ],
+      "scienceNotes": [
+        "A static handheld starting floor with this lens is about 1/80 before stabilization or subject motion changes the equation.",
+        "The best available stabilization gives roughly 7.5 stops of buffer, so static subjects may hold around 2s if your technique is clean.",
+        "Stabilization does not freeze subject motion; once people, animals, or vehicles move, shutter speed matters more than IBIS or OIS.",
+        "On full-frame, f/16 and smaller apertures are a depth-of-field tool, not a default choice, because diffraction builds quickly there too."
+      ]
+    }
+  },
+  {
+    "reviewerTrack": "astro / night",
+    "brand": "sony",
+    "cameraModel": "Sony Alpha a7 V",
+    "lensName": "Sony FE 20mm f/1.8 G",
+    "genre": "astro",
+    "condition": "MILKY_WAY_WIDE",
+    "mode": "professional",
+    "presetSummary": {
+      "mode": "M",
+      "ISO": 3200,
+      "aperture": "f/2.8",
+      "shutterSpeed": "20",
+      "metering": "evaluative",
+      "autofocusMode": "AF-C / Servo",
+      "focusArea": "Single point or small flexible spot for precise placement.",
+      "whiteBalance": "Manual 3800-4300K to keep the night sky neutral and repeatable.",
+      "flashGuidance": "Stay at or below 1/250 for conventional flash sync unless you intentionally move into HSS.",
+      "lensFit": "The selected lens range fits this session well.",
+      "qualityControls": {
+        "colorAccuracy": "Mixed lighting makes perfect color control unrealistic. Prioritize skin or subject color over background lighting gimmicks.",
+        "repeatability": "When building a series, change one variable at a time so you can trace what improved or degraded the result.",
+        "hiddenChoiceAwareness": "Exposure, focal length, viewpoint, processing, and tone mapping all change the meaning of the image. Treat them as deliberate decisions rather than invisible defaults."
+      },
+      "composition": {
+        "placement": "Start with thirds or an offset horizon, but let strong leading lines or a vanishing point dictate the final placement if they read more clearly.",
+        "ruleBreaking": "Treat composition rules as priors, not laws. Break them when the frame gains clarity, balance, or emphasis.",
+        "backgroundStrategy": "Use layering, scale, and directional lines before relying on shallow depth of field to create depth.",
+        "depthOfFieldUse": "Bias toward enough depth of field to preserve informative detail. Add blur only when it serves the story more than the information."
+      },
+      "checklist": [
+        "Set the camera to M with RAW capture and highlight warnings enabled.",
+        "Use evaluative metering and confirm exposure from the histogram before the session starts.",
+        "Confirm manual autofocus behavior and your focus area before the key moment begins.",
+        "Check card space, battery status, and front-element cleanliness before shooting.",
+        "Use a timer or remote release and turn stabilization off only if tripod-induced drift appears.",
+        "Disable long-exposure NR if cadence matters and shoot a separate dark frame set instead.",
+        "Use full-resolution capture for the master files and create smaller derivatives only after review.",
+        "Keep flash work at or below 1/250 unless you intentionally switch to HSS.",
+        "Use the strengths of Sony FE 20mm f/1.8 G instead of forcing it into a role it does not naturally cover."
+      ],
+      "caveats": [],
+      "scienceNotes": [
+        "A static handheld starting floor with this lens is about 1/20 before stabilization or subject motion changes the equation.",
+        "The best available stabilization gives roughly 7.5 stops of buffer, so static subjects may hold around 4s if your technique is clean.",
+        "For untracked astro, a simple 500-rule start point is about 25s at the wide end before star trailing becomes obvious.",
+        "On full-frame, f/16 and smaller apertures are a depth-of-field tool, not a default choice, because diffraction builds quickly there too."
+      ]
+    }
+  }
+]

@@ -7,6 +7,28 @@ const CANON_CAMERA_MODEL = 'Canon EOS-1D X Mark II';
 const CANON_LENS_NAME = 'Canon EF 16-35mm f/2.8L III USM';
 
 describe('Camera API', () => {
+  test('camera catalog backfills current Canon and Sony bodies', () => {
+    const canon = require('../api/cameras/data_cameras/canon.json');
+    const sony = require('../api/cameras/data_cameras/sony.json');
+
+    expect(canon.cameras.some((camera) => camera.modelName === 'Canon EOS R6 Mark III')).toBe(true);
+    expect(canon.cameras.some((camera) => camera.modelName === 'Canon EOS R50 V')).toBe(true);
+    expect(sony.cameras.some((camera) => camera.modelName === 'Sony Alpha a1 II')).toBe(true);
+    expect(sony.cameras.some((camera) => camera.modelName === 'Sony Alpha a7 V')).toBe(true);
+    expect(sony.cameras.some((camera) => camera.modelName === 'Sony Alpha a6100')).toBe(true);
+    expect(sony.cameras.some((camera) => camera.modelName === 'Sony ZV-E10 II')).toBe(true);
+  });
+
+  test('camera and lens records carry provenance metadata', () => {
+    const canonCameras = require('../api/cameras/data_cameras/canon.json').cameras;
+    const sonyLenses = require('../api/cameras/data_lenses/sony.json').lenses;
+
+    expect(canonCameras.every((camera) => Array.isArray(camera.sourceUrls) && camera.sourceUrls.length > 0)).toBe(true);
+    expect(canonCameras.every((camera) => typeof camera.validationTier === 'string')).toBe(true);
+    expect(sonyLenses.every((lens) => Array.isArray(lens.sourceUrls) && lens.sourceUrls.length > 0)).toBe(true);
+    expect(sonyLenses.every((lens) => typeof lens.verificationScope === 'string')).toBe(true);
+  });
+
   test('GET /cameras/:brand returns Firestore-backed camera data', async () => {
     const cameraData = require('../api/cameras/data_cameras/canon.json');
     const lensData = require('../api/cameras/data_lenses/canon.json');
@@ -42,6 +64,11 @@ describe('Camera API', () => {
     expect(res.body.preset.condition).toBe('SUNNY_OUTDOOR');
     expect(res.body.preset.camera.modelName).toBe(CANON_CAMERA_MODEL);
     expect(res.body.preset.lens.lensName).toBe(CANON_LENS_NAME);
+    expect(res.body.preset.sessionOptimization).toBeDefined();
+    expect(res.body.preset.sessionOptimization.exposure.whiteBalance).toBeDefined();
+    expect(res.body.preset.sessionOptimization.qualityControls).toBeDefined();
+    expect(res.body.preset.sessionOptimization.composition).toBeDefined();
+    expect(Array.isArray(res.body.preset.sessionOptimization.checklist)).toBe(true);
   });
 
   test('POST /presets/smart resolves gear-aware presets', async () => {
@@ -62,5 +89,6 @@ describe('Camera API', () => {
     expect(Array.isArray(res.body.presetsByInterest)).toBe(true);
     expect(res.body.presetsByInterest.length).toBe(2);
     expect(res.body.presetsByInterest[0].presets.length).toBeGreaterThan(0);
+    expect(res.body.presetsByInterest[0].presets[0].sessionOptimization).toBeDefined();
   });
 });

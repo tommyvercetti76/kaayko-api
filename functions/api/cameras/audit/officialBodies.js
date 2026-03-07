@@ -1,0 +1,126 @@
+module.exports = {
+  auditedAt: '2026-03-07',
+  scope: 'Current Canon and Sony interchangeable-lens bodies relevant to the Kaayko camera API audit.',
+  brands: {
+    canon: {
+      notes: [
+        'Canon U.S.A. shop pages currently expose contradictory "In Stock" and "Discontinued" labels, so the baseline uses Canon-owned lineup and launch pages instead of storefront availability badges.',
+        'The Canon baseline is limited to EOS R bodies and the hybrid EOS R5 C because the existing Kaayko dataset is centered on still and hybrid mirrorless cameras.',
+      ],
+      sources: {
+        eosRSystem: {
+          label: 'Canon EOS R System lineup page',
+          url: 'https://www.usa.canon.com/digital-cameras/eos-r-system',
+          verifiedAt: '2026-03-07',
+        },
+        eosR1AndR5MarkII: {
+          label: 'Canon EOS R1 and EOS R5 Mark II launch',
+          url: 'https://www.usa.canon.com/newsroom/2024/20240717-camera',
+          verifiedAt: '2026-03-07',
+        },
+        eosR50V: {
+          label: 'Canon EOS R50 V launch',
+          url: 'https://www.usa.canon.com/newsroom/2025/20250326-camera',
+          verifiedAt: '2026-03-07',
+        },
+        eosR6MarkIII: {
+          label: 'Canon EOS R6 Mark III product page',
+          url: 'https://www.usa.canon.com/shop/p/eos-r6-mark-iii',
+          verifiedAt: '2026-03-07',
+        },
+      },
+      bodies: [
+        { displayName: 'EOS R1', lineupStatus: 'current-lineup', sourceIds: ['eosRSystem', 'eosR1AndR5MarkII'] },
+        { displayName: 'EOS R3', lineupStatus: 'current-lineup', sourceIds: ['eosRSystem'] },
+        { displayName: 'EOS R5 Mark II', lineupStatus: 'current-lineup', sourceIds: ['eosRSystem', 'eosR1AndR5MarkII'] },
+        { displayName: 'EOS R5', lineupStatus: 'current-lineup', sourceIds: ['eosRSystem'] },
+        { displayName: 'EOS R6 Mark III', lineupStatus: 'current-product-page', sourceIds: ['eosR6MarkIII'] },
+        { displayName: 'EOS R6 Mark II', lineupStatus: 'current-lineup', sourceIds: ['eosRSystem'] },
+        { displayName: 'EOS R6', lineupStatus: 'current-lineup', sourceIds: ['eosRSystem'] },
+        { displayName: 'EOS R7', lineupStatus: 'current-lineup', sourceIds: ['eosRSystem'] },
+        { displayName: 'EOS R8', lineupStatus: 'current-lineup', sourceIds: ['eosRSystem'] },
+        { displayName: 'EOS RP', lineupStatus: 'current-lineup', sourceIds: ['eosRSystem'] },
+        { displayName: 'EOS R10', lineupStatus: 'current-lineup', sourceIds: ['eosRSystem'] },
+        { displayName: 'EOS R50', lineupStatus: 'current-lineup', sourceIds: ['eosRSystem'] },
+        { displayName: 'EOS R50 V', lineupStatus: 'current-lineup', sourceIds: ['eosRSystem', 'eosR50V'] },
+        { displayName: 'EOS R100', lineupStatus: 'current-lineup', sourceIds: ['eosRSystem'] },
+        { displayName: 'EOS R5 C', lineupStatus: 'current-lineup', sourceIds: ['eosRSystem'] },
+      ],
+    },
+    sony: {
+      notes: [
+        'Sony category pages are much more reliable than Canon for current lineup coverage, but some active bodies only appear on direct product pages or vlog pages instead of the main stills category pages.',
+        'The Sony baseline includes still, hybrid, and interchangeable-lens vlog bodies because the current Kaayko dataset already mixes Alpha and ZV cameras.',
+      ],
+      sources: {
+        allBodies: {
+          label: 'Sony all interchangeable-lens cameras',
+          url: 'https://electronics.sony.com/imaging/interchangeable-lens-cameras/c/all-interchangeable-lens-cameras',
+          verifiedAt: '2026-03-07',
+        },
+        fullFrameCategory: {
+          label: 'Sony full-frame category',
+          url: 'https://electronics.sony.com/imaging/interchangeable-lens-cameras/c/full-frame',
+          verifiedAt: '2026-03-07',
+        },
+        apscCategory: {
+          label: 'Sony APS-C category',
+          url: 'https://electronics.sony.com/imaging/interchangeable-lens-cameras/c/aps-c',
+          verifiedAt: '2026-03-07',
+        },
+        vlogCategory: {
+          label: 'Sony vlog camera category',
+          url: 'https://electronics.sony.com/imaging/compact-cameras/c/vlog-cameras',
+          verifiedAt: '2026-03-07',
+        },
+        a9II: {
+          label: 'Sony Alpha 9 II product page',
+          url: 'https://electronics.sony.com/imaging/interchangeable-lens-cameras/full-frame/p/ilce9m2-b?sku=ilce9m2-b',
+          verifiedAt: '2026-03-07',
+        },
+        a7SIII: {
+          label: 'Sony Alpha 7S III product page',
+          url: 'https://electronics.sony.com/imaging/interchangeable-lens-cameras/all-interchangeable-lens-cameras/p/ilce7sm3-b',
+          verifiedAt: '2026-03-07',
+        },
+        a7C: {
+          label: 'Sony Alpha 7C product page',
+          url: 'https://electronics.sony.com/imaging/interchangeable-lens-cameras/all-interchangeable-lens-cameras/p/ilce7c-s',
+          verifiedAt: '2026-03-07',
+        },
+        a6600: {
+          label: 'Sony Alpha 6600 product page',
+          url: 'https://electronics.sony.com/imaging/interchangeable-lens-cameras/aps-c/p/ilce6600-b',
+          verifiedAt: '2026-03-07',
+        },
+        zve1: {
+          label: 'Sony ZV-E1 product page',
+          url: 'https://electronics.sony.com/imaging/interchangeable-lens-cameras/all-interchangeable-lens-cameras/p/ilczve1-b',
+          verifiedAt: '2026-03-07',
+        },
+      },
+      bodies: [
+        { displayName: 'Alpha 1 II', lineupStatus: 'current-lineup', sourceIds: ['allBodies', 'fullFrameCategory'] },
+        { displayName: 'Alpha 1', lineupStatus: 'current-lineup', sourceIds: ['allBodies', 'fullFrameCategory'] },
+        { displayName: 'Alpha 9 III', lineupStatus: 'current-lineup', sourceIds: ['allBodies', 'fullFrameCategory'] },
+        { displayName: 'Alpha 9 II', lineupStatus: 'current-product-page', sourceIds: ['a9II'] },
+        { displayName: 'Alpha 7 V', lineupStatus: 'current-lineup', sourceIds: ['allBodies', 'fullFrameCategory'] },
+        { displayName: 'Alpha 7R V', lineupStatus: 'current-lineup', sourceIds: ['allBodies', 'fullFrameCategory'] },
+        { displayName: 'Alpha 7 IV', lineupStatus: 'current-lineup', sourceIds: ['allBodies', 'fullFrameCategory'] },
+        { displayName: 'Alpha 7 III', lineupStatus: 'current-lineup', sourceIds: ['allBodies', 'fullFrameCategory'] },
+        { displayName: 'Alpha 7C II', lineupStatus: 'current-lineup', sourceIds: ['allBodies', 'fullFrameCategory'] },
+        { displayName: 'Alpha 7CR', lineupStatus: 'current-lineup', sourceIds: ['allBodies', 'fullFrameCategory'] },
+        { displayName: 'Alpha 7C', lineupStatus: 'current-product-page', sourceIds: ['a7C'] },
+        { displayName: 'Alpha 7R IV', lineupStatus: 'current-lineup', sourceIds: ['allBodies', 'fullFrameCategory'] },
+        { displayName: 'Alpha 7S III', lineupStatus: 'current-product-page', sourceIds: ['a7SIII'] },
+        { displayName: 'Alpha ZV-E1', lineupStatus: 'current-product-page', sourceIds: ['vlogCategory', 'zve1'] },
+        { displayName: 'Alpha 6700', lineupStatus: 'current-lineup', sourceIds: ['allBodies', 'apscCategory'] },
+        { displayName: 'Alpha 6600', lineupStatus: 'current-product-page', sourceIds: ['a6600'] },
+        { displayName: 'Alpha 6400', lineupStatus: 'current-lineup', sourceIds: ['apscCategory'] },
+        { displayName: 'Alpha 6100', lineupStatus: 'current-lineup', sourceIds: ['apscCategory'] },
+        { displayName: 'Alpha ZV-E10 II', lineupStatus: 'current-lineup', sourceIds: ['allBodies', 'apscCategory', 'vlogCategory'] },
+        { displayName: 'Alpha ZV-E10', lineupStatus: 'current-lineup', sourceIds: ['apscCategory', 'vlogCategory'] },
+      ],
+    },
+  },
+};

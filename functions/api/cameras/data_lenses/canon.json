@@ -2,6 +2,8 @@
   "lenses": [
     {
       "lensName": "Canon EF 16-35mm f/2.8L III USM",
+      "brand": "canon",
+      "status": "official-category-reference",
       "mountType": "EF",
       "minFocalLength": 16,
       "maxFocalLength": 35,
@@ -10,6 +12,8 @@
       "hasOIS": false,
       "oisStops": 0,
       "filterThread": 82,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Canon EOS-1D X Mark II",
         "Canon EOS 5D Mark IV",
@@ -35,11 +39,24 @@
         "Canon EOS R6 Mark II",
         "Canon EOS R8",
         "Canon EOS R1",
-        "Canon EOS R5 Mark II"
-      ]
+        "Canon EOS R5 Mark II",
+        "Canon EOS R6 Mark III",
+        "Canon EOS R50 V"
+      ],
+      "sourceUrls": [
+        "https://www.usa.canon.com/shop/camera-lenses",
+        "https://www.usa.canon.com/shop/camera-lenses/dslr-lenses",
+        "https://www.usa.canon.com/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Canon EF 24-105mm f/4L IS II USM",
+      "brand": "canon",
+      "status": "official-category-reference",
       "mountType": "EF",
       "minFocalLength": 24,
       "maxFocalLength": 105,
@@ -48,6 +65,8 @@
       "hasOIS": true,
       "oisStops": 4,
       "filterThread": 77,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Canon EOS-1D X Mark II",
         "Canon EOS 5D Mark IV",
@@ -73,11 +92,24 @@
         "Canon EOS R6 Mark II",
         "Canon EOS R8",
         "Canon EOS R1",
-        "Canon EOS R5 Mark II"
-      ]
+        "Canon EOS R5 Mark II",
+        "Canon EOS R6 Mark III",
+        "Canon EOS R50 V"
+      ],
+      "sourceUrls": [
+        "https://www.usa.canon.com/shop/camera-lenses",
+        "https://www.usa.canon.com/shop/camera-lenses/dslr-lenses",
+        "https://www.usa.canon.com/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Canon EF 70-300mm f/4-5.6 IS II USM",
+      "brand": "canon",
+      "status": "official-category-reference",
       "mountType": "EF",
       "minFocalLength": 70,
       "maxFocalLength": 300,
@@ -86,6 +118,8 @@
       "hasOIS": true,
       "oisStops": 4,
       "filterThread": 67,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Canon EOS-1D X Mark II",
         "Canon EOS 5D Mark IV",
@@ -111,11 +145,24 @@
         "Canon EOS R6 Mark II",
         "Canon EOS R8",
         "Canon EOS R1",
-        "Canon EOS R5 Mark II"
-      ]
+        "Canon EOS R5 Mark II",
+        "Canon EOS R6 Mark III",
+        "Canon EOS R50 V"
+      ],
+      "sourceUrls": [
+        "https://www.usa.canon.com/shop/camera-lenses",
+        "https://www.usa.canon.com/shop/camera-lenses/dslr-lenses",
+        "https://www.usa.canon.com/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Canon EF 85mm f/1.4L IS USM",
+      "brand": "canon",
+      "status": "official-category-reference",
       "mountType": "EF",
       "minFocalLength": 85,
       "maxFocalLength": 85,
@@ -124,6 +171,8 @@
       "hasOIS": true,
       "oisStops": 4,
       "filterThread": 77,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Canon EOS-1D X Mark II",
         "Canon EOS 5D Mark IV",
@@ -149,11 +198,24 @@
         "Canon EOS R6 Mark II",
         "Canon EOS R8",
         "Canon EOS R1",
-        "Canon EOS R5 Mark II"
-      ]
+        "Canon EOS R5 Mark II",
+        "Canon EOS R6 Mark III",
+        "Canon EOS R50 V"
+      ],
+      "sourceUrls": [
+        "https://www.usa.canon.com/shop/camera-lenses",
+        "https://www.usa.canon.com/shop/camera-lenses/dslr-lenses",
+        "https://www.usa.canon.com/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Canon EF 70-200mm f/4L IS II USM",
+      "brand": "canon",
+      "status": "official-category-reference",
       "mountType": "EF",
       "minFocalLength": 70,
       "maxFocalLength": 200,
@@ -162,6 +224,8 @@
       "hasOIS": true,
       "oisStops": 5,
       "filterThread": 72,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Canon EOS-1D X Mark II",
         "Canon EOS 5D Mark IV",
@@ -187,11 +251,24 @@
         "Canon EOS R6 Mark II",
         "Canon EOS R8",
         "Canon EOS R1",
-        "Canon EOS R5 Mark II"
-      ]
+        "Canon EOS R5 Mark II",
+        "Canon EOS R6 Mark III",
+        "Canon EOS R50 V"
+      ],
+      "sourceUrls": [
+        "https://www.usa.canon.com/shop/camera-lenses",
+        "https://www.usa.canon.com/shop/camera-lenses/dslr-lenses",
+        "https://www.usa.canon.com/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Canon EF 70-200mm f/2.8L IS III USM",
+      "brand": "canon",
+      "status": "official-category-reference",
       "mountType": "EF",
       "minFocalLength": 70,
       "maxFocalLength": 200,
@@ -200,6 +277,8 @@
       "hasOIS": true,
       "oisStops": 5,
       "filterThread": 77,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Canon EOS-1D X Mark II",
         "Canon EOS 5D Mark IV",
@@ -225,11 +304,24 @@
         "Canon EOS R6 Mark II",
         "Canon EOS R8",
         "Canon EOS R1",
-        "Canon EOS R5 Mark II"
-      ]
+        "Canon EOS R5 Mark II",
+        "Canon EOS R6 Mark III",
+        "Canon EOS R50 V"
+      ],
+      "sourceUrls": [
+        "https://www.usa.canon.com/shop/camera-lenses",
+        "https://www.usa.canon.com/shop/camera-lenses/dslr-lenses",
+        "https://www.usa.canon.com/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Canon EF 400mm f/2.8L IS III USM",
+      "brand": "canon",
+      "status": "official-category-reference",
       "mountType": "EF",
       "minFocalLength": 400,
       "maxFocalLength": 400,
@@ -238,6 +330,8 @@
       "hasOIS": true,
       "oisStops": 4,
       "filterThread": 0,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Canon EOS-1D X Mark II",
         "Canon EOS 5D Mark IV",
@@ -263,11 +357,24 @@
         "Canon EOS R6 Mark II",
         "Canon EOS R8",
         "Canon EOS R1",
-        "Canon EOS R5 Mark II"
-      ]
+        "Canon EOS R5 Mark II",
+        "Canon EOS R6 Mark III",
+        "Canon EOS R50 V"
+      ],
+      "sourceUrls": [
+        "https://www.usa.canon.com/shop/camera-lenses",
+        "https://www.usa.canon.com/shop/camera-lenses/dslr-lenses",
+        "https://www.usa.canon.com/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Canon EF 600mm f/4L IS III USM",
+      "brand": "canon",
+      "status": "official-category-reference",
       "mountType": "EF",
       "minFocalLength": 600,
       "maxFocalLength": 600,
@@ -276,6 +383,8 @@
       "hasOIS": true,
       "oisStops": 4,
       "filterThread": 0,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Canon EOS-1D X Mark II",
         "Canon EOS 5D Mark IV",
@@ -301,11 +410,24 @@
         "Canon EOS R6 Mark II",
         "Canon EOS R8",
         "Canon EOS R1",
-        "Canon EOS R5 Mark II"
-      ]
+        "Canon EOS R5 Mark II",
+        "Canon EOS R6 Mark III",
+        "Canon EOS R50 V"
+      ],
+      "sourceUrls": [
+        "https://www.usa.canon.com/shop/camera-lenses",
+        "https://www.usa.canon.com/shop/camera-lenses/dslr-lenses",
+        "https://www.usa.canon.com/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Canon TS-E 50mm f/2.8L Macro",
+      "brand": "canon",
+      "status": "official-category-reference",
       "mountType": "EF",
       "minFocalLength": 50,
       "maxFocalLength": 50,
@@ -314,6 +436,8 @@
       "hasOIS": false,
       "oisStops": 0,
       "filterThread": 77,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Canon EOS-1D X Mark II",
         "Canon EOS 5D Mark IV",
@@ -339,11 +463,24 @@
         "Canon EOS R6 Mark II",
         "Canon EOS R8",
         "Canon EOS R1",
-        "Canon EOS R5 Mark II"
-      ]
+        "Canon EOS R5 Mark II",
+        "Canon EOS R6 Mark III",
+        "Canon EOS R50 V"
+      ],
+      "sourceUrls": [
+        "https://www.usa.canon.com/shop/camera-lenses",
+        "https://www.usa.canon.com/shop/camera-lenses/dslr-lenses",
+        "https://www.usa.canon.com/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Canon TS-E 90mm f/2.8L Macro",
+      "brand": "canon",
+      "status": "official-category-reference",
       "mountType": "EF",
       "minFocalLength": 90,
       "maxFocalLength": 90,
@@ -352,6 +489,8 @@
       "hasOIS": false,
       "oisStops": 0,
       "filterThread": 77,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Canon EOS-1D X Mark II",
         "Canon EOS 5D Mark IV",
@@ -377,11 +516,24 @@
         "Canon EOS R6 Mark II",
         "Canon EOS R8",
         "Canon EOS R1",
-        "Canon EOS R5 Mark II"
-      ]
+        "Canon EOS R5 Mark II",
+        "Canon EOS R6 Mark III",
+        "Canon EOS R50 V"
+      ],
+      "sourceUrls": [
+        "https://www.usa.canon.com/shop/camera-lenses",
+        "https://www.usa.canon.com/shop/camera-lenses/dslr-lenses",
+        "https://www.usa.canon.com/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Canon TS-E 135mm f/4L Macro",
+      "brand": "canon",
+      "status": "official-category-reference",
       "mountType": "EF",
       "minFocalLength": 135,
       "maxFocalLength": 135,
@@ -390,6 +542,8 @@
       "hasOIS": false,
       "oisStops": 0,
       "filterThread": 77,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Canon EOS-1D X Mark II",
         "Canon EOS 5D Mark IV",
@@ -415,11 +569,24 @@
         "Canon EOS R6 Mark II",
         "Canon EOS R8",
         "Canon EOS R1",
-        "Canon EOS R5 Mark II"
-      ]
+        "Canon EOS R5 Mark II",
+        "Canon EOS R6 Mark III",
+        "Canon EOS R50 V"
+      ],
+      "sourceUrls": [
+        "https://www.usa.canon.com/shop/camera-lenses",
+        "https://www.usa.canon.com/shop/camera-lenses/dslr-lenses",
+        "https://www.usa.canon.com/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Canon EF-S 18-135mm f/3.5-5.6 IS USM",
+      "brand": "canon",
+      "status": "official-category-reference",
       "mountType": "EF-S",
       "minFocalLength": 18,
       "maxFocalLength": 135,
@@ -428,6 +595,8 @@
       "hasOIS": true,
       "oisStops": 4,
       "filterThread": 67,
+      "fullFrameCoverage": false,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Canon EOS 80D",
         "Canon EOS 77D",
@@ -441,11 +610,23 @@
         "Canon EOS R7",
         "Canon EOS R10",
         "Canon EOS R50",
-        "Canon EOS R100"
-      ]
+        "Canon EOS R100",
+        "Canon EOS R50 V"
+      ],
+      "sourceUrls": [
+        "https://www.usa.canon.com/shop/camera-lenses",
+        "https://www.usa.canon.com/shop/camera-lenses/dslr-lenses",
+        "https://www.usa.canon.com/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Canon EF-S 18-55mm f/4-5.6 IS STM",
+      "brand": "canon",
+      "status": "official-category-reference",
       "mountType": "EF-S",
       "minFocalLength": 18,
       "maxFocalLength": 55,
@@ -454,6 +635,8 @@
       "hasOIS": true,
       "oisStops": 4,
       "filterThread": 58,
+      "fullFrameCoverage": false,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Canon EOS 80D",
         "Canon EOS 77D",
@@ -467,11 +650,23 @@
         "Canon EOS R7",
         "Canon EOS R10",
         "Canon EOS R50",
-        "Canon EOS R100"
-      ]
+        "Canon EOS R100",
+        "Canon EOS R50 V"
+      ],
+      "sourceUrls": [
+        "https://www.usa.canon.com/shop/camera-lenses",
+        "https://www.usa.canon.com/shop/camera-lenses/dslr-lenses",
+        "https://www.usa.canon.com/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Canon EF-S 35mm f/2.8 Macro IS STM",
+      "brand": "canon",
+      "status": "official-category-reference",
       "mountType": "EF-S",
       "minFocalLength": 35,
       "maxFocalLength": 35,
@@ -480,6 +675,8 @@
       "hasOIS": true,
       "oisStops": 4,
       "filterThread": 49,
+      "fullFrameCoverage": false,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Canon EOS 80D",
         "Canon EOS 77D",
@@ -493,11 +690,23 @@
         "Canon EOS R7",
         "Canon EOS R10",
         "Canon EOS R50",
-        "Canon EOS R100"
-      ]
+        "Canon EOS R100",
+        "Canon EOS R50 V"
+      ],
+      "sourceUrls": [
+        "https://www.usa.canon.com/shop/camera-lenses",
+        "https://www.usa.canon.com/shop/camera-lenses/dslr-lenses",
+        "https://www.usa.canon.com/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Canon RF 16mm f/2.8 STM",
+      "brand": "canon",
+      "status": "official-category-reference",
       "mountType": "RF",
       "minFocalLength": 16,
       "maxFocalLength": 16,
@@ -506,6 +715,8 @@
       "hasOIS": false,
       "oisStops": 0,
       "filterThread": 43,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Canon EOS R",
         "Canon EOS RP",
@@ -521,11 +732,24 @@
         "Canon EOS R7",
         "Canon EOS R10",
         "Canon EOS R50",
-        "Canon EOS R100"
-      ]
+        "Canon EOS R100",
+        "Canon EOS R6 Mark III",
+        "Canon EOS R50 V"
+      ],
+      "sourceUrls": [
+        "https://www.usa.canon.com/shop/camera-lenses",
+        "https://www.usa.canon.com/shop/camera-lenses/mirrorless-lenses",
+        "https://www.usa.canon.com/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Canon RF 24-105mm f/4L IS USM",
+      "brand": "canon",
+      "status": "official-category-reference",
       "mountType": "RF",
       "minFocalLength": 24,
       "maxFocalLength": 105,
@@ -534,6 +758,8 @@
       "hasOIS": true,
       "oisStops": 5,
       "filterThread": 77,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Canon EOS R",
         "Canon EOS RP",
@@ -549,11 +775,24 @@
         "Canon EOS R7",
         "Canon EOS R10",
         "Canon EOS R50",
-        "Canon EOS R100"
-      ]
+        "Canon EOS R100",
+        "Canon EOS R6 Mark III",
+        "Canon EOS R50 V"
+      ],
+      "sourceUrls": [
+        "https://www.usa.canon.com/shop/camera-lenses",
+        "https://www.usa.canon.com/shop/camera-lenses/mirrorless-lenses",
+        "https://www.usa.canon.com/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Canon RF 70-200mm f/2.8L IS USM",
+      "brand": "canon",
+      "status": "official-category-reference",
       "mountType": "RF",
       "minFocalLength": 70,
       "maxFocalLength": 200,
@@ -562,6 +801,8 @@
       "hasOIS": true,
       "oisStops": 5,
       "filterThread": 77,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Canon EOS R",
         "Canon EOS RP",
@@ -577,11 +818,24 @@
         "Canon EOS R7",
         "Canon EOS R10",
         "Canon EOS R50",
-        "Canon EOS R100"
-      ]
+        "Canon EOS R100",
+        "Canon EOS R6 Mark III",
+        "Canon EOS R50 V"
+      ],
+      "sourceUrls": [
+        "https://www.usa.canon.com/shop/camera-lenses",
+        "https://www.usa.canon.com/shop/camera-lenses/mirrorless-lenses",
+        "https://www.usa.canon.com/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Canon RF 50mm f/1.2L USM",
+      "brand": "canon",
+      "status": "official-category-reference",
       "mountType": "RF",
       "minFocalLength": 50,
       "maxFocalLength": 50,
@@ -590,6 +844,8 @@
       "hasOIS": false,
       "oisStops": 0,
       "filterThread": 77,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Canon EOS R",
         "Canon EOS RP",
@@ -605,11 +861,24 @@
         "Canon EOS R7",
         "Canon EOS R10",
         "Canon EOS R50",
-        "Canon EOS R100"
-      ]
+        "Canon EOS R100",
+        "Canon EOS R6 Mark III",
+        "Canon EOS R50 V"
+      ],
+      "sourceUrls": [
+        "https://www.usa.canon.com/shop/camera-lenses",
+        "https://www.usa.canon.com/shop/camera-lenses/mirrorless-lenses",
+        "https://www.usa.canon.com/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Canon RF 85mm f/1.2L USM",
+      "brand": "canon",
+      "status": "official-category-reference",
       "mountType": "RF",
       "minFocalLength": 85,
       "maxFocalLength": 85,
@@ -618,6 +887,8 @@
       "hasOIS": false,
       "oisStops": 0,
       "filterThread": 82,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Canon EOS R",
         "Canon EOS RP",
@@ -633,11 +904,24 @@
         "Canon EOS R7",
         "Canon EOS R10",
         "Canon EOS R50",
-        "Canon EOS R100"
-      ]
+        "Canon EOS R100",
+        "Canon EOS R6 Mark III",
+        "Canon EOS R50 V"
+      ],
+      "sourceUrls": [
+        "https://www.usa.canon.com/shop/camera-lenses",
+        "https://www.usa.canon.com/shop/camera-lenses/mirrorless-lenses",
+        "https://www.usa.canon.com/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Canon RF 15-35mm f/2.8L IS USM",
+      "brand": "canon",
+      "status": "official-category-reference",
       "mountType": "RF",
       "minFocalLength": 15,
       "maxFocalLength": 35,
@@ -646,6 +930,8 @@
       "hasOIS": true,
       "oisStops": 5,
       "filterThread": 82,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Canon EOS R",
         "Canon EOS RP",
@@ -661,11 +947,24 @@
         "Canon EOS R7",
         "Canon EOS R10",
         "Canon EOS R50",
-        "Canon EOS R100"
-      ]
+        "Canon EOS R100",
+        "Canon EOS R6 Mark III",
+        "Canon EOS R50 V"
+      ],
+      "sourceUrls": [
+        "https://www.usa.canon.com/shop/camera-lenses",
+        "https://www.usa.canon.com/shop/camera-lenses/mirrorless-lenses",
+        "https://www.usa.canon.com/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Canon RF 24mm f/1.8 Macro IS STM",
+      "brand": "canon",
+      "status": "official-category-reference",
       "mountType": "RF",
       "minFocalLength": 24,
       "maxFocalLength": 24,
@@ -674,6 +973,8 @@
       "hasOIS": true,
       "oisStops": 5,
       "filterThread": 52,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Canon EOS R",
         "Canon EOS RP",
@@ -689,11 +990,24 @@
         "Canon EOS R7",
         "Canon EOS R10",
         "Canon EOS R50",
-        "Canon EOS R100"
-      ]
+        "Canon EOS R100",
+        "Canon EOS R6 Mark III",
+        "Canon EOS R50 V"
+      ],
+      "sourceUrls": [
+        "https://www.usa.canon.com/shop/camera-lenses",
+        "https://www.usa.canon.com/shop/camera-lenses/mirrorless-lenses",
+        "https://www.usa.canon.com/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Canon RF 20mm f/1.4L VCM",
+      "brand": "canon",
+      "status": "official-category-reference",
       "mountType": "RF",
       "minFocalLength": 20,
       "maxFocalLength": 20,
@@ -702,6 +1016,8 @@
       "hasOIS": false,
       "oisStops": 0,
       "filterThread": 82,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Canon EOS R",
         "Canon EOS RP",
@@ -717,11 +1033,24 @@
         "Canon EOS R7",
         "Canon EOS R10",
         "Canon EOS R50",
-        "Canon EOS R100"
-      ]
+        "Canon EOS R100",
+        "Canon EOS R6 Mark III",
+        "Canon EOS R50 V"
+      ],
+      "sourceUrls": [
+        "https://www.usa.canon.com/shop/camera-lenses",
+        "https://www.usa.canon.com/shop/camera-lenses/mirrorless-lenses",
+        "https://www.usa.canon.com/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Canon RF 35mm f/1.8 Macro IS STM",
+      "brand": "canon",
+      "status": "official-category-reference",
       "mountType": "RF",
       "minFocalLength": 35,
       "maxFocalLength": 35,
@@ -730,6 +1059,8 @@
       "hasOIS": true,
       "oisStops": 4,
       "filterThread": 58,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Canon EOS R",
         "Canon EOS RP",
@@ -745,11 +1076,24 @@
         "Canon EOS R7",
         "Canon EOS R10",
         "Canon EOS R50",
-        "Canon EOS R100"
-      ]
+        "Canon EOS R100",
+        "Canon EOS R6 Mark III",
+        "Canon EOS R50 V"
+      ],
+      "sourceUrls": [
+        "https://www.usa.canon.com/shop/camera-lenses",
+        "https://www.usa.canon.com/shop/camera-lenses/mirrorless-lenses",
+        "https://www.usa.canon.com/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Canon RF 50mm f/1.8 STM",
+      "brand": "canon",
+      "status": "official-category-reference",
       "mountType": "RF",
       "minFocalLength": 50,
       "maxFocalLength": 50,
@@ -758,6 +1102,8 @@
       "hasOIS": false,
       "oisStops": 0,
       "filterThread": 67,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Canon EOS R",
         "Canon EOS RP",
@@ -773,11 +1119,24 @@
         "Canon EOS R7",
         "Canon EOS R10",
         "Canon EOS R50",
-        "Canon EOS R100"
-      ]
+        "Canon EOS R100",
+        "Canon EOS R6 Mark III",
+        "Canon EOS R50 V"
+      ],
+      "sourceUrls": [
+        "https://www.usa.canon.com/shop/camera-lenses",
+        "https://www.usa.canon.com/shop/camera-lenses/mirrorless-lenses",
+        "https://www.usa.canon.com/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Canon RF 85mm f/1.2L USM DS",
+      "brand": "canon",
+      "status": "official-category-reference",
       "mountType": "RF",
       "minFocalLength": 85,
       "maxFocalLength": 85,
@@ -786,6 +1145,8 @@
       "hasOIS": false,
       "oisStops": 0,
       "filterThread": 77,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Canon EOS R",
         "Canon EOS RP",
@@ -801,19 +1162,34 @@
         "Canon EOS R7",
         "Canon EOS R10",
         "Canon EOS R50",
-        "Canon EOS R100"
-      ]
+        "Canon EOS R100",
+        "Canon EOS R6 Mark III",
+        "Canon EOS R50 V"
+      ],
+      "sourceUrls": [
+        "https://www.usa.canon.com/shop/camera-lenses",
+        "https://www.usa.canon.com/shop/camera-lenses/mirrorless-lenses",
+        "https://www.usa.canon.com/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Canon RF 85mm f/2 Macro IS STM",
+      "brand": "canon",
+      "status": "official-category-reference",
       "mountType": "RF",
       "minFocalLength": 85,
       "maxFocalLength": 85,
-      "maxAperture": 2.0,
-      "maxApertureAtTele": 2.0,
+      "maxAperture": 2,
+      "maxApertureAtTele": 2,
       "hasOIS": true,
       "oisStops": 4,
       "filterThread": 77,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Canon EOS R",
         "Canon EOS RP",
@@ -829,11 +1205,24 @@
         "Canon EOS R7",
         "Canon EOS R10",
         "Canon EOS R50",
-        "Canon EOS R100"
-      ]
+        "Canon EOS R100",
+        "Canon EOS R6 Mark III",
+        "Canon EOS R50 V"
+      ],
+      "sourceUrls": [
+        "https://www.usa.canon.com/shop/camera-lenses",
+        "https://www.usa.canon.com/shop/camera-lenses/mirrorless-lenses",
+        "https://www.usa.canon.com/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Canon RF 100mm f/2.8L Macro IS USM",
+      "brand": "canon",
+      "status": "official-category-reference",
       "mountType": "RF",
       "minFocalLength": 100,
       "maxFocalLength": 100,
@@ -842,6 +1231,8 @@
       "hasOIS": true,
       "oisStops": 4,
       "filterThread": 77,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Canon EOS R",
         "Canon EOS RP",
@@ -857,11 +1248,24 @@
         "Canon EOS R7",
         "Canon EOS R10",
         "Canon EOS R50",
-        "Canon EOS R100"
-      ]
+        "Canon EOS R100",
+        "Canon EOS R6 Mark III",
+        "Canon EOS R50 V"
+      ],
+      "sourceUrls": [
+        "https://www.usa.canon.com/shop/camera-lenses",
+        "https://www.usa.canon.com/shop/camera-lenses/mirrorless-lenses",
+        "https://www.usa.canon.com/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Canon RF 135mm f/1.8L IS USM",
+      "brand": "canon",
+      "status": "official-category-reference",
       "mountType": "RF",
       "minFocalLength": 135,
       "maxFocalLength": 135,
@@ -870,6 +1274,8 @@
       "hasOIS": true,
       "oisStops": 5,
       "filterThread": 67,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Canon EOS R",
         "Canon EOS RP",
@@ -885,11 +1291,24 @@
         "Canon EOS R7",
         "Canon EOS R10",
         "Canon EOS R50",
-        "Canon EOS R100"
-      ]
+        "Canon EOS R100",
+        "Canon EOS R6 Mark III",
+        "Canon EOS R50 V"
+      ],
+      "sourceUrls": [
+        "https://www.usa.canon.com/shop/camera-lenses",
+        "https://www.usa.canon.com/shop/camera-lenses/mirrorless-lenses",
+        "https://www.usa.canon.com/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Canon RF 400mm f/2.8L IS USM",
+      "brand": "canon",
+      "status": "official-category-reference",
       "mountType": "RF",
       "minFocalLength": 400,
       "maxFocalLength": 400,
@@ -898,6 +1317,8 @@
       "hasOIS": true,
       "oisStops": 5,
       "filterThread": 77,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Canon EOS R",
         "Canon EOS RP",
@@ -913,19 +1334,34 @@
         "Canon EOS R7",
         "Canon EOS R10",
         "Canon EOS R50",
-        "Canon EOS R100"
-      ]
+        "Canon EOS R100",
+        "Canon EOS R6 Mark III",
+        "Canon EOS R50 V"
+      ],
+      "sourceUrls": [
+        "https://www.usa.canon.com/shop/camera-lenses",
+        "https://www.usa.canon.com/shop/camera-lenses/mirrorless-lenses",
+        "https://www.usa.canon.com/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Canon RF 600mm f/4L IS USM",
+      "brand": "canon",
+      "status": "official-category-reference",
       "mountType": "RF",
       "minFocalLength": 600,
       "maxFocalLength": 600,
-      "maxAperture": 4.0,
-      "maxApertureAtTele": 4.0,
+      "maxAperture": 4,
+      "maxApertureAtTele": 4,
       "hasOIS": true,
       "oisStops": 5,
       "filterThread": 77,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Canon EOS R",
         "Canon EOS RP",
@@ -941,19 +1377,34 @@
         "Canon EOS R7",
         "Canon EOS R10",
         "Canon EOS R50",
-        "Canon EOS R100"
-      ]
+        "Canon EOS R100",
+        "Canon EOS R6 Mark III",
+        "Canon EOS R50 V"
+      ],
+      "sourceUrls": [
+        "https://www.usa.canon.com/shop/camera-lenses",
+        "https://www.usa.canon.com/shop/camera-lenses/mirrorless-lenses",
+        "https://www.usa.canon.com/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Canon RF 600mm f/11 IS STM",
+      "brand": "canon",
+      "status": "official-category-reference",
       "mountType": "RF",
       "minFocalLength": 600,
       "maxFocalLength": 600,
-      "maxAperture": 11.0,
-      "maxApertureAtTele": 11.0,
+      "maxAperture": 11,
+      "maxApertureAtTele": 11,
       "hasOIS": true,
       "oisStops": 4,
       "filterThread": 67,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Canon EOS R",
         "Canon EOS RP",
@@ -969,11 +1420,24 @@
         "Canon EOS R7",
         "Canon EOS R10",
         "Canon EOS R50",
-        "Canon EOS R100"
-      ]
+        "Canon EOS R100",
+        "Canon EOS R6 Mark III",
+        "Canon EOS R50 V"
+      ],
+      "sourceUrls": [
+        "https://www.usa.canon.com/shop/camera-lenses",
+        "https://www.usa.canon.com/shop/camera-lenses/mirrorless-lenses",
+        "https://www.usa.canon.com/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Canon RF 800mm f/5.6L IS USM",
+      "brand": "canon",
+      "status": "official-category-reference",
       "mountType": "RF",
       "minFocalLength": 800,
       "maxFocalLength": 800,
@@ -982,6 +1446,8 @@
       "hasOIS": true,
       "oisStops": 5,
       "filterThread": 67,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Canon EOS R",
         "Canon EOS RP",
@@ -997,19 +1463,34 @@
         "Canon EOS R7",
         "Canon EOS R10",
         "Canon EOS R50",
-        "Canon EOS R100"
-      ]
+        "Canon EOS R100",
+        "Canon EOS R6 Mark III",
+        "Canon EOS R50 V"
+      ],
+      "sourceUrls": [
+        "https://www.usa.canon.com/shop/camera-lenses",
+        "https://www.usa.canon.com/shop/camera-lenses/mirrorless-lenses",
+        "https://www.usa.canon.com/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Canon RF 800mm f/11 IS STM",
+      "brand": "canon",
+      "status": "official-category-reference",
       "mountType": "RF",
       "minFocalLength": 800,
       "maxFocalLength": 800,
-      "maxAperture": 11.0,
-      "maxApertureAtTele": 11.0,
+      "maxAperture": 11,
+      "maxApertureAtTele": 11,
       "hasOIS": true,
       "oisStops": 4,
       "filterThread": 67,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Canon EOS R",
         "Canon EOS RP",
@@ -1025,19 +1506,34 @@
         "Canon EOS R7",
         "Canon EOS R10",
         "Canon EOS R50",
-        "Canon EOS R100"
-      ]
+        "Canon EOS R100",
+        "Canon EOS R6 Mark III",
+        "Canon EOS R50 V"
+      ],
+      "sourceUrls": [
+        "https://www.usa.canon.com/shop/camera-lenses",
+        "https://www.usa.canon.com/shop/camera-lenses/mirrorless-lenses",
+        "https://www.usa.canon.com/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Canon RF 1200mm f/8L IS USM",
+      "brand": "canon",
+      "status": "official-category-reference",
       "mountType": "RF",
       "minFocalLength": 1200,
       "maxFocalLength": 1200,
-      "maxAperture": 8.0,
-      "maxApertureAtTele": 8.0,
+      "maxAperture": 8,
+      "maxApertureAtTele": 8,
       "hasOIS": true,
       "oisStops": 5,
       "filterThread": 67,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Canon EOS R",
         "Canon EOS RP",
@@ -1053,11 +1549,24 @@
         "Canon EOS R7",
         "Canon EOS R10",
         "Canon EOS R50",
-        "Canon EOS R100"
-      ]
+        "Canon EOS R100",
+        "Canon EOS R6 Mark III",
+        "Canon EOS R50 V"
+      ],
+      "sourceUrls": [
+        "https://www.usa.canon.com/shop/camera-lenses",
+        "https://www.usa.canon.com/shop/camera-lenses/mirrorless-lenses",
+        "https://www.usa.canon.com/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Canon RF 5.2mm f/2.8L Dual Fisheye",
+      "brand": "canon",
+      "status": "official-category-reference",
       "mountType": "RF",
       "minFocalLength": 5,
       "maxFocalLength": 2,
@@ -1066,6 +1575,8 @@
       "hasOIS": false,
       "oisStops": 0,
       "filterThread": 82,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Canon EOS R",
         "Canon EOS RP",
@@ -1081,19 +1592,34 @@
         "Canon EOS R7",
         "Canon EOS R10",
         "Canon EOS R50",
-        "Canon EOS R100"
-      ]
+        "Canon EOS R100",
+        "Canon EOS R6 Mark III",
+        "Canon EOS R50 V"
+      ],
+      "sourceUrls": [
+        "https://www.usa.canon.com/shop/camera-lenses",
+        "https://www.usa.canon.com/shop/camera-lenses/mirrorless-lenses",
+        "https://www.usa.canon.com/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Canon RF 14-35mm f/4L IS USM",
+      "brand": "canon",
+      "status": "official-category-reference",
       "mountType": "RF",
       "minFocalLength": 14,
       "maxFocalLength": 35,
-      "maxAperture": 4.0,
-      "maxApertureAtTele": 4.0,
+      "maxAperture": 4,
+      "maxApertureAtTele": 4,
       "hasOIS": true,
       "oisStops": 5,
       "filterThread": 82,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Canon EOS R",
         "Canon EOS RP",
@@ -1109,11 +1635,24 @@
         "Canon EOS R7",
         "Canon EOS R10",
         "Canon EOS R50",
-        "Canon EOS R100"
-      ]
+        "Canon EOS R100",
+        "Canon EOS R6 Mark III",
+        "Canon EOS R50 V"
+      ],
+      "sourceUrls": [
+        "https://www.usa.canon.com/shop/camera-lenses",
+        "https://www.usa.canon.com/shop/camera-lenses/mirrorless-lenses",
+        "https://www.usa.canon.com/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Canon RF 16-28mm f/2.8 IS STM",
+      "brand": "canon",
+      "status": "official-category-reference",
       "mountType": "RF",
       "minFocalLength": 16,
       "maxFocalLength": 28,
@@ -1122,6 +1661,8 @@
       "hasOIS": true,
       "oisStops": 4,
       "filterThread": 82,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Canon EOS R",
         "Canon EOS RP",
@@ -1137,11 +1678,24 @@
         "Canon EOS R7",
         "Canon EOS R10",
         "Canon EOS R50",
-        "Canon EOS R100"
-      ]
+        "Canon EOS R100",
+        "Canon EOS R6 Mark III",
+        "Canon EOS R50 V"
+      ],
+      "sourceUrls": [
+        "https://www.usa.canon.com/shop/camera-lenses",
+        "https://www.usa.canon.com/shop/camera-lenses/mirrorless-lenses",
+        "https://www.usa.canon.com/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Canon RF 24-50mm f/4.5-6.3 IS STM",
+      "brand": "canon",
+      "status": "official-category-reference",
       "mountType": "RF",
       "minFocalLength": 24,
       "maxFocalLength": 50,
@@ -1150,6 +1704,8 @@
       "hasOIS": true,
       "oisStops": 4,
       "filterThread": 67,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Canon EOS R",
         "Canon EOS RP",
@@ -1165,11 +1721,24 @@
         "Canon EOS R7",
         "Canon EOS R10",
         "Canon EOS R50",
-        "Canon EOS R100"
-      ]
+        "Canon EOS R100",
+        "Canon EOS R6 Mark III",
+        "Canon EOS R50 V"
+      ],
+      "sourceUrls": [
+        "https://www.usa.canon.com/shop/camera-lenses",
+        "https://www.usa.canon.com/shop/camera-lenses/mirrorless-lenses",
+        "https://www.usa.canon.com/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Canon RF 24-70mm f/2.8L IS USM",
+      "brand": "canon",
+      "status": "official-category-reference",
       "mountType": "RF",
       "minFocalLength": 24,
       "maxFocalLength": 70,
@@ -1178,6 +1747,8 @@
       "hasOIS": true,
       "oisStops": 5,
       "filterThread": 82,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Canon EOS R",
         "Canon EOS RP",
@@ -1193,19 +1764,34 @@
         "Canon EOS R7",
         "Canon EOS R10",
         "Canon EOS R50",
-        "Canon EOS R100"
-      ]
+        "Canon EOS R100",
+        "Canon EOS R6 Mark III",
+        "Canon EOS R50 V"
+      ],
+      "sourceUrls": [
+        "https://www.usa.canon.com/shop/camera-lenses",
+        "https://www.usa.canon.com/shop/camera-lenses/mirrorless-lenses",
+        "https://www.usa.canon.com/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Canon RF 24-105mm f/4-7.1 IS STM",
+      "brand": "canon",
+      "status": "official-category-reference",
       "mountType": "RF",
       "minFocalLength": 24,
       "maxFocalLength": 105,
-      "maxAperture": 4.0,
+      "maxAperture": 4,
       "maxApertureAtTele": 7.1,
       "hasOIS": true,
       "oisStops": 4,
       "filterThread": 77,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Canon EOS R",
         "Canon EOS RP",
@@ -1221,19 +1807,34 @@
         "Canon EOS R7",
         "Canon EOS R10",
         "Canon EOS R50",
-        "Canon EOS R100"
-      ]
+        "Canon EOS R100",
+        "Canon EOS R6 Mark III",
+        "Canon EOS R50 V"
+      ],
+      "sourceUrls": [
+        "https://www.usa.canon.com/shop/camera-lenses",
+        "https://www.usa.canon.com/shop/camera-lenses/mirrorless-lenses",
+        "https://www.usa.canon.com/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Canon RF 24-240mm f/4-6.3 IS USM",
+      "brand": "canon",
+      "status": "official-category-reference",
       "mountType": "RF",
       "minFocalLength": 24,
       "maxFocalLength": 240,
-      "maxAperture": 4.0,
+      "maxAperture": 4,
       "maxApertureAtTele": 6.3,
       "hasOIS": true,
       "oisStops": 4,
       "filterThread": 77,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Canon EOS R",
         "Canon EOS RP",
@@ -1249,19 +1850,34 @@
         "Canon EOS R7",
         "Canon EOS R10",
         "Canon EOS R50",
-        "Canon EOS R100"
-      ]
+        "Canon EOS R100",
+        "Canon EOS R6 Mark III",
+        "Canon EOS R50 V"
+      ],
+      "sourceUrls": [
+        "https://www.usa.canon.com/shop/camera-lenses",
+        "https://www.usa.canon.com/shop/camera-lenses/mirrorless-lenses",
+        "https://www.usa.canon.com/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Canon RF 28-70mm f/2L USM",
+      "brand": "canon",
+      "status": "official-category-reference",
       "mountType": "RF",
       "minFocalLength": 28,
       "maxFocalLength": 70,
-      "maxAperture": 2.0,
-      "maxApertureAtTele": 2.0,
+      "maxAperture": 2,
+      "maxApertureAtTele": 2,
       "hasOIS": false,
       "oisStops": 0,
       "filterThread": 72,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Canon EOS R",
         "Canon EOS RP",
@@ -1277,11 +1893,24 @@
         "Canon EOS R7",
         "Canon EOS R10",
         "Canon EOS R50",
-        "Canon EOS R100"
-      ]
+        "Canon EOS R100",
+        "Canon EOS R6 Mark III",
+        "Canon EOS R50 V"
+      ],
+      "sourceUrls": [
+        "https://www.usa.canon.com/shop/camera-lenses",
+        "https://www.usa.canon.com/shop/camera-lenses/mirrorless-lenses",
+        "https://www.usa.canon.com/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Canon RF 28-70mm f/2.8 IS STM",
+      "brand": "canon",
+      "status": "official-category-reference",
       "mountType": "RF",
       "minFocalLength": 28,
       "maxFocalLength": 70,
@@ -1290,6 +1919,8 @@
       "hasOIS": true,
       "oisStops": 4,
       "filterThread": 72,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Canon EOS R",
         "Canon EOS RP",
@@ -1305,19 +1936,34 @@
         "Canon EOS R7",
         "Canon EOS R10",
         "Canon EOS R50",
-        "Canon EOS R100"
-      ]
+        "Canon EOS R100",
+        "Canon EOS R6 Mark III",
+        "Canon EOS R50 V"
+      ],
+      "sourceUrls": [
+        "https://www.usa.canon.com/shop/camera-lenses",
+        "https://www.usa.canon.com/shop/camera-lenses/mirrorless-lenses",
+        "https://www.usa.canon.com/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Canon RF 70-200mm f/4L IS USM",
+      "brand": "canon",
+      "status": "official-category-reference",
       "mountType": "RF",
       "minFocalLength": 70,
       "maxFocalLength": 200,
-      "maxAperture": 4.0,
-      "maxApertureAtTele": 4.0,
+      "maxAperture": 4,
+      "maxApertureAtTele": 4,
       "hasOIS": true,
       "oisStops": 5,
       "filterThread": 77,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Canon EOS R",
         "Canon EOS RP",
@@ -1333,11 +1979,24 @@
         "Canon EOS R7",
         "Canon EOS R10",
         "Canon EOS R50",
-        "Canon EOS R100"
-      ]
+        "Canon EOS R100",
+        "Canon EOS R6 Mark III",
+        "Canon EOS R50 V"
+      ],
+      "sourceUrls": [
+        "https://www.usa.canon.com/shop/camera-lenses",
+        "https://www.usa.canon.com/shop/camera-lenses/mirrorless-lenses",
+        "https://www.usa.canon.com/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Canon RF 100-300mm f/2.8L IS USM",
+      "brand": "canon",
+      "status": "official-category-reference",
       "mountType": "RF",
       "minFocalLength": 100,
       "maxFocalLength": 300,
@@ -1346,6 +2005,8 @@
       "hasOIS": true,
       "oisStops": 5,
       "filterThread": 77,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Canon EOS R",
         "Canon EOS RP",
@@ -1361,19 +2022,34 @@
         "Canon EOS R7",
         "Canon EOS R10",
         "Canon EOS R50",
-        "Canon EOS R100"
-      ]
+        "Canon EOS R100",
+        "Canon EOS R6 Mark III",
+        "Canon EOS R50 V"
+      ],
+      "sourceUrls": [
+        "https://www.usa.canon.com/shop/camera-lenses",
+        "https://www.usa.canon.com/shop/camera-lenses/mirrorless-lenses",
+        "https://www.usa.canon.com/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Canon RF 100-400mm f/5.6-8 IS USM",
+      "brand": "canon",
+      "status": "official-category-reference",
       "mountType": "RF",
       "minFocalLength": 100,
       "maxFocalLength": 400,
       "maxAperture": 5.6,
-      "maxApertureAtTele": 8.0,
+      "maxApertureAtTele": 8,
       "hasOIS": true,
       "oisStops": 4,
       "filterThread": 67,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Canon EOS R",
         "Canon EOS RP",
@@ -1389,11 +2065,24 @@
         "Canon EOS R7",
         "Canon EOS R10",
         "Canon EOS R50",
-        "Canon EOS R100"
-      ]
+        "Canon EOS R100",
+        "Canon EOS R6 Mark III",
+        "Canon EOS R50 V"
+      ],
+      "sourceUrls": [
+        "https://www.usa.canon.com/shop/camera-lenses",
+        "https://www.usa.canon.com/shop/camera-lenses/mirrorless-lenses",
+        "https://www.usa.canon.com/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Canon RF 100-500mm f/4.5-7.1L IS USM",
+      "brand": "canon",
+      "status": "official-category-reference",
       "mountType": "RF",
       "minFocalLength": 100,
       "maxFocalLength": 500,
@@ -1402,6 +2091,8 @@
       "hasOIS": true,
       "oisStops": 5,
       "filterThread": 67,
+      "fullFrameCoverage": true,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Canon EOS R",
         "Canon EOS RP",
@@ -1417,11 +2108,24 @@
         "Canon EOS R7",
         "Canon EOS R10",
         "Canon EOS R50",
-        "Canon EOS R100"
-      ]
+        "Canon EOS R100",
+        "Canon EOS R6 Mark III",
+        "Canon EOS R50 V"
+      ],
+      "sourceUrls": [
+        "https://www.usa.canon.com/shop/camera-lenses",
+        "https://www.usa.canon.com/shop/camera-lenses/mirrorless-lenses",
+        "https://www.usa.canon.com/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Canon RF-S 18-45mm f/4.5-6.3 IS STM",
+      "brand": "canon",
+      "status": "official-category-reference",
       "mountType": "RF-S",
       "minFocalLength": 18,
       "maxFocalLength": 45,
@@ -1430,15 +2134,29 @@
       "hasOIS": true,
       "oisStops": 4,
       "filterThread": 67,
+      "fullFrameCoverage": false,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Canon EOS R7",
         "Canon EOS R10",
         "Canon EOS R50",
-        "Canon EOS R100"
-      ]
+        "Canon EOS R100",
+        "Canon EOS R50 V"
+      ],
+      "sourceUrls": [
+        "https://www.usa.canon.com/shop/camera-lenses",
+        "https://www.usa.canon.com/shop/camera-lenses/mirrorless-lenses",
+        "https://www.usa.canon.com/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Canon RF-S 18-150mm f/3.5-6.3 IS STM",
+      "brand": "canon",
+      "status": "official-category-reference",
       "mountType": "RF-S",
       "minFocalLength": 18,
       "maxFocalLength": 150,
@@ -1447,46 +2165,86 @@
       "hasOIS": true,
       "oisStops": 4,
       "filterThread": 77,
+      "fullFrameCoverage": false,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Canon EOS R7",
         "Canon EOS R10",
         "Canon EOS R50",
-        "Canon EOS R100"
-      ]
+        "Canon EOS R100",
+        "Canon EOS R50 V"
+      ],
+      "sourceUrls": [
+        "https://www.usa.canon.com/shop/camera-lenses",
+        "https://www.usa.canon.com/shop/camera-lenses/mirrorless-lenses",
+        "https://www.usa.canon.com/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Canon RF-S 14-30mm f/4-6.3 IS STM PZ",
+      "brand": "canon",
+      "status": "official-category-reference",
       "mountType": "RF-S",
       "minFocalLength": 14,
       "maxFocalLength": 30,
-      "maxAperture": 4.0,
+      "maxAperture": 4,
       "maxApertureAtTele": 6.3,
       "hasOIS": true,
       "oisStops": 4,
       "filterThread": 82,
+      "fullFrameCoverage": false,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Canon EOS R7",
         "Canon EOS R10",
         "Canon EOS R50",
-        "Canon EOS R100"
-      ]
+        "Canon EOS R100",
+        "Canon EOS R50 V"
+      ],
+      "sourceUrls": [
+        "https://www.usa.canon.com/shop/camera-lenses",
+        "https://www.usa.canon.com/shop/camera-lenses/mirrorless-lenses",
+        "https://www.usa.canon.com/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     },
     {
       "lensName": "Canon RF-S 55-210mm f/5-7.1 IS STM",
+      "brand": "canon",
+      "status": "official-category-reference",
       "mountType": "RF-S",
       "minFocalLength": 55,
       "maxFocalLength": 210,
-      "maxAperture": 5.0,
+      "maxAperture": 5,
       "maxApertureAtTele": 7.1,
       "hasOIS": true,
       "oisStops": 4,
       "filterThread": 67,
+      "fullFrameCoverage": false,
+      "apscCoverage": true,
       "compatibleCameras": [
         "Canon EOS R7",
         "Canon EOS R10",
         "Canon EOS R50",
-        "Canon EOS R100"
-      ]
+        "Canon EOS R100",
+        "Canon EOS R50 V"
+      ],
+      "sourceUrls": [
+        "https://www.usa.canon.com/shop/camera-lenses",
+        "https://www.usa.canon.com/shop/camera-lenses/mirrorless-lenses",
+        "https://www.usa.canon.com/support"
+      ],
+      "verifiedAt": "2026-03-07",
+      "verifiedBy": "codex",
+      "verificationScope": "official-category-page",
+      "validationTier": "official-category"
     }
   ]
 }
