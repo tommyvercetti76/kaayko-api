@@ -71,7 +71,7 @@ Primary frontend files:
 
 ## Current mismatches on `main`
 
-- [`functions/api/smartLinks/publicApiRouter.js`](../../functions/api/smartLinks/publicApiRouter.js) exists, but it is not mounted from [`functions/index.js`](../../functions/index.js).
+- [`functions/api/smartLinks/publicApiRouter.js`](../../functions/api/smartLinks/publicApiRouter.js) exists but is **intentionally not mounted** from [`functions/index.js`](../../functions/index.js). It defines API-key-authenticated external client endpoints (`POST /api/public/smartlinks`, batch create, stats, attribution) intended for future use. Do not call `/api/public/*` paths — they will 404. Mount this router when external API access is ready to ship.
 - Some admin onboarding docs in the frontend still describe `/public/smartlinks` flows even though `main` only mounts `/smartlinks`.
 
 ## Quality and maintenance notes

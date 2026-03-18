@@ -14,6 +14,7 @@
 const admin = require('firebase-admin');
 const { FieldValue, Timestamp } = require('firebase-admin/firestore');
 const crypto = require('crypto');
+const { sendMagicLinkEmail } = require('./emailNotificationService');
 
 const db = admin.firestore();
 
@@ -740,7 +741,7 @@ async function getKreatorStats() {
  * @param {string} adminUid 
  */
 async function resendMagicLink(kreatorId, adminUid) {
-  return db.runTransaction(async (transaction) => {
+  const result = await db.runTransaction(async (transaction) => {
     const kreatorRef = db.collection('kreators').doc(kreatorId);
     const kreatorDoc = await transaction.get(kreatorRef);
 
@@ -853,11 +854,25 @@ async function resendMagicLink(kreatorId, adminUid) {
       success: true,
       kreatorId,
       email: kreatorData.email,
+      firstName: kreatorData.firstName,
       magicLinkCode: token.code,
       magicLinkUrl: `https://kaayko.com/l/${token.code}`,
       expiresAt: expiresAt.toISOString()
     };
   });
+
+  // Send resend email (non-blocking on failure)
+  sendMagicLinkEmail({
+    email: result.email,
+    firstName: result.firstName,
+    magicLinkUrl: result.magicLinkUrl,
+    expiresAt: result.expiresAt,
+    isResend: true
+  }).catch(err => {
+    console.error(`[Kreator] ⚠️ Failed to send resend email to ${result.email}:`, err.message);
+  });
+
+  return result;
 }
 
 module.exports = {

@@ -66,11 +66,11 @@ router.get(
       const [exists] = await file.exists();
       if (!exists) {
         console.log(`Image not found: ${path}`);
-        return res.status(404).json({ 
-          error: "Image not found",
-          path: path,
-          productId,
-          fileName 
+        return res.status(404).json({
+          success: false,
+          error: "Not found",
+          message: "Image not found",
+          code: "IMAGE_NOT_FOUND"
         });
       }
 
@@ -82,13 +82,13 @@ router.get(
       file.createReadStream()
         .on("error", err => {
           console.error("Stream error:", err);
-          res.status(500).json({ error: "Failed to stream image" });
+          res.status(500).json({ success: false, error: "Server error", message: "Failed to stream image", code: "STREAM_ERROR" });
         })
         .pipe(res);
 
     } catch (e) {
       console.error("Error proxying image:", e);
-      res.status(500).json({ error: "Internal server error", details: e.message });
+      res.status(500).json({ success: false, error: "Server error", message: "Internal server error", code: "SERVER_ERROR" });
     }
   }
 );

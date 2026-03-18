@@ -54,10 +54,11 @@ Primary frontend files:
 - Admin review flows require an admin user via the shared auth middleware.
 - Google sign-in is brokered through Firebase identity plus backend verification.
 
-## Current mismatch on `main`
+## Route mounting note
 
-- [`functions/api/kreators/kreatorProductRoutes.js`](../../functions/api/kreators/kreatorProductRoutes.js) defines `/products` CRUD, but it is not mounted from [`functions/index.js`](../../functions/index.js).
-- The frontend dashboard and add-product pages call `/kreators/products`, so those product-management surfaces are currently documented-but-unshipped in `main`.
+- [`functions/api/kreators/kreatorProductRoutes.js`](../../functions/api/kreators/kreatorProductRoutes.js) defines `/products` CRUD and **is mounted** from [`functions/api/kreators/kreatorRoutes.js`](../../functions/api/kreators/kreatorRoutes.js) at line 61 (`router.use('/products', kreatorProductRoutes)`).
+- Product endpoints are live at `/kreators/products/*` even though they are not mounted directly from `functions/index.js`.
+- The frontend dashboard and add-product pages calling `/kreators/products` are fully supported.
 
 ## Quality and maintenance notes
 

@@ -13,6 +13,7 @@
 const admin = require('firebase-admin');
 const { FieldValue, Timestamp } = require('firebase-admin/firestore');
 const crypto = require('crypto');
+const { sendMagicLinkEmail } = require('./emailNotificationService');
 
 const db = admin.firestore();
 
@@ -447,7 +448,7 @@ async function approveApplication(applicationId, adminUid, notes = '') {
   // Import services needed for approval
   const kreatorService = require('./kreatorService');
   
-  return db.runTransaction(async (transaction) => {
+  const result = await db.runTransaction(async (transaction) => {
     // 1. Read application (within transaction)
     const appRef = db.collection('kreator_applications').doc(applicationId);
     const appDoc = await transaction.get(appRef);
@@ -660,11 +661,25 @@ async function approveApplication(applicationId, adminUid, notes = '') {
       applicationId,
       kreatorId: userRecord.uid,
       kreatorEmail: appData.email,
+      kreatorFirstName: appData.firstName,
       magicLinkCode: token.code,
       magicLinkUrl: `https://kaayko.com/l/${token.code}`,
       expiresAt: linkExpiresAt.toISOString()
     };
   });
+
+  // Send activation email to kreator (outside transaction — non-blocking on failure)
+  sendMagicLinkEmail({
+    email: result.kreatorEmail,
+    firstName: result.kreatorFirstName,
+    magicLinkUrl: result.magicLinkUrl,
+    expiresAt: result.expiresAt,
+    isResend: false
+  }).catch(err => {
+    console.error(`[KreatorApp] ⚠️ Failed to send activation email to ${result.kreatorEmail}:`, err.message);
+  });
+
+  return result;
 }
 
 /**

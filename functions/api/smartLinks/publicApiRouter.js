@@ -1,12 +1,17 @@
 /**
  * Public Smart Links API for External Clients
- * 
+ *
+ * ⚠️  NOT MOUNTED — This router is NOT registered in functions/index.js.
+ *     Endpoints at /api/public/* will 404 until this is mounted.
+ *     Mount when external API key access is ready to ship:
+ *       apiApp.use("/api/public", require("./api/smartLinks/publicApiRouter"));
+ *
  * Programmatic API for external clients using API keys.
  * Enables tenant-scoped link creation, management, and analytics.
- * 
+ *
  * All endpoints require API key authentication (x-api-key header).
  * Operations are automatically scoped to the API key's tenant.
- * 
+ *
  * @module api/smartLinks/publicApiRouter
  */
 

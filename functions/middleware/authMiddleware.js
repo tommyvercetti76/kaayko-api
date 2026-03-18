@@ -109,9 +109,9 @@ function requireAdmin(req, res, next) {
   // Check for X-Admin-Key header (simpler admin access for internal tools)
   const adminKey = req.headers['x-admin-key'];
   const isEmulator = process.env.FUNCTIONS_EMULATOR === 'true';
-  const ADMIN_PASSPHRASE = isEmulator 
+  const ADMIN_PASSPHRASE = isEmulator
     ? (process.env.ADMIN_PASSPHRASE || 'dev-admin-local-only')
-    : process.env.ADMIN_PASSPHRASE;
+    : (process.env.ADMIN_PASSPHRASE || process.env.KORTEX_SYNC_KEY);
   
   if (!ADMIN_PASSPHRASE && !isEmulator) {
     console.error('[SECURITY] ADMIN_PASSPHRASE not configured - admin access disabled');

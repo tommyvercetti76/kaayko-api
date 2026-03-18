@@ -229,7 +229,7 @@ This is an automated notification.
  * @private
  */
 async function sendEmail({ to, from, subject, htmlBody, textBody }) {
-  const apiKey = sendGridApiKey.value();
+  const apiKey = getSendGridApiKey().value();
   
   // Production: Use SendGrid
   if (apiKey && apiKey.length > 0) {
@@ -326,6 +326,95 @@ function formatDate(timestamp) {
   });
 }
 
+/**
+ * Send magic link onboarding email to a newly approved kreator.
+ * Called after approveApplication() and resendMagicLink().
+ *
+ * @param {Object} params
+ * @param {string} params.email          - Recipient email
+ * @param {string} params.firstName      - Kreator first name (for greeting)
+ * @param {string} params.magicLinkUrl   - Full activation URL
+ * @param {string} params.expiresAt      - ISO string of link expiry
+ * @param {boolean} [params.isResend]    - true when this is a resent link
+ */
+async function sendMagicLinkEmail({ email, firstName, magicLinkUrl, expiresAt, isResend = false }) {
+  const name = escapeHtml(firstName || 'Creator');
+  const url  = escapeHtml(magicLinkUrl);
+  const expiry = expiresAt ? formatDate(new Date(expiresAt)) : '24 hours from now';
+
+  const subject = isResend
+    ? `Your Kaayko seller activation link (resent)`
+    : `Welcome to Kaayko — activate your seller account`;
+
+  const htmlBody = `
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+    .container { max-width: 600px; margin: 0 auto; padding: 20px; background: #f9f9f9; }
+    .header { background: linear-gradient(135deg, #d4af37 0%, #c4961a 100%); color: white; padding: 30px; text-align: center; border-radius: 8px 8px 0 0; }
+    .content { background: white; padding: 30px; border-radius: 0 0 8px 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    .btn { display: inline-block; padding: 14px 28px; background: #d4af37; color: white; text-decoration: none; border-radius: 6px; font-weight: 600; margin: 20px 0; font-size: 16px; }
+    .note { background: #fff8e1; border-left: 4px solid #d4af37; padding: 12px 16px; margin: 20px 0; border-radius: 4px; font-size: 14px; color: #555; }
+    .footer { text-align: center; margin-top: 30px; color: #999; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1 style="margin:0;font-size:24px;">Welcome to Kaayko</h1>
+      <p style="margin:8px 0 0;opacity:0.9;">Your seller account is approved</p>
+    </div>
+    <div class="content">
+      <p>Hi ${name},</p>
+      ${isResend
+        ? '<p>Here is your new activation link to complete your Kaayko seller account setup.</p>'
+        : '<p>Congratulations — your seller application has been approved! Click the button below to set your password and activate your account.</p>'
+      }
+      <div style="text-align:center;">
+        <a href="${url}" class="btn">Activate My Account</a>
+      </div>
+      <div class="note">
+        <strong>This link expires at:</strong> ${expiry}<br>
+        It is single-use — it will stop working after you click it once.
+      </div>
+      <p>If the button doesn't work, copy and paste this URL into your browser:</p>
+      <p style="word-break:break-all;font-size:13px;color:#666;">${url}</p>
+    </div>
+    <div class="footer">
+      <p>Kaayko · noreply@kaayko.com</p>
+      <p>If you did not apply to be a seller, please ignore this email.</p>
+    </div>
+  </div>
+</body>
+</html>`;
+
+  const textBody = [
+    `Hi ${firstName || 'Creator'},`,
+    '',
+    isResend
+      ? 'Here is your new Kaayko seller account activation link:'
+      : 'Congratulations — your Kaayko seller application has been approved!',
+    '',
+    `Activate your account: ${magicLinkUrl}`,
+    '',
+    `This link expires at: ${expiry}`,
+    'It is single-use and will stop working after you click it once.',
+    '',
+    '— The Kaayko Team'
+  ].join('\n');
+
+  return sendEmail({
+    to: email,
+    from: FROM_EMAIL,
+    subject,
+    htmlBody,
+    textBody
+  });
+}
+
 module.exports = {
-  sendLinkCreatedNotification
+  sendLinkCreatedNotification,
+  sendMagicLinkEmail
 };

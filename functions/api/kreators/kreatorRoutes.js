@@ -927,6 +927,37 @@ router.get('/admin/list', optionalAuthForAdmin, requireAdmin, async (req, res) =
 });
 
 /**
+ * GET /kreators/admin/stats
+ * Get kreator and application statistics (admin only)
+ * NOTE: Must be registered BEFORE /admin/:uid to avoid the param route catching "stats" as a uid.
+ */
+router.get('/admin/stats', optionalAuthForAdmin, requireAdmin, async (req, res) => {
+  try {
+    const [appStats, kreatorStats] = await Promise.all([
+      kreatorApplicationService.getApplicationStats(),
+      kreatorService.getKreatorStats()
+    ]);
+
+    return res.json({
+      success: true,
+      data: {
+        applications: appStats,
+        kreators: kreatorStats
+      }
+    });
+
+  } catch (error) {
+    console.error('[KreatorAPI] Get stats error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Server Error',
+      message: 'Failed to get statistics',
+      code: 'INTERNAL_ERROR'
+    });
+  }
+});
+
+/**
  * GET /kreators/admin/:uid
  * Get kreator details (admin only)
  */
@@ -1000,36 +1031,6 @@ router.post('/admin/:uid/resend-link', optionalAuthForAdmin, requireAdmin, async
       success: false,
       error: 'Server Error',
       message: 'Failed to resend magic link',
-      code: 'INTERNAL_ERROR'
-    });
-  }
-});
-
-/**
- * GET /kreators/admin/stats
- * Get kreator and application statistics (admin only)
- */
-router.get('/admin/stats', optionalAuthForAdmin, requireAdmin, async (req, res) => {
-  try {
-    const [appStats, kreatorStats] = await Promise.all([
-      kreatorApplicationService.getApplicationStats(),
-      kreatorService.getKreatorStats()
-    ]);
-
-    return res.json({
-      success: true,
-      data: {
-        applications: appStats,
-        kreators: kreatorStats
-      }
-    });
-
-  } catch (error) {
-    console.error('[KreatorAPI] Get stats error:', error);
-    return res.status(500).json({
-      success: false,
-      error: 'Server Error',
-      message: 'Failed to get statistics',
       code: 'INTERNAL_ERROR'
     });
   }

@@ -33,6 +33,26 @@ service cloud.firestore {
     }
     
     // ========================================
+    // STORE COLLECTIONS
+    // ========================================
+
+    // Products — public read (catalog browsing), API-only writes
+    match /kaaykoproducts/{productId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Orders — API-only access (all reads/writes via Cloud Functions Admin SDK)
+    match /orders/{orderId} {
+      allow read, write: if false;
+    }
+
+    // Payment intents — API-only access
+    match /payment_intents/{paymentIntentId} {
+      allow read, write: if false;
+    }
+
+    // ========================================
     // KREATOR COLLECTIONS
     // ========================================
     
