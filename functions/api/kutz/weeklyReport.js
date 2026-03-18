@@ -59,7 +59,7 @@ async function weeklyReport(req, res) {
     const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
     const message = await client.messages.create({
-      model: 'claude-3-5-sonnet-20241022',
+      model: 'claude-sonnet-4-5-20250929',
       max_tokens: 1000,
       messages: [{ role: 'user', content: prompt }],
     });
