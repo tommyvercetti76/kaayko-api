@@ -48,6 +48,10 @@ function validFoodArray(overrides = []) {
     carbs:    20,
     fat:      5,
     fiber:    4,
+    iron:     3.0,
+    calcium:  25,
+    b12:      0,
+    zinc:     1.0,
     meal:     'lunch',
   }];
   return JSON.stringify(overrides.length ? overrides : defaults);
@@ -172,7 +176,7 @@ describe('Successful parsing', () => {
     expect(res.body.data.foods).toHaveLength(1);
   });
 
-  it('returns all 5 macros for each food item', async () => {
+  it('returns all 5 macros + 4 micronutrients for each food item', async () => {
     Anthropic._setResponse(validFoodArray());
     const res = await post({ text: 'dal for lunch' });
     const food = res.body.data.foods[0];
@@ -183,6 +187,10 @@ describe('Successful parsing', () => {
     expect(food).toHaveProperty('carbs');
     expect(food).toHaveProperty('fat');
     expect(food).toHaveProperty('fiber');
+    expect(food).toHaveProperty('iron');
+    expect(food).toHaveProperty('calcium');
+    expect(food).toHaveProperty('b12');
+    expect(food).toHaveProperty('zinc');
     expect(food).toHaveProperty('meal');
   });
 
@@ -196,6 +204,20 @@ describe('Successful parsing', () => {
     expect(food.calories).toBe(0);
     expect(food.protein).toBe(0);
     expect(food.carbs).toBe(20);
+  });
+
+  it('rounds micronutrients to 1 decimal place', async () => {
+    Anthropic._setResponse(JSON.stringify([{
+      name: 'Paneer', quantity: '100g',
+      calories: 265, protein: 18, carbs: 3, fat: 20, fiber: 0,
+      iron: 0.333, calcium: 480.6, b12: 0.444, zinc: 2.555, meal: 'lunch',
+    }]));
+    const res = await post({ text: 'paneer' });
+    const food = res.body.data.foods[0];
+    expect(food.iron).toBe(0.3);
+    expect(food.calcium).toBe(480.6);
+    expect(food.b12).toBe(0.4);
+    expect(food.zinc).toBe(2.6);
   });
 
   it('normalises invalid meal to "snacks"', async () => {
@@ -216,9 +238,9 @@ describe('Successful parsing', () => {
 
   it('handles multiple food items in a single parse', async () => {
     const multiFood = JSON.stringify([
-      { name: 'Roti',  quantity: '2', calories: 200, protein: 6,  carbs: 40, fat: 2,  fiber: 3,  meal: 'dinner' },
-      { name: 'Sabzi', quantity: '1 katori', calories: 120, protein: 3, carbs: 10, fat: 7, fiber: 4, meal: 'dinner' },
-      { name: 'Curd',  quantity: '150g',     calories: 90,  protein: 5, carbs: 7,  fat: 4,  fiber: 0, meal: 'dinner' },
+      { name: 'Roti',  quantity: '2', calories: 200, protein: 6,  carbs: 40, fat: 2,  fiber: 3,  iron: 1.6, calcium: 20, b12: 0, zinc: 0.8, meal: 'dinner' },
+      { name: 'Sabzi', quantity: '1 katori', calories: 120, protein: 3, carbs: 10, fat: 7, fiber: 4, iron: 1.0, calcium: 30, b12: 0, zinc: 0.4, meal: 'dinner' },
+      { name: 'Curd',  quantity: '150g',     calories: 90,  protein: 5, carbs: 7,  fat: 4,  fiber: 0, iron: 0.1, calcium: 180, b12: 0.4, zinc: 0.8, meal: 'dinner' },
     ]);
     Anthropic._setResponse(multiFood);
     const res = await post({ text: '2 rotis sabzi and curd for dinner' });
@@ -292,7 +314,8 @@ describe('Product DB overrides', () => {
     // Verify Claude was called (product context was built)
     expect(Anthropic.messages.create).toHaveBeenCalledTimes(1);
     const callArg = Anthropic.messages.create.mock.calls[0][0];
-    expect(callArg.system).toContain('label-verified');
+    // Product context moves to the user message prefix (keeps system cache stable)
+    expect(callArg.messages[0].content).toContain('label-verified');
   });
 
   it('does not error if kutzProductDB is empty', async () => {
@@ -351,8 +374,12 @@ describe('Claude prompt construction', () => {
     Anthropic._setResponse(validFoodArray());
     await post({ text: 'dal', dietType: 'vegan' });
     const call = Anthropic.messages.create.mock.calls[0][0];
-    expect(call.system).toContain('VEGAN');
-    expect(call.system).toContain('ALL animal products');
+    // system is now an array of cache blocks — check the text property
+    const systemText = Array.isArray(call.system)
+      ? call.system.map(b => b.text || '').join('\n')
+      : call.system;
+    expect(systemText).toContain('VEGAN');
+    expect(systemText).toContain('ALL animal products');
   });
 
   it('uses claude-sonnet model', async () => {

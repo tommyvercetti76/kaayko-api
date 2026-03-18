@@ -244,10 +244,10 @@ describe('Claude response handling', () => {
 // ─── Claude Model ─────────────────────────────────────────────────────────────
 
 describe('Claude model selection', () => {
-  it('uses claude-sonnet model for suggestions', async () => {
+  it('uses claude-haiku model for suggestions (high-frequency, cost-efficient)', async () => {
     Anthropic._setResponse(validSuggestResponse());
     await post();
     const call = Anthropic.messages.create.mock.calls[0][0];
-    expect(call.model).toMatch(/claude-sonnet/);
+    expect(call.model).toMatch(/claude-haiku/);
   });
 });

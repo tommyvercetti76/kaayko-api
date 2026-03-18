@@ -10,6 +10,7 @@ const router  = express.Router();
 const { requireAuth } = require('../../middleware/authMiddleware');
 
 const parseFoods   = require('./parseFoods');
+const parsePhoto   = require('./parsePhoto');
 const weeklyReport = require('./weeklyReport');
 const suggest      = require('./suggest');
 const {
@@ -22,6 +23,9 @@ const {
 
 // POST /api/kutz/parseFoods
 router.post('/parseFoods', requireAuth, parseFoods);
+
+// POST /api/kutz/parsePhoto  — base64 image → Claude vision → food array
+router.post('/parsePhoto', requireAuth, parsePhoto);
 
 // POST /api/kutz/weeklyReport
 router.post('/weeklyReport', requireAuth, weeklyReport);

@@ -8,12 +8,59 @@
  *   1. Today's food log (what's been eaten + remaining macros)
  *   2. Last 14 days of history (pattern learning)
  *   3. Frequent foods (quick-add favorites)
+ *   4. Weight log (last 14 entries → adaptive calorie hint)
  */
 
-const admin    = require('firebase-admin');
-const Anthropic = require('@anthropic-ai/sdk');
+const admin      = require('firebase-admin');
+const { callAI } = require('./aiClient');
 
 const db = admin.firestore();
+
+// ─── Weight trend helper ──────────────────────────────────────────────────────
+async function getWeightTrend(uid) {
+  try {
+    const snap = await db
+      .collection('users').doc(uid)
+      .collection('kutzWeightLog')
+      .orderBy('date', 'asc')
+      .limit(14)
+      .get();
+
+    if (snap.size < 3) return null;
+
+    const entries = snap.docs.map(d => ({ date: d.data().date, kg: Number(d.data().kg) || 0 }));
+    const mid     = Math.floor(entries.length / 2);
+    const first   = entries.slice(0, mid);
+    const second  = entries.slice(mid);
+
+    const avgFirst  = first.reduce((s, e) => s + e.kg, 0)  / first.length;
+    const avgSecond = second.reduce((s, e) => s + e.kg, 0) / second.length;
+
+    const daySpan      = Math.max(1, (new Date(entries[entries.length - 1].date) - new Date(entries[0].date)) / 86_400_000);
+    const weeklyRateKg = ((avgSecond - avgFirst) / daySpan) * 7;
+
+    return { weeklyRateKg: Math.round(weeklyRateKg * 100) / 100, dataPoints: entries.length };
+  } catch {
+    return null;
+  }
+}
+
+// ─── Adaptive calorie hint ────────────────────────────────────────────────────
+function buildWeightHint(trend, targets) {
+  if (!trend) return '';
+  const { weeklyRateKg } = trend;
+  if (weeklyRateKg < -0.6) {
+    const surplusKcal = Math.round(Math.abs(weeklyRateKg + 0.5) * 7700 / 7);
+    return `\n⚠️ WEIGHT TREND: Losing ${Math.abs(weeklyRateKg).toFixed(1)} kg/wk — too fast. Consider adding ~${surplusKcal} kcal/day to stay sustainable.`;
+  }
+  if (weeklyRateKg > 0.1) {
+    return `\n⚠️ WEIGHT TREND: Gaining ${weeklyRateKg.toFixed(1)} kg/wk despite target deficit — check adherence or recalculate targets.`;
+  }
+  if (weeklyRateKg >= -0.6 && weeklyRateKg <= -0.15) {
+    return `\n✓ WEIGHT TREND: On track — losing ${Math.abs(weeklyRateKg).toFixed(1)} kg/wk sustainably.`;
+  }
+  return '';
+}
 
 async function suggest(req, res) {
   const uid = req.user.uid;
@@ -109,7 +156,7 @@ async function suggest(req, res) {
         .join(', ') || 'no data yet';
     }
 
-    const n = macroHistory.length || 1;
+    const n           = macroHistory.length || 1;
     const avgProtein  = Math.round(macroHistory.reduce((s, d) => s + d.protein,  0) / n);
     const avgCalories = Math.round(macroHistory.reduce((s, d) => s + d.calories, 0) / n);
     const daysHitProt = macroHistory.filter(d => d.protein >= targets.protein).length;
@@ -129,7 +176,11 @@ async function suggest(req, res) {
       })
       .join('\n') || 'none yet';
 
-    // ── 5. Time context (IST) ────────────────────────────────────────────────
+    // ── 5. Weight trend ──────────────────────────────────────────────────────
+    const weightTrend = await getWeightTrend(uid);
+    const weightHint  = buildWeightHint(weightTrend, targets);
+
+    // ── 6. Time context (IST) ────────────────────────────────────────────────
     const utcHour  = new Date().getUTCHours() + new Date().getUTCMinutes() / 60;
     const istHour  = Math.floor((utcHour + 5.5) % 24);
     const nextMeal = istHour < 10 ? 'breakfast'
@@ -137,7 +188,7 @@ async function suggest(req, res) {
                    : istHour < 19 ? 'snacks'
                    : 'dinner';
 
-    // ── 6. Claude ────────────────────────────────────────────────────────────
+    // ── 7. Claude (Haiku — high-frequency, advisory only) ────────────────────
     const DIET_LABELS = {
       'lacto-ovo-vegetarian': 'lacto-ovo vegetarian (no meat/fish — dairy and eggs OK)',
       'lacto-vegetarian':     'lacto vegetarian (no meat/fish/eggs — dairy OK)',
@@ -169,7 +220,7 @@ Typical foods by meal:
 
 MOST-USED FOODS:
 ${frequentFoods}
-
+${weightHint}
 Return ONLY a JSON object:
 {
   "insights": ["string", "string"],
@@ -195,15 +246,12 @@ Rules:
 - Suggestions should fit within remaining macros
 - Respond ONLY with the JSON. No markdown, no backticks.`;
 
-    const client  = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-    const message = await client.messages.create({
-      model:      'claude-sonnet-4-5',
-      max_tokens: 1000,
-      system:     systemPrompt,
-      messages:   [{ role: 'user', content: userMessage }],
+    const raw     = await callAI({
+      task:     'suggest',
+      system:   systemPrompt,
+      messages: [{ role: 'user', content: userMessage }],
+      maxTokens: 1000,
     });
-
-    const raw     = message.content.map(c => c.text || '').join('').trim();
     const cleaned = raw.replace(/```json|```/g, '').trim();
     const parsed  = JSON.parse(cleaned);
 
