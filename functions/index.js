@@ -60,6 +60,9 @@ const { getOrder, listOrders } = require("./api/admin/getOrder");
 apiApp.get("/admin/getOrder", requireAuth, requireAdmin, getOrder);
 apiApp.get("/admin/listOrders", requireAuth, requireAdmin, listOrders);
 
+// 🥗 KALEKUTZ - Voice-first nutrition tracker
+apiApp.use("/kutz", require("./api/kutz/kutzRouter"));
+
 // 📷 KAMERA QUEST - Camera/lens data & photography presets
 apiApp.use("/cameras", require("./api/cameras/camerasRoutes"));
 apiApp.use("/lenses", require("./api/cameras/lensesRoutes"));

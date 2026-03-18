@@ -29,6 +29,7 @@
     "postinstall": "pip3 install -r requirements.txt || echo 'Python dependencies installation failed, will fallback to JS'"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
     "axios": "^1.13.2",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
