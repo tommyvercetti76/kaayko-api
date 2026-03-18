@@ -11,6 +11,13 @@ admin.initializeApp();
 const apiApp = express();
 apiApp.use(cors());
 
+// Strip /api/ prefix when requests come through Firebase Hosting rewrite
+// (Firebase Hosting forwards the full path, e.g. /api/kutz/parseFoods)
+apiApp.use((req, _res, next) => {
+  if (req.url.startsWith('/api/')) req.url = req.url.slice(4);
+  next();
+});
+
 // ⚠️ CRITICAL: Stripe webhook needs raw body for signature verification
 // Must be defined BEFORE express.json() middleware
 apiApp.use("/createPaymentIntent/webhook", express.raw({ type: 'application/json' }), require("./api/checkout/stripeWebhook"));
