@@ -22,6 +22,7 @@
     "test:kortex": "node ./node_modules/jest/bin/jest.js __tests__/kortex-api.test.js",
     "test:kreator": "node ./node_modules/jest/bin/jest.js __tests__/kreator-api.test.js",
     "test:store": "node ./node_modules/jest/bin/jest.js __tests__/store-api.test.js",
+    "test:kutz": "node ./node_modules/jest/bin/jest.js --runInBand __tests__/kutz-parseFoods.test.js __tests__/kutz-suggest.test.js __tests__/kutz-fitbit.test.js --forceExit --detectOpenHandles",
     "test:all": "node ./node_modules/jest/bin/jest.js __tests__/",
     "predeploy:check": "npm run catalog:cameras && npm run reviewpacket:cameras && npm run audit:cameras && npm run validate:cameras && node scripts/predeploy-check.js && npm run test:smoke",
     "test:performance": "node ../tests/firebase_performance_test.js",

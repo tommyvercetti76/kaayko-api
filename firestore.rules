@@ -100,6 +100,11 @@ service cloud.firestore {
             && (!exists(/databases/$(database)/documents/users/$(userId)/kutzDays/$(dayId))
                 || get(/databases/$(database)/documents/users/$(userId)/kutzDays/$(dayId)).data.locked != true);
         }
+
+        // Exercise log subcollection (not locked — always editable)
+        match /exercises/{exerciseId} {
+          allow read, create, delete: if request.auth != null && request.auth.uid == userId;
+        }
       }
 
       // Frequent foods for quick-add bar
@@ -112,6 +117,11 @@ service cloud.firestore {
       match /kutzProductDB/{productId} {
         allow read: if request.auth != null && request.auth.uid == userId;
         allow write: if request.auth != null && request.auth.uid == userId;
+      }
+
+      // Daily weight log entries
+      match /kutzWeightLog/{dateId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
       }
     }
 

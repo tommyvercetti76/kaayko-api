@@ -7,6 +7,10 @@
 // ─── Environment ───────────────────────────────────────────────
 process.env.FUNCTIONS_EMULATOR = 'true';
 process.env.ADMIN_PASSPHRASE = 'test-admin-passphrase';
+process.env.ANTHROPIC_API_KEY    = 'sk-ant-test-key';
+process.env.FITBIT_CLIENT_ID     = 'fitbit-test-client-id';
+process.env.FITBIT_CLIENT_SECRET = 'fitbit-test-secret';
+process.env.FITBIT_REDIRECT_URI  = 'https://example.com/kutz/fitbit/callback';
 process.env.STRIPE_SECRET_KEY = 'sk_test_fake';
 process.env.STRIPE_WEBHOOK_SECRET = 'whsec_test_fake';
 process.env.STRIPE_CHECKOUT_WEBHOOK_SECRET = 'whsec_checkout_fake';
