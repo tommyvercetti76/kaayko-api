@@ -11,6 +11,7 @@ const { requireAuth } = require('../../middleware/authMiddleware');
 
 const parseFoods   = require('./parseFoods');
 const parsePhoto   = require('./parsePhoto');
+const searchFoods  = require('./searchFoods');
 const weeklyReport = require('./weeklyReport');
 const suggest      = require('./suggest');
 const {
@@ -23,6 +24,9 @@ const {
 
 // POST /api/kutz/parseFoods
 router.post('/parseFoods', requireAuth, parseFoods);
+
+// GET  /api/kutz/searchFoods?q=... — OFf proxy (avoids CORS)
+router.get('/searchFoods', requireAuth, searchFoods);
 
 // POST /api/kutz/parsePhoto  — base64 image → Claude vision → food array
 router.post('/parsePhoto', requireAuth, parsePhoto);
