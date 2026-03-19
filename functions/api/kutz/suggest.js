@@ -28,7 +28,7 @@ async function getWeightTrend(uid) {
 
     if (snap.size < 3) return null;
 
-    const entries = snap.docs.map(d => ({ date: d.data().date, kg: Number(d.data().kg) || 0 }));
+    const entries = snap.docs.map(d => ({ date: d.data().date, kg: Number(d.data().weight) || 0 }));
     const mid     = Math.floor(entries.length / 2);
     const first   = entries.slice(0, mid);
     const second  = entries.slice(mid);

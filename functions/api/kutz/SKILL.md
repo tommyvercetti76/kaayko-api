@@ -46,10 +46,11 @@ Firebase project: kaaykostore   → same Auth + Firestore as main kaayko app
 | `src/components/FoodModal.jsx` | Manual food entry for all 5 macros |
 | `src/components/SettingsView.jsx` | BMR/TDEE calculator, macro targets, diet pattern (4 options), weight log, auto-entries, product DB overrides, CSV export |
 | `src/components/BarcodeScanner.jsx` | ZXing-based barcode scanner → OpenFoodFacts lookup → preview card |
+| `src/components/Achievements.jsx` | Real-time badges (water done, protein hit, fiber hit, precision, balanced day) + macro warnings (calories over, fat over, carbs over, low fiber) |
 | `src/lib/claude.js` | Frontend API calls: parseFoods(text, dietType), getSuggestions(), fitbit helpers |
-| `src/lib/firestore.js` | All Firestore ops: getOrCreateDay, addFood, deleteFood, logWeight, saveProduct, exercise CRUD |
+| `src/lib/firestore.js` | All Firestore ops: getOrCreateDay (today-only guard), addFood, deleteFood, logWeight, saveProduct, exercise CRUD |
 | `src/lib/calculations.js` | calcBMR (Mifflin-St Jeor, gender-aware), calcTDEE, stepBurn, correctedFitbit |
-| `src/context/ProfileContext.jsx` | Provides: profile, targets, dietType (derived), updateProfile. Falls back to defaults if not loaded. |
+| `src/context/ProfileContext.jsx` | Provides: profile, targets, dietType (derived), waterTarget, updateProfile. Falls back to defaults if not loaded. |
 | `src/lib/constants.js` | TARGETS, MEALS, MEAL_COLORS, COLORS, DIET_TYPES, ACTIVITY_LEVELS, DEFAULT_AUTO_ENTRIES |
 
 ---
@@ -80,7 +81,7 @@ Firebase project: kaaykostore   → same Auth + Firestore as main kaayko app
 | `kutzDays/{date}/exercises/{id}` | `type`, `durationMin`, `caloriesBurned`, `notes`, `addedAt` |
 | `kutzFrequentFoods/{key}` | `name`, `calories`, `protein`, `carbs`, `fat`, `fiber`, `useCount`, `defaultQuantity` |
 | `kutzProductDB/{key}` | `name`, `calories`, `protein`, `carbs`, `fat`, `fiber`, `per` (e.g. `100g`) |
-| `kutzWeightLog/{YYYY-MM-DD}` | `weight`, `date`, `loggedAt` |
+| `kutzWeightLog/{YYYY-MM-DD}` | `weight` (number, kg), `date`, `createdAt` |
 
 ---
 
@@ -186,6 +187,45 @@ cd kaayko-api && firebase deploy --only functions
 # Tests only
 cd kaayko-api/functions && npm run test:kutz
 ```
+
+---
+
+## Achievements / Rewards System
+
+`Achievements.jsx` evaluates totals + water on every render and displays badges/warnings:
+
+**Badges (positive):**
+| Badge | Trigger | Color |
+|-------|---------|-------|
+| 💧 Water quota done | `water >= waterTarget` | blue |
+| 💪 Protein hit | `protein >= target.protein` | green |
+| 🥦 Fiber hit | `fiber >= target.fiber` | green |
+| 🎯 Calorie precision | within ±50 kcal of target | amber |
+| ⚖️ Balanced day | all 5 macros within ±15% | purple |
+
+**Warnings (flags):**
+| Warning | Trigger | Color |
+|---------|---------|-------|
+| 🔴 Calories over | >15% over calorie target | red |
+| 🟠 Fat high | >30% over fat target | orange |
+| 🟡 Carbs high | >20% over carb target | amber |
+| ⚠️ Low fiber | carbs >80% of target but fiber <50% | amber |
+| ⚠️ Low protein | eaten >50% calories but <50% protein target | red |
+
+Thresholds live as `THRESHOLDS` object at top of `Achievements.jsx` for easy tuning.
+
+---
+
+## Critical Design Decisions
+
+### Today-Only Day Creation
+`getOrCreateDay(uid, dateKey)` will ONLY auto-create a day document when `dateKey === today (UTC)`. For any past or future date, it returns `null` and does NOT write to Firestore. This prevents phantom data from appearing when navigating dates or when RepeatMeal/WeekView reference other dates.
+
+### UTC-Safe Date Arithmetic
+All date math in the frontend uses `new Date(dateKey + 'T00:00:00Z')` + `setUTCDate()` to avoid DST off-by-one bugs. The `addDays()` helper in `App.jsx` and Streak date generation both use this pattern.
+
+### Firestore Listener Error Handling
+`onDaySnapshot()` and `onFoodsSnapshot()` accept optional `onError` callbacks. All listeners log errors to console. The `useDay` hook awaits `getOrCreateDay` before subscribing to avoid the race condition where the snapshot fires before the day document exists.
 
 ---
 

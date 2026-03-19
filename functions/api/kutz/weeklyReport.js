@@ -46,10 +46,13 @@ async function weeklyReport(req, res) {
 
     const weekData = [];
 
-    for (const dayDoc of daysSnap.docs) {
-      const day       = dayDoc.data();
-      const foodsSnap = await dayDoc.ref.collection('foods').get();
-      const foods     = foodsSnap.docs.map(d => d.data());
+    // Parallelize foods subcollection reads (was sequential — 7 round-trips)
+    const foodsPromises = daysSnap.docs.map(d => d.ref.collection('foods').get());
+    const allFoodsSnaps = await Promise.all(foodsPromises);
+
+    daysSnap.docs.forEach((dayDoc, i) => {
+      const day   = dayDoc.data();
+      const foods = allFoodsSnaps[i].docs.map(d => d.data());
 
       const totals = foods.reduce((acc, f) => ({
         calories: acc.calories + (Number(f.calories) || 0),
@@ -70,7 +73,7 @@ async function weeklyReport(req, res) {
         locked:    day.locked || false,
         foodCount: foods.filter(f => !f.auto).length,
       });
-    }
+    });
 
     const prompt = `Here is ${weekData.length} days of nutrition data for a ${gender} (diet: ${dietType}) targeting ${targets.calories} kcal, ${targets.protein}g protein, ${targets.carbs}g carbs, ${targets.fat}g fat, ${targets.fiber}g fiber per day:\n\n${JSON.stringify(weekData, null, 2)}\n\nProvide a brief factual analysis:\n- Adherence to calorie target (days over/under)\n- Protein consistency (days below ${Math.round(targets.protein * 0.9)}g)\n- Carb and fat trends vs targets\n- Any suspicious entries (unusually high/low days)\n- Estimated weekly deficit in kcal\n\nBe precise. No motivational language. No coaching.`;
 
