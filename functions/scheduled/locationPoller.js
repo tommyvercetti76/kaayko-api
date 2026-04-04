@@ -1,47 +1,47 @@
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { logger } = require('firebase-functions');
-const https = require('https');
 
 /**
  * Dynamic Location Polling Service
- * Automatically discovers new locations from paddlingOut API
+ * Discovers new/changed paddling spots by comparing Firestore paddlingSpots
+ * against the previously-stored snapshot in known_locations.
+ * Never makes HTTP calls back to the paddlingOut API — that's a circular dependency.
  */
 class LocationPoller {
     constructor() {
-        this.API_BASE_URL = 'https://api-vwcc5j4qda-uc.a.run.app';
         this.KNOWN_LOCATIONS_COLLECTION = 'known_locations';
     }
 
     /**
-     * Fetch all locations from paddlingOut API
+     * Fetch all locations directly from Firestore paddlingSpots collection.
+     * Returns an array in the same shape the old HTTP call returned.
      */
     async fetchAllLocations() {
-        return new Promise((resolve, reject) => {
-            const req = https.request(`${this.API_BASE_URL}/paddlingOut`, (res) => {
-                let data = '';
-                res.on('data', chunk => data += chunk);
-                res.on('end', () => {
-                    try {
-                        if (res.statusCode >= 200 && res.statusCode < 300) {
-                            const locations = JSON.parse(data);
-                            resolve(locations);
-                        } else {
-                            reject(new Error(`HTTP ${res.statusCode}: ${data}`));
-                        }
-                    } catch (error) {
-                        reject(error);
-                    }
-                });
-            });
+        const { getFirestore } = require('firebase-admin/firestore');
+        const db = getFirestore();
 
-            req.on('error', reject);
-            req.setTimeout(15000, () => {
-                req.destroy();
-                reject(new Error('Request timeout'));
-            });
-            
-            req.end();
-        });
+        const snapshot = await Promise.race([
+            db.collection('paddlingSpots').get(),
+            new Promise((_, reject) =>
+                setTimeout(() => reject(new Error('Firestore timeout after 10s')), 10000)
+            )
+        ]);
+
+        return snapshot.docs
+            .map(doc => {
+                const data = doc.data();
+                return {
+                    id: doc.id,
+                    title: data.title || data.lakeName || doc.id,
+                    lakeName: data.lakeName || data.title || doc.id,
+                    subtitle: data.subtitle || '',
+                    location: {
+                        latitude: data.location?.latitude,
+                        longitude: data.location?.longitude
+                    }
+                };
+            })
+            .filter(loc => loc.location.latitude && loc.location.longitude);
     }
 
     /**

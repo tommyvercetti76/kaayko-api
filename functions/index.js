@@ -108,4 +108,14 @@ exports.eveningForecastUpdate = eveningForecastUpdate;
 exports.emergencyForecastRefresh = emergencyForecastRefresh;
 exports.forecastSchedulerHealth = forecastSchedulerHealth;
 
+// Paddle score cache warmer — runs every 15 min, pre-warms scores for all curated spots
+// Deploy: firebase deploy --only functions:warmPaddleScoreCache
+const {
+  warmPaddleScoreCache,
+  aggregatePaddleFeedback
+} = require('./scheduled/paddleScoreWarmer');
+
+exports.warmPaddleScoreCache    = warmPaddleScoreCache;
+exports.aggregatePaddleFeedback = aggregatePaddleFeedback;
+
 console.log("✅ Kaayko API v2 - PUBLIC: fastForecast + paddlingOut | PREMIUM: forecast ($$) | SMARTLINKS: admin portal");
