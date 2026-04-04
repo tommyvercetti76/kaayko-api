@@ -1,37 +1,82 @@
-// File: functions/src/services/mlService.js
+// File: functions/api/weather/mlService.js
+//
+// ML Service — calls Cloud Run GradientBoosting model for paddle score predictions.
+// Uses native Node https (no axios dependency).
+// Falls back to rule-based rating if Cloud Run is unavailable.
 
-const axios = require('axios');
+const https = require('https');
 
-// Cloud Run ML service URL - Always use production ML service
-// The ML model is deployed and working in production, no need for local ML service
-const ML_SERVICE_URL = process.env.ML_SERVICE_URL || 'https://kaayko-ml-service-87383373015.us-central1.run.app';
+// URL must be set in Firebase Functions environment: ML_SERVICE_URL
+// Never falls back to a hardcoded URL — fail loudly so misconfiguration is caught early.
+function getMLServiceURL() {
+  const url = process.env.ML_SERVICE_URL;
+  if (!url) {
+    throw new Error('ML_SERVICE_URL environment variable is not set');
+  }
+  return url;
+}
 
 /**
- * Get ML prediction using Cloud Run ML service
- * @param {object} features
- * @returns {Promise<object>} result object with { success, rating, mlModelUsed, predictionSource }
+ * POST JSON to a URL using native https. Returns parsed response body.
+ * Enforces a strict timeout and validates the response status.
  */
-async function getPrediction(features) {
-  console.log('🤖 Getting ML prediction from Cloud Run service for features:', JSON.stringify(features, null, 2));
-  console.log('🌡️ Temperature being sent to ML model:', features.temperature, '°C');
-  console.log('💨 Wind speed being sent to ML model:', features.windSpeed, 'mph');
-  
-  try {
-    // Make HTTP request to Cloud Run ML service
-    const response = await axios.post(`${ML_SERVICE_URL}/predict`, features, {
-      timeout: 10000, // 10 second timeout
+function httpsPost(url, body, timeoutMs = 10000) {
+  return new Promise((resolve, reject) => {
+    const payload = JSON.stringify(body);
+    const parsed = new URL(url);
+
+    const options = {
+      hostname: parsed.hostname,
+      port: parsed.port || 443,
+      path: parsed.pathname + (parsed.search || ''),
+      method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
-      }
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(payload)
+      },
+      timeout: timeoutMs
+    };
+
+    const req = https.request(options, (res) => {
+      let data = '';
+      res.on('data', chunk => { data += chunk; });
+      res.on('end', () => {
+        if (res.statusCode < 200 || res.statusCode >= 300) {
+          return reject(new Error(`ML service HTTP ${res.statusCode}: ${data.slice(0, 200)}`));
+        }
+        try {
+          resolve(JSON.parse(data));
+        } catch {
+          reject(new Error('ML service returned non-JSON response'));
+        }
+      });
     });
 
-    const result = response.data;
-    console.log('✅ ML prediction successful - FULL RESPONSE:', JSON.stringify(result, null, 2));
-    console.log('🎯 ML Model returned rating:', result.rating);
-    console.log('🧠 Model type used:', result.modelType);
-    console.log('📊 ML model used:', result.mlModelUsed);
-    console.log('🔍 Prediction source:', result.predictionSource);
-    console.log('🎪 Confidence level:', result.confidence);
+    req.on('timeout', () => {
+      req.destroy();
+      reject(new Error(`ML service request timed out after ${timeoutMs}ms`));
+    });
+
+    req.on('error', reject);
+    req.write(payload);
+    req.end();
+  });
+}
+
+/**
+ * Get ML prediction from Cloud Run service.
+ * Always returns { success, rating, mlModelUsed, predictionSource, modelType, confidence }.
+ * On any failure, returns rule-based fallback with success: true so callers don't need
+ * to handle two code paths.
+ */
+async function getPrediction(features) {
+  console.log(`ML request — temp: ${features.temperature}°C, wind: ${features.windSpeed}mph`);
+
+  try {
+    const mlUrl = getMLServiceURL();
+    const result = await httpsPost(`${mlUrl}/predict`, features, 10000);
+
+    console.log(`ML prediction — rating: ${result.rating}, source: ${result.predictionSource}`);
 
     return {
       success: true,
@@ -40,18 +85,14 @@ async function getPrediction(features) {
       predictionSource: result.predictionSource || 'ml-model',
       modelType: result.modelType || 'GradientBoostingRegressor',
       confidence: result.confidence || 0.99,
-      // Pass through any additional fields from ML service
-      featuresUsed: result.featuresUsed,
-      rawMLResponse: result // Keep full response for debugging
+      featuresUsed: result.featuresUsed
     };
 
   } catch (error) {
-    console.error('❌ Cloud Run ML prediction failed:', error.message);
-    
-    // Fallback to rule-based system
-    console.log('🔄 Falling back to rule-based system...');
+    console.error('Cloud Run ML prediction failed:', error.message);
+    console.log('Falling back to rule-based rating');
+
     const fallbackRating = calculateFallbackRating(features);
-    
     return {
       success: true,
       rating: fallbackRating,
@@ -64,47 +105,38 @@ async function getPrediction(features) {
 }
 
 /**
- * Simple fallback rating calculation
- * @param {object} features 
- * @returns {number} rating between 1-5
+ * Rule-based fallback when ML service is unavailable.
+ * Operates on standardized MPH wind and Celsius temperature.
  */
 function calculateFallbackRating(features) {
-  let rating = 3.0; // Start with neutral
-  
-  // Wind factor (major impact)
-  if (features.windSpeed < 5) rating += 0.8;
+  let rating = 3.0;
+
+  // Wind (major impact — features.windSpeed is in MPH)
+  if (features.windSpeed < 5)       rating += 0.8;
   else if (features.windSpeed < 10) rating += 0.4;
   else if (features.windSpeed > 20) rating -= 1.2;
   else if (features.windSpeed > 15) rating -= 0.6;
-  
-  // Temperature factor
-  if (features.temperature >= 70 && features.temperature <= 85) rating += 0.3;
-  else if (features.temperature < 60 || features.temperature > 90) rating -= 0.4;
-  
-  // Weather warnings
-  if (features.hasWarnings) rating -= 0.8;
-  
-  // UV and visibility
-  if (features.uvIndex > 8) rating -= 0.2;
+
+  // Temperature (features.temperature is in Celsius)
+  const tempC = features.temperature;
+  if (tempC >= 18 && tempC <= 30)      rating += 0.3; // ~65-86°F
+  else if (tempC < 10 || tempC > 35)   rating -= 0.4; // Too cold or too hot
+
+  // Conditions
+  if (features.hasWarnings)  rating -= 0.8;
+  if (features.uvIndex > 8)  rating -= 0.2;
   if (features.visibility < 5) rating -= 0.3;
-  
-  // Ensure final rating is within bounds
-  rating = Math.max(1.0, Math.min(5.0, rating));
-  
-  // Round to nearest 0.5 for UI consistency (1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0)
-  rating = Math.round(rating * 2) / 2;
-  
-  return rating;
+
+  return Math.round(Math.max(1.0, Math.min(5.0, rating)) * 2) / 2;
 }
 
 /**
- * Extract features needed for ML prediction
- * @param {object} weatherData
- * @returns {object} features object
+ * Extract a minimal feature set from raw weather data.
+ * Used by legacy callers — prefer standardizeForMLModel() for new code.
  */
 function extractMLFeatures(weatherData) {
   return {
-    temperature: weatherData.temperature || 70,
+    temperature: weatherData.temperature || 20,
     windSpeed: weatherData.windSpeed || 5,
     hasWarnings: weatherData.hasWarnings || false,
     beaufortScale: Math.min(Math.floor((weatherData.windSpeed || 5) / 3.0), 12),
@@ -117,11 +149,6 @@ function extractMLFeatures(weatherData) {
   };
 }
 
-/**
- * Interpret rating result
- * @param {number} rating
- * @returns {string} interpretation
- */
 function interpretRating(rating) {
   if (rating >= 4.0) return 'Excellent';
   if (rating >= 3.0) return 'Good';
@@ -129,14 +156,8 @@ function interpretRating(rating) {
   return 'Poor';
 }
 
-/**
- * Apply personalized adjustments (placeholder)
- * @param {object} prediction
- * @param {object} userPrefs
- * @returns {object} adjusted prediction
- */
 function applyPersonalizedAdjustments(prediction, userPrefs = {}) {
-  return prediction; // No adjustments for now
+  return prediction;
 }
 
 module.exports = {

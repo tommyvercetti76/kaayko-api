@@ -294,9 +294,12 @@ class UnifiedWeatherService {
     }
 
     async _getCachedWeather(cacheKey) {
-        // Check memory cache first
+        // Check memory cache first — touch the entry to maintain LRU order
         const memoryEntry = this.memoryCache.get(cacheKey);
         if (memoryEntry && memoryEntry.expiresAt > Date.now()) {
+            // Re-insert so this key moves to the "most recently used" end of the Map
+            this.memoryCache.delete(cacheKey);
+            this.memoryCache.set(cacheKey, memoryEntry);
             return memoryEntry.data;
         }
 
@@ -348,12 +351,12 @@ class UnifiedWeatherService {
     }
 
     _updateMemoryCache(cacheKey, data, expiresAt) {
-        // Implement LRU eviction
+        // True LRU: delete before insert so the key moves to the "most recently used" end.
+        // JavaScript Map preserves insertion order, so the first key is always the LRU.
+        this.memoryCache.delete(cacheKey);
         if (this.memoryCache.size >= this.MAX_MEMORY_CACHE) {
-            const firstKey = this.memoryCache.keys().next().value;
-            this.memoryCache.delete(firstKey);
+            this.memoryCache.delete(this.memoryCache.keys().next().value);
         }
-
         this.memoryCache.set(cacheKey, {
             data,
             expiresAt: expiresAt.getTime ? expiresAt.getTime() : expiresAt

@@ -4,7 +4,6 @@
 //  Maximizes code reuse and ensures consistency across APIs
 //
 
-const https = require('https');
 const { WEATHER_CONFIG } = require('../../config/weatherConfig');
 
 /**
@@ -56,82 +55,41 @@ function securityHeadersMiddleware(req, res, next) {
 }
 
 /**
- * Shared location fetching with fallback
+ * Fetch all paddling locations directly from Firestore.
+ * Never makes an HTTP call back to the paddlingOut API — that creates a circular
+ * dependency and becomes a single point of failure for all scheduled jobs.
+ * Firestore is always the authoritative source for spot coordinates.
  */
 async function fetchPaddlingLocations(db) {
-  try {
-    const response = await new Promise((resolve, reject) => {
-      const req = https.get('https://kaayko.com/api/paddlingOut', {
-        timeout: 8000,
-        headers: { 'User-Agent': 'Kaayko-SharedUtils/1.0' }
-      }, (res) => {
-        let data = '';
-        res.on('data', chunk => data += chunk);
-        res.on('end', () => {
-          try {
-            resolve(JSON.parse(data));
-          } catch (e) {
-            reject(new Error('Invalid JSON from paddlingOut API'));
-          }
-        });
-      });
-      req.on('error', reject);
-      req.on('timeout', () => reject(new Error('Request timeout')));
-    });
-    
-    if (!Array.isArray(response)) throw new Error('Invalid response format');
-    
-    return response
-      .filter(spot => spot.location?.latitude && spot.location?.longitude)
-      .map(spot => ({
-        id: spot.id,
-        name: spot.title || spot.lakeName || spot.id,
+  const snapshot = await Promise.race([
+    db.collection('paddlingSpots').get(),
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Firestore timeout after 8s')), 8000)
+    )
+  ]);
+
+  return snapshot.docs
+    .map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        name: data.title || data.lakeName || doc.id,
         coordinates: {
-          latitude: spot.location.latitude,
-          longitude: spot.location.longitude
+          latitude: data.location?.latitude,
+          longitude: data.location?.longitude
         },
         amenities: {
-          parking: spot.parkingAvl === true || spot.parkingAvl === 'Y',
-          restrooms: spot.restroomsAvl === true || spot.restroomsAvl === 'Y'
+          parking: data.parkingAvl === true || data.parkingAvl === 'Y',
+          restrooms: data.restroomsAvl === true || data.restroomsAvl === 'Y'
         }
-      }))
-      .filter(spot => 
-        Math.abs(spot.coordinates.latitude) <= 90 &&
-        Math.abs(spot.coordinates.longitude) <= 180
-      );
-      
-  } catch (error) {
-    console.warn('paddlingOut API failed, using Firestore fallback:', error.message);
-    
-    // Fallback to Firestore with timeout
-    const snapshot = await Promise.race([
-      db.collection('paddlingSpots').get(),
-      new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Firestore timeout')), 5000)
-      )
-    ]);
-    
-    return snapshot.docs
-      .map(doc => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          name: data.title || data.lakeName || doc.id,
-          coordinates: {
-            latitude: data.location?.latitude,
-            longitude: data.location?.longitude
-          },
-          amenities: {
-            parking: data.parkingAvl === true || data.parkingAvl === 'Y',
-            restrooms: data.restroomsAvl === true || data.restroomsAvl === 'Y'
-          }
-        };
-      })
-      .filter(spot => 
-        spot.coordinates.latitude && 
-        spot.coordinates.longitude
-      );
-  }
+      };
+    })
+    .filter(spot =>
+      spot.coordinates.latitude &&
+      spot.coordinates.longitude &&
+      Math.abs(spot.coordinates.latitude) <= 90 &&
+      Math.abs(spot.coordinates.longitude) <= 180
+    );
 }
 
 /**

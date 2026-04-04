@@ -153,14 +153,20 @@ function analyzeForecastTrends(forecastData, currentConditions) {
   const windSpeeds = relevantHours.map(h => h.windKPH || 0);
   const temps = relevantHours.map(h => h.tempC || 15);
   
+  const windSpeeds0 = windSpeeds[0] || 0;
+  const windSpeedsLast = windSpeeds[windSpeeds.length - 1] || 0;
   const windImproving = windSpeeds.every((speed, i) => i === 0 || speed <= windSpeeds[i-1] + 2);
+  const windDeteriorating = windSpeedsLast > windSpeeds0 + 5; // increasing by >5kph over next hours
   const tempImproving = temps.some((temp, i) => i > 0 && temp > temps[i-1]);
   const stableConditions = windSpeeds.every(speed => speed < 15);
-  
+
   let adjustment = 0;
   let reason = '';
-  
-  if (windImproving && stableConditions) {
+
+  if (windDeteriorating) {
+    adjustment = -0.2;
+    reason = 'Wind increasing in forecast (-0.2)';
+  } else if (windImproving && stableConditions) {
     adjustment = +0.2;
     reason = 'Improving wind conditions in forecast (+0.2)';
   } else if (tempImproving && stableConditions) {
@@ -170,7 +176,7 @@ function analyzeForecastTrends(forecastData, currentConditions) {
     adjustment = +0.1;
     reason = 'Stable forecast conditions (+0.1)';
   }
-  
+
   return {
     type: 'forecast_trend',
     adjustment: adjustment,
@@ -260,24 +266,27 @@ function analyzeWindPatterns(conditions, forecastData) {
   let adjustment = 0;
   let reason = '';
   
-  // Light, steady winds are often underrated by the model
+  // Light, steady winds — optimal for paddling
   if (windSpeed >= 3 && windSpeed <= 8 && gustSpeed <= windSpeed * 1.2) {
     adjustment = +0.2;
     reason = 'Light steady winds optimal for paddling (+0.2)';
   }
-  
-  // Moderate winds with low gusts
+  // Moderate winds with manageable gusts
   else if (windSpeed >= 8 && windSpeed <= 12 && gustSpeed <= windSpeed * 1.3) {
     adjustment = +0.1;
     reason = 'Moderate winds with manageable gusts (+0.1)';
   }
-  
-  // Very light winds (might be underrated due to safety bias)
+  // Very light winds — ideal for beginners
   else if (windSpeed <= 5) {
     adjustment = +0.1;
     reason = 'Very light winds - ideal for beginners (+0.1)';
   }
-  
+  // High winds — model may under-penalise in borderline cases
+  else if (windSpeed >= 20) {
+    adjustment = -0.1;
+    reason = 'High wind advisory conditions (-0.1)';
+  }
+
   return {
     type: 'wind_pattern',
     adjustment: adjustment,
