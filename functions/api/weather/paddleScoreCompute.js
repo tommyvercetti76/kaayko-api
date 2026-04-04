@@ -137,9 +137,17 @@ async function computePaddleScoreForSpot(loc, options = {}) {
         penaltiesApplied: penaltyResult.penaltiesApplied || [],
         dynamicOffset,
         conditions: {
-            temperature: mlFeatures.temperature,
-            windSpeed:   mlFeatures.windSpeed,
-            hasWarnings: smartWarnings.length > 0
+            temperature:   mlFeatures.temperature,                               // °C
+            windSpeed:     current.wind?.speedKPH || (mlFeatures.windSpeed * 1.60934), // KPH for display
+            windDirection: current.wind?.direction || mlFeatures.windDirection,
+            gustSpeed:     current.wind?.gustKPH || (mlFeatures.gustSpeed * 1.60934),  // KPH
+            humidity:      mlFeatures.humidity,
+            cloudCover:    mlFeatures.cloudCover,
+            uvIndex:       mlFeatures.uvIndex,
+            visibility:    mlFeatures.visibility,                                // km
+            waterTemp:     marineHour?.water_temp_c || Math.max(2, mlFeatures.temperature - 8), // °C
+            precipMm:      mlFeatures.precipMm || 0,
+            hasWarnings:   smartWarnings.length > 0
         },
         warnings: {
             hasWarnings: smartWarnings.length > 0,
