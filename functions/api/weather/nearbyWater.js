@@ -116,11 +116,13 @@ router.get("/", async (req, res) => {
       });
     }
 
+    const noCache = req.query.nocache === '1' || req.query.nocache === 'true';
+
     // Check cache first (round to 2 decimal places for ~1km precision)
     const cacheKey = `${Math.round(lat * 100) / 100},${Math.round(lng * 100) / 100},${radius},${publicOnly}`;
     const cached = waterBodyCache.get(cacheKey);
-    
-    if (cached && (Date.now() - cached.timestamp < CACHE_TTL)) {
+
+    if (!noCache && cached && (Date.now() - cached.timestamp < CACHE_TTL)) {
       logger.info(`✅ Cache HIT for ${cacheKey} (age: ${Math.round((Date.now() - cached.timestamp) / 1000)}s)`);
       return res.json({
         ...cached.data,
@@ -128,34 +130,28 @@ router.get("/", async (req, res) => {
         cacheAge: Math.round((Date.now() - cached.timestamp) / 1000)
       });
     }
-    
+
     logger.info(`❌ Cache MISS for ${cacheKey} - fetching from Overpass API`);
 
     logger.info(`🔎 Searching for water bodies near ${lat}, ${lng} within ${radius}km${publicOnly ? ' (PUBLIC ONLY)' : ''}`);
 
     const radiusMeters = radius * 1000;
     
-    // Enhanced query prioritizing major water bodies and reservoirs
+    // Streamlined query — fewer tag combinations means faster Overpass response
     const waterQuery = `
-[out:json][timeout:90];
+[out:json][timeout:60];
 (
-  // Major reservoirs and lakes - explicit search
-  relation(around:${radiusMeters},${lat},${lng})["landuse"="reservoir"]["name"];
-  way(around:${radiusMeters},${lat},${lng})["landuse"="reservoir"]["name"];
-  relation(around:${radiusMeters},${lat},${lng})["water"="lake"]["name"];
-  way(around:${radiusMeters},${lat},${lng})["water"="lake"]["name"];
-  relation(around:${radiusMeters},${lat},${lng})["place"="lake"]["name"];
-  way(around:${radiusMeters},${lat},${lng})["place"="lake"]["name"];
-  
-  // Natural water bodies with names
-  relation(around:${radiusMeters},${lat},${lng})["natural"="water"]["name"];
   way(around:${radiusMeters},${lat},${lng})["natural"="water"]["name"];
-  
-  // Major rivers (limited to avoid duplicates)
+  relation(around:${radiusMeters},${lat},${lng})["natural"="water"]["name"];
+  way(around:${radiusMeters},${lat},${lng})["landuse"="reservoir"]["name"];
+  relation(around:${radiusMeters},${lat},${lng})["landuse"="reservoir"]["name"];
+  way(around:${radiusMeters},${lat},${lng})["waterway"="river"]["name"];
   relation(around:${radiusMeters},${lat},${lng})["waterway"="river"]["name"];
 );
 out center tags;
-    `.trim();    const waterData = await queryOverpass(waterQuery);
+    `.trim();
+
+    const waterData = await queryOverpass(waterQuery);
     logger.info(`📦 Overpass returned ${waterData.elements?.length || 0} water elements`);
 
     let publicLandsData = { elements: [] };
@@ -417,12 +413,16 @@ out tags center;
       cached: false
     };
 
-    // Store in cache
-    waterBodyCache.set(cacheKey, {
-      data: responseData,
-      timestamp: Date.now()
-    });
-    logger.info(`💾 Cached result for ${cacheKey} (${waterBodyCache.size} total entries)`);
+    // Only cache non-empty results — avoids locking out retries on Overpass failures
+    if (results.length > 0) {
+      waterBodyCache.set(cacheKey, {
+        data: responseData,
+        timestamp: Date.now()
+      });
+      logger.info(`💾 Cached result for ${cacheKey} (${waterBodyCache.size} total entries)`);
+    } else {
+      logger.warn(`⚠️ Not caching empty result for ${cacheKey} — Overpass may have timed out`);
+    }
 
     res.json(responseData);
 
