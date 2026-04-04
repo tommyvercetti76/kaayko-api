@@ -21,12 +21,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY main.py .
 COPY predict_konditions.py .
 
-# Copy working model
-# Copy model files
-COPY kaayko_production_model_compat.pkl .
-
-# Run model compatibility rebuild (skip if already compatible)
-# RUN python3 rebuild_model_compat.py
+# Model is NOT baked into the image.
+# predict_konditions.py downloads it from GCS (ML_MODEL_BUCKET / ML_MODEL_OBJECT)
+# at container startup, falling back to rule-based predictions if GCS is unavailable.
 
 # Set environment variables for production
 ENV PYTHONUNBUFFERED=1

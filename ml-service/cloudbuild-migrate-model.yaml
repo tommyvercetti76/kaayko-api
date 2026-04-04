@@ -1,0 +1,20 @@
+# One-time migration: extract model pkl from existing Cloud Run image → GCS
+# Run once: gcloud builds submit --config ml-service/cloudbuild-migrate-model.yaml --no-source
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        docker pull gcr.io/kaaykostore/kaayko-ml-service:latest
+        docker create --name extract gcr.io/kaaykostore/kaayko-ml-service:latest
+        docker cp extract:/app/kaayko_production_model_compat.pkl /workspace/model.pkl
+        docker rm extract
+        ls -lh /workspace/model.pkl
+
+  - name: 'gcr.io/cloud-builders/gsutil'
+    args: ['cp', '/workspace/model.pkl', 'gs://kaayko-ml-models/paddle-score/current.pkl']
+
+timeout: '300s'
+options:
+  logging: CLOUD_LOGGING_ONLY
