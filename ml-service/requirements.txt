@@ -7,3 +7,6 @@ pandas==2.2.2
 gunicorn==21.2.0
 requests==2.32.3
 xgboost==2.0.3
+google-cloud-storage==2.18.2
+google-cloud-firestore==2.19.0
+shap==0.45.1

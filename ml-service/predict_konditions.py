@@ -43,21 +43,48 @@ import traceback
 _model_cache = None
 _model_error = None
 
+# GCS bucket / object path (override with env vars at deploy time)
+GCS_BUCKET  = os.environ.get('ML_MODEL_BUCKET', 'kaayko-ml-models')
+GCS_OBJECT  = os.environ.get('ML_MODEL_OBJECT', 'paddle-score/current.pkl')
+LOCAL_MODEL = 'kaayko_production_model_compat.pkl'
+
+
+def _download_model_from_gcs(dest_path: str) -> bool:
+    """Download model from GCS to dest_path. Returns True on success."""
+    try:
+        from google.cloud import storage  # type: ignore
+        client = storage.Client()
+        bucket = client.bucket(GCS_BUCKET)
+        blob   = bucket.blob(GCS_OBJECT)
+        blob.download_to_filename(dest_path)
+        size_mb = os.path.getsize(dest_path) / (1024 * 1024)
+        print(f'☁️  Downloaded model from gs://{GCS_BUCKET}/{GCS_OBJECT} → {dest_path} ({size_mb:.1f} MB)')
+        return True
+    except Exception as e:
+        print(f'⚠️  GCS download failed ({e}), will use local model if present')
+        return False
+
+
 def load_production_model():
-    """Load the production ML model with all preprocessing components"""
+    """Load the production ML model — GCS first, then local fallback."""
     global _model_cache, _model_error
-    
+
     if _model_cache is not None:
         return _model_cache
-        
+
     # Always try to load on new container - don't cache errors across container restarts
     # if _model_error is not None:
     #     raise Exception(f"Model previously failed to load: {_model_error}")
-    
+
     try:
-        # Try to load the production model
-        model_path = 'kaayko_production_model_compat.pkl'
-        
+        # Try to download from GCS first so the running container always uses the
+        # latest model without requiring a Docker rebuild / redeploy.
+        gcs_dest = '/tmp/model_gcs.pkl'
+        if _download_model_from_gcs(gcs_dest):
+            model_path = gcs_dest
+        else:
+            model_path = LOCAL_MODEL
+
         if not os.path.exists(model_path):
             raise FileNotFoundError(f"Production model not found at {model_path}")
         
@@ -191,53 +218,93 @@ def load_production_model():
         print(f"❌ Failed to load production model: {e}")
         raise e
 
-def extract_production_features(temperature, windSpeed, hasWarnings, beaufortScale, 
+def extract_production_features(temperature, windSpeed, hasWarnings, beaufortScale,
                               uvIndex, visibility, humidity=50, cloudCover=50,
-                              latitude=30.0, longitude=-97.0, location_id="default"):
-    """Extract features in the same format as the new training data"""
-    
+                              latitude=30.0, longitude=-97.0, location_id="default",
+                              gustSpeed=None, windDirection=None, waveHeight=None,
+                              waterTemp=None, precipMM=None, pressure=None,
+                              feelsLike=None, precipChance=None):
+    """Extract features in the same format as the new training data.
+
+    Real values are used when provided; sensible estimates fill any gaps so the
+    function remains backward-compatible while making full use of available data.
+    """
+
+    # ── Resolve optional fields with realistic estimates ────────────────────
+    gustSpeed     = float(gustSpeed)     if gustSpeed     is not None else float(windSpeed * 1.3)
+    pressure      = float(pressure)      if pressure      is not None else 1013.0
+    feelsLike     = float(feelsLike)     if feelsLike     is not None else float(temperature)
+    precipMM      = float(precipMM)      if precipMM      is not None else 0.0
+    precipChance  = float(precipChance)  if precipChance  is not None else min(100.0, float(cloudCover) * 0.8)
+
+    # Wind direction: convert compass string → degrees if needed
+    _COMPASS = {
+        'N': 0, 'NNE': 22.5, 'NE': 45, 'ENE': 67.5,
+        'E': 90, 'ESE': 112.5, 'SE': 135, 'SSE': 157.5,
+        'S': 180, 'SSW': 202.5, 'SW': 225, 'WSW': 247.5,
+        'W': 270, 'WNW': 292.5, 'NW': 315, 'NNW': 337.5,
+    }
+    if windDirection is None:
+        windDegree = 180.0
+        windDirStr = 'S'
+    elif isinstance(windDirection, str):
+        windDegree = float(_COMPASS.get(windDirection.upper(), 180.0))
+        windDirStr = windDirection.upper()
+    else:
+        windDegree = float(windDirection)
+        # reverse-map degrees to the nearest compass label
+        closest = min(_COMPASS, key=lambda k: abs(_COMPASS[k] - windDegree))
+        windDirStr = closest
+
     # Get current time info
     now = datetime.now()
     hour = now.hour
     day_index = 0  # Current day (0=today)
     date_str = now.strftime("%Y-%m-%d")
-    
+
     # Determine time slot based on hour
     if 7 <= hour <= 9:
         time_slot = "MORNING"
     elif 12 <= hour <= 14:
-        time_slot = "NOON" 
+        time_slot = "NOON"
     elif 17 <= hour <= 19:
         time_slot = "EVENING"
     else:
-        # Default to closest time slot
         if hour < 12:
             time_slot = "MORNING"
         elif hour < 17:
             time_slot = "NOON"
         else:
             time_slot = "EVENING"
-    
+
     # Base numerical features from new training format
     numerical_features = {
-        'latitude': float(latitude),
-        'longitude': float(longitude), 
-        'hour': hour,
-        'day_index': day_index,
-        'distance_km': 0.0,  # Base location
-        'temperature': float(temperature),
-        'feelsLike': float(temperature),  # Simplified
-        'windSpeed': float(windSpeed),
-        'gustSpeed': float(windSpeed * 1.5),  # Typical gust multiplier
-        'windDegree': 180.0,  # Default south wind
-        'humidity': float(humidity),
-        'uvIndex': float(uvIndex),
-        'visibility': float(visibility),
-        'cloudCover': float(cloudCover),
-        'pressure': 1013.0,  # Standard pressure
-        'precipChance': min(100.0, cloudCover * 0.8),  # Approximation
-        'precipMM': 0.0,  # No current precipitation
+        'latitude':     float(latitude),
+        'longitude':    float(longitude),
+        'hour':         hour,
+        'day_index':    day_index,
+        'distance_km':  0.0,
+        'temperature':  float(temperature),
+        'feelsLike':    feelsLike,
+        'windSpeed':    float(windSpeed),
+        'gustSpeed':    gustSpeed,
+        'windDegree':   windDegree,
+        'humidity':     float(humidity),
+        'uvIndex':      float(uvIndex),
+        'visibility':   float(visibility),
+        'cloudCover':   float(cloudCover),
+        'pressure':     pressure,
+        'precipChance': precipChance,
+        'precipMM':     precipMM,
     }
+
+    # Wave height feeds the model when available (ocean/large-lake locations)
+    if waveHeight is not None:
+        numerical_features['waveHeight'] = float(waveHeight)
+
+    # Water temperature — real value is far more accurate than an air-temp proxy
+    if waterTemp is not None:
+        numerical_features['waterTemp'] = float(waterTemp)
     
     # Add derived time features (calculated like in training)
     import pandas as pd
@@ -291,9 +358,12 @@ def extract_production_features(temperature, windSpeed, hasWarnings, beaufortSca
 
 def predict_with_production_model(temperature, windSpeed, hasWarnings, beaufortScale,
                                 uvIndex, visibility, humidity=50, cloudCover=50,
-                                latitude=30.0, longitude=-97.0, location_id="api_call"):
+                                latitude=30.0, longitude=-97.0, location_id="api_call",
+                                gustSpeed=None, windDirection=None, waveHeight=None,
+                                waterTemp=None, precipMM=None, pressure=None,
+                                feelsLike=None, precipChance=None):
     """Make prediction using the trained production model"""
-    
+
     try:
         # Load model
         model_data = load_production_model()
@@ -301,12 +371,16 @@ def predict_with_production_model(temperature, windSpeed, hasWarnings, beaufortS
         scaler = model_data['scaler']
         label_encoders = model_data['label_encoders']
         feature_names = model_data['feature_names']
-        
-        # Extract features in new format
+
+        # Extract features — pass all real values through
         numerical_features, categorical_features = extract_production_features(
             temperature, windSpeed, hasWarnings, beaufortScale,
             uvIndex, visibility, humidity, cloudCover,
-            latitude, longitude, location_id
+            latitude, longitude, location_id,
+            gustSpeed=gustSpeed, windDirection=windDirection,
+            waveHeight=waveHeight, waterTemp=waterTemp,
+            precipMM=precipMM, pressure=pressure,
+            feelsLike=feelsLike, precipChance=precipChance,
         )
         
         import pandas as pd
@@ -379,33 +453,35 @@ def predict_with_production_model(temperature, windSpeed, hasWarnings, beaufortS
 
 def predict_paddle_rating(temperature, windSpeed, hasWarnings, beaufortScale,
                          uvIndex, visibility, model_path=None, humidity=50, cloudCover=50,
-                         latitude=30.0, longitude=-97.0, location_id="api_call"):
+                         latitude=30.0, longitude=-97.0, location_id="api_call",
+                         gustSpeed=None, windDirection=None, waveHeight=None,
+                         waterTemp=None, precipMM=None, pressure=None,
+                         feelsLike=None, precipChance=None):
     """
     =======================================================================
     MAIN PREDICTION FUNCTION: Production ML Model + Rule-based Fallback
     =======================================================================
-    
+
     This function first attempts to use the trained production ML model
-    (99.56% accuracy) and falls back to rule-based predictions if needed.
-    
+    and falls back to rule-based predictions if needed.
+
     Returns:
     --------
-    dict or float
-        If called from API: dict with rating, mlModelUsed, predictionSource
-        If called standalone: float rating (backward compatibility)
+    dict with rating, mlModelUsed, predictionSource
     """
-    
-    # Determine if this is an API call (when we need detailed response)
-    # Always return detailed response when called through the web service
+
     return_detailed = True
-    
+
     try:
-        # Try production ML model first
         print(f"🚀 Attempting production ML prediction...")
         ml_result = predict_with_production_model(
             temperature, windSpeed, hasWarnings, beaufortScale,
             uvIndex, visibility, humidity, cloudCover,
-            latitude, longitude, location_id
+            latitude, longitude, location_id,
+            gustSpeed=gustSpeed, windDirection=windDirection,
+            waveHeight=waveHeight, waterTemp=waterTemp,
+            precipMM=precipMM, pressure=pressure,
+            feelsLike=feelsLike, precipChance=precipChance,
         )
         
         if ml_result['success']:
