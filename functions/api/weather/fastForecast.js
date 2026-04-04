@@ -63,120 +63,128 @@ async function transformToFastForecastFormat(weatherData, locationQuery) {
             
             if (isNaN(hour) || hour < 0 || hour > 23) continue;
             
-            // Get ML prediction using standardized data format
+            const KPH_TO_MPH = 0.621371;
+            const lat = weatherData.location?.coordinates?.latitude || location.coordinates?.latitude;
+            const lng = weatherData.location?.coordinates?.longitude || location.coordinates?.longitude;
+
+            // Real gust from API (WeatherAPI hourly has gust_kph)
+            const realGustKph = hourData.gust_kph || hourData.gustKph || (hourData.windKPH * 1.3);
+            const realVisKm   = hourData.vis_km   || hourData.visibility || 10;
+            const realPrecipMm = hourData.precip_mm ?? hourData.precipMM ?? 0;
+            const realRainChancePct = hourData.chance_of_rain ?? hourData.chanceOfRain ?? 0;
+
+            // Extract water temp from marine data for this hour
+            let waterTemp = null;
+            if (marineData?.forecast?.forecastday) {
+                const marineDay = marineData.forecast.forecastday.find(d => d.date === dayData.date);
+                const marineHour = marineDay?.hour?.find(h => h.time === hourData.time);
+                if (marineHour?.water_temp_c) waterTemp = marineHour.water_temp_c;
+            }
+            if (waterTemp === null) waterTemp = Math.max(2, hourData.tempC - 8);
+
+            // ML input — real values, no hardcoded defaults
             const rawInput = {
-                temperature: hourData.tempC,
-                windSpeedKph: hourData.windKPH,
-                windDirection: hourData.windDir,
-                humidity: hourData.humidity,
-                cloudCover: hourData.cloudCover,
-                uvIndex: hourData.uvIndex,
-                visibility: 10,
-                hasWarnings: false,
-                latitude: weatherData.location?.coordinates?.latitude || location.coordinates?.latitude,
-                longitude: weatherData.location?.coordinates?.longitude || location.coordinates?.longitude
+                temperature:          hourData.tempC,
+                windSpeedKph:         hourData.windKPH,
+                windDirection:        hourData.windDir,
+                humidity:             hourData.humidity,
+                cloudCover:           hourData.cloudCover,
+                uvIndex:              hourData.uvIndex,
+                visibility:           realVisKm,
+                precipMm:             realPrecipMm,
+                precipChancePercent:  realRainChancePct,
+                gustSpeedKph:         realGustKph,
+                hasWarnings:          false,
+                latitude:  lat,
+                longitude: lng
             };
-            
+
             const mlInputData = standardizeForMLModel(rawInput, marineData);
-            
-            // Use v3 model with standardized data and apply calibration
+
+            // ML prediction
             const prediction = await mlService.getPrediction(mlInputData);
-            
-            // Apply model calibration for more accurate real-world ratings
+
+            // Calibration (trend, seasonal, location adjustments)
             const calibratedPrediction = calibrateModelPrediction(
                 prediction.rating,
                 {
                     temperature: hourData.tempC,
-                    windSpeed: hourData.windKPH * 0.621371, // Convert to MPH
-                    gustSpeed: (hourData.windKPH * 1.3) * 0.621371,
-                    humidity: hourData.humidity,
-                    cloudCover: hourData.cloudCover,
-                    uvIndex: hourData.uvIndex,
-                    visibility: 10
+                    windSpeed:   hourData.windKPH * KPH_TO_MPH,
+                    gustSpeed:   realGustKph      * KPH_TO_MPH,
+                    humidity:    hourData.humidity,
+                    cloudCover:  hourData.cloudCover,
+                    uvIndex:     hourData.uvIndex,
+                    visibility:  realVisKm
                 },
                 weatherData.forecast,
-                {
-                    latitude: weatherData.location?.coordinates?.latitude || location.coordinates?.latitude,
-                    longitude: weatherData.location?.coordinates?.longitude || location.coordinates?.longitude
-                }
+                { latitude: lat, longitude: lng }
             );
-            
-            // Use calibrated rating for heatmap consistency
-            const finalRating = calibratedPrediction.calibratedRating;
-            
-            // Extract water temperature from marine data if available for this hour
-            let waterTemp = null;
-            if (marineData && marineData.forecast && marineData.forecast.forecastday) {
-                const marineDay = marineData.forecast.forecastday.find(day => day.date === dayData.date);
-                if (marineDay && marineDay.hour) {
-                    const marineHour = marineDay.hour.find(h => h.time === hourData.time);
-                    if (marineHour && marineHour.water_temp_c) {
-                        waterTemp = marineHour.water_temp_c;
-                        console.log(`🌊 MARINE WATER TEMP FOUND for ${hourData.time}: ${waterTemp}°C (was going to estimate from air temp ${hourData.tempC}°C)`);
-                    } else {
-                        console.log(`⚠️ Marine data available but no water_temp_c for ${hourData.time}`);
-                    }
-                } else {
-                    console.log(`⚠️ Marine data available but no hourly data for ${dayData.date}`);
-                }
-            } else {
-                console.log(`ℹ️ No marine data available for water temp estimation at ${hourData.time}`);
-            }
-            
-            // Generate smart warnings for this hour
+
+            // Penalties — THIS is what was missing. Rain, wind, visibility all apply here.
+            const penaltyFeatures = {
+                ...mlInputData,
+                precipMm:            realPrecipMm,
+                precipChancePercent: realRainChancePct,
+                visibilityKm:        realVisKm,
+                waterTemp:           waterTemp
+            };
+            const penaltyResult = applyEnhancedPenalties(
+                { rating: calibratedPrediction.calibratedRating },
+                penaltyFeatures,
+                marineData
+            );
+            const finalRating = penaltyResult.rating;
+
+            // Smart warnings with real data
             const smartWarnings = getSmartWarnings(
                 {
                     temperature: hourData.tempC,
-                    windSpeed: hourData.windKPH * 0.621371, // Convert to MPH for warnings
-                    gustSpeed: (hourData.windKPH * 1.3) * 0.621371,
-                    humidity: hourData.humidity,
-                    cloudCover: hourData.cloudCover,
-                    uvIndex: hourData.uvIndex,
-                    visibility: 10,
-                    waterTemp: waterTemp  // Use marine data if available, otherwise smartWarnings will estimate
+                    windSpeed:   hourData.windKPH * KPH_TO_MPH,
+                    gustSpeed:   realGustKph      * KPH_TO_MPH,
+                    humidity:    hourData.humidity,
+                    cloudCover:  hourData.cloudCover,
+                    uvIndex:     hourData.uvIndex,
+                    visibility:  realVisKm,
+                    waterTemp:   waterTemp
                 },
                 weatherData,
-                {
-                    latitude: weatherData.location?.coordinates?.latitude || location.coordinates?.latitude,
-                    longitude: weatherData.location?.coordinates?.longitude || location.coordinates?.longitude
-                }
+                { latitude: lat, longitude: lng }
             );
-            
-            // Transform to production format with calibrated ratings
+
             forecastDay.hourly[hour] = {
-                temperature: hourData.tempC,
-                windSpeed: hourData.windKPH,
+                temperature:   hourData.tempC,
+                windSpeed:     hourData.windKPH,
                 windDirection: hourData.windDir,
-                gustSpeed: (hourData.windKPH * 1.3), // Simple gust estimate in KPH
-                humidity: hourData.humidity,
-                cloudCover: hourData.cloudCover,
-                uvIndex: hourData.uvIndex,
-                visibility: 10, // Default visibility
-                hasWarnings: smartWarnings.length > 0,
-                warnings: smartWarnings,
+                gustSpeed:     realGustKph,
+                humidity:      hourData.humidity,
+                cloudCover:    hourData.cloudCover,
+                uvIndex:       hourData.uvIndex,
+                visibility:    realVisKm,
+                precipMM:      realPrecipMm,
+                chanceOfRain:  realRainChancePct,
+                hasWarnings:   smartWarnings.length > 0,
+                warnings:      smartWarnings,
                 beaufortScale: calculateBeaufortFromKph(hourData.windKPH),
-                // Marine data consistency
-                waterTemp: Math.max(2, hourData.tempC - 8), // Conservative water temp estimate
+                waterTemp:     waterTemp,
                 marineDataAvailable: !!marineData,
                 prediction: {
-                    rating: finalRating,
-                    mlModelUsed: prediction.mlModelUsed,
+                    rating:           finalRating,
+                    mlModelUsed:      prediction.mlModelUsed,
                     predictionSource: prediction.predictionSource,
-                    modelType: prediction.modelType,
-                    confidence: prediction.confidence,
-                    isGoldStandard: true, // Using calibrated ML model
-                    v3ModelUsed: true,
-                    // Calibration details
-                    originalMLRating: calibratedPrediction.originalRating,
-                    calibrationApplied: calibratedPrediction.adjustments.length > 0,
-                    adjustments: calibratedPrediction.adjustments
+                    modelType:        prediction.modelType,
+                    confidence:       prediction.confidence,
+                    isGoldStandard:   true,
+                    v3ModelUsed:      true,
+                    originalMLRating:     calibratedPrediction.originalRating,
+                    calibrationApplied:   calibratedPrediction.adjustments.length > 0,
+                    adjustments:          calibratedPrediction.adjustments,
+                    penaltiesApplied:     penaltyResult.penaltiesApplied
                 },
-                // Calibrated results for heatmap consistency
-                originalRating: calibratedPrediction.originalRating,
-                safetyDeduction: 0, // No additional penalties with calibration
-                apiRating: finalRating,
-                rating: finalRating,
-                mlModelUsed: prediction.mlModelUsed,
+                originalRating:   calibratedPrediction.originalRating,
+                safetyDeduction:  penaltyResult.totalPenalty || 0,
+                apiRating:        finalRating,
+                rating:           finalRating,
+                mlModelUsed:      prediction.mlModelUsed,
                 predictionSource: prediction.predictionSource
             };
         }

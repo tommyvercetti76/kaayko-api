@@ -687,12 +687,18 @@ class UnifiedWeatherService {
                 hourly: day.hour ? day.hour.map(hour => ({
                     time: hour.time,
                     tempC: hour.temp_c,
+                    feelsLikeC: hour.feelslike_c,
                     windKPH: hour.wind_kph,
                     windDir: hour.wind_dir,
+                    windDegree: hour.wind_degree,
+                    gust_kph: hour.gust_kph,
                     humidity: hour.humidity,
                     cloudCover: hour.cloud,
                     uvIndex: hour.uv,
+                    vis_km: hour.vis_km,
                     precipMM: hour.precip_mm,
+                    chance_of_rain: hour.chance_of_rain,
+                    chance_of_snow: hour.chance_of_snow,
                     condition: hour.condition
                 })) : []
             }));

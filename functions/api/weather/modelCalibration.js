@@ -18,44 +18,31 @@
  */
 function calibrateModelPrediction(baseRating, currentConditions, forecastData, locationData) {
   console.log('🎯 Starting model calibration for base rating:', baseRating);
-  
+
+  // If conditions are already severe, positive adjustments are misleading.
+  // Suppress all positive calibration when: heavy rain OR high wind OR poor visibility.
+  const precipMm     = currentConditions.precipMm || currentConditions.precipMM || 0;
+  const rainChancePct = currentConditions.precipChancePercent || currentConditions.precipChance || 0;
+  const windSpeedMph = currentConditions.windSpeed || 0;
+  const visKm        = currentConditions.visibility ?? 10;
+  const suppressPositive = precipMm >= 2 || rainChancePct >= 60 || windSpeedMph >= 20 || visKm < 5;
+
   let adjustedRating = baseRating;
   const adjustments = [];
   
-  // 1. WATER TEMPERATURE CALIBRATION
-  const waterTempAdjustment = calibrateWaterTemperature(currentConditions, locationData);
-  if (waterTempAdjustment.adjustment !== 0) {
-    adjustedRating += waterTempAdjustment.adjustment;
-    adjustments.push(waterTempAdjustment);
-  }
-  
-  // 2. FORECAST TREND ANALYSIS
-  const forecastTrendAdjustment = analyzeForecastTrends(forecastData, currentConditions);
-  if (forecastTrendAdjustment.adjustment !== 0) {
-    adjustedRating += forecastTrendAdjustment.adjustment;
-    adjustments.push(forecastTrendAdjustment);
-  }
-  
-  // 3. SEASONAL CALIBRATION
-  const seasonalAdjustment = applySeasonalCalibration(currentConditions, locationData);
-  if (seasonalAdjustment.adjustment !== 0) {
-    adjustedRating += seasonalAdjustment.adjustment;
-    adjustments.push(seasonalAdjustment);
-  }
-  
-  // 4. LOCATION-SPECIFIC CALIBRATION
-  const locationAdjustment = applyLocationCalibration(currentConditions, locationData);
-  if (locationAdjustment.adjustment !== 0) {
-    adjustedRating += locationAdjustment.adjustment;
-    adjustments.push(locationAdjustment);
-  }
-  
-  // 5. WIND PATTERN ANALYSIS
-  const windPatternAdjustment = analyzeWindPatterns(currentConditions, forecastData);
-  if (windPatternAdjustment.adjustment !== 0) {
-    adjustedRating += windPatternAdjustment.adjustment;
-    adjustments.push(windPatternAdjustment);
-  }
+  // Helper: apply adjustment, but skip positive ones when conditions are severe
+  const applyAdj = (adj) => {
+    if (!adj || adj.adjustment === 0) return;
+    if (suppressPositive && adj.adjustment > 0) return; // never boost in rain/storm
+    adjustedRating += adj.adjustment;
+    adjustments.push(adj);
+  };
+
+  applyAdj(calibrateWaterTemperature(currentConditions, locationData));  // 1. Water temp
+  applyAdj(analyzeForecastTrends(forecastData, currentConditions));       // 2. Forecast trend
+  applyAdj(applySeasonalCalibration(currentConditions, locationData));    // 3. Seasonal
+  applyAdj(applyLocationCalibration(currentConditions, locationData));    // 4. Location
+  applyAdj(analyzeWindPatterns(currentConditions, forecastData));         // 5. Wind pattern
   
   // Ensure rating stays within bounds
   adjustedRating = Math.max(1.0, Math.min(5.0, adjustedRating));

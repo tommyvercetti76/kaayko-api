@@ -47,19 +47,23 @@ async function computePaddleScoreForSpot(loc, options = {}) {
     const current = weatherData.current;
     const marineHour = marineData?.forecast?.forecastday?.[0]?.hour?.[0];
 
-    // Standardize into 57-feature ML input
+    // Standardize into ML input — pass ALL available real values
     const mlFeatures = standardizeForMLModel({
-        temperature: current.temperature?.celsius,
-        windSpeed:   current.wind?.speedMPH || current.windSpeed,
-        gustSpeed:   current.wind?.gustMPH  || (current.wind?.speedMPH || 0) * 1.3,
+        temperature:   current.temperature?.celsius,
+        windSpeed:     current.wind?.speedMPH  || current.windSpeed,
+        gustSpeed:     current.wind?.gustMPH   || (current.wind?.speedMPH || 0) * 1.3,
         windDirection: current.wind?.direction || current.windDirection,
-        humidity:    current.atmospheric?.humidity  || current.humidity,
-        cloudCover:  current.atmospheric?.cloudCover || current.cloudCover,
-        uvIndex:     current.solar?.uvIndex || current.uvIndex,
-        visibility:  current.atmospheric?.visibility || current.visibility,
-        hasWarnings: current.hasWarnings,
-        latitude:    loc.lat,
-        longitude:   loc.lng
+        humidity:      current.atmospheric?.humidity   || current.humidity,
+        cloudCover:    current.atmospheric?.cloudCover || current.cloudCover,
+        uvIndex:       current.solar?.uvIndex  || current.uvIndex,
+        // Real visibility — never default to 10 when we have actual data
+        visibility:    current.atmospheric?.visibility ?? current.visibility ?? 10,
+        hasWarnings:   current.hasWarnings,
+        // Precipitation — critical for accuracy in rain events
+        precipMm:      current.precipitation?.amountMM ?? 0,
+        precipChancePercent: current.precipitation?.chancePct ?? 0,
+        latitude:  loc.lat,
+        longitude: loc.lng
     }, marineData);
 
     // ML prediction (with built-in fallback to rule-based if Cloud Run is down)
@@ -92,15 +96,16 @@ async function computePaddleScoreForSpot(loc, options = {}) {
     );
 
     // Apply enhanced penalties (wind, temp, wave, precip, visibility, marine)
+    // applyEnhancedPenalties expects { rating: number } as first arg
     const penaltyResult = applyEnhancedPenalties(
-        calibratedPrediction.calibratedRating,
+        { rating: calibratedPrediction.calibratedRating },
         mlFeatures,
         marineData
     );
 
     // Apply per-spot dynamic calibration offset from feedback loop (defaults to 0)
     const dynamicOffset = calibrationOffsets.get(loc.id) || 0;
-    let finalRating = penaltyResult.finalRating + dynamicOffset;
+    let finalRating = penaltyResult.rating + dynamicOffset;
     finalRating = Math.max(1.0, Math.min(5.0, finalRating));
     finalRating = Math.round(finalRating * 2) / 2;
 
