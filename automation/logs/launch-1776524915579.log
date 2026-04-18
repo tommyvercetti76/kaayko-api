@@ -1,0 +1,33 @@
+
+  KAAYKO API • AGENT MISSION
+
+  Area:    kortex
+  Track:   kortex
+  Goal:    Look for low-risk cleanup opportunities and summarize them before editing
+  Apply:   none
+  Mode:    edit
+  Model:   deepseek-coder-v2:16b
+
+  Created run: kortex-look-for-low-risk-cleanup-opportunities-and-summarize-them-before-editing-20260418-150835z
+  Directory:   automation/runs/kortex-look-for-low-risk-cleanup-opportunities-and-summarize-them-before-editing-20260418-150835z
+  [1/6] Collecting candidate files... 20 candidates
+  [2/6] Model selecting files... done (25.7s)
+  [3/6] Loading selected files... 4 files loaded
+  [4/6] Model analyzing (this may take a few minutes)... done (56.5s)
+  [6/6] Writing reports...
+
+────────────────────────────────────────────────────────────
+ KAAYKO API  •  RUN RESULTS
+────────────────────────────────────────────────────────────
+  Run:        kortex-look-for-low-risk-cleanup-opportunities-and-summarize-them-before-editing-20260418-150835z
+  Track:      kortex
+  Status:     changes_requested
+  Decision:   changes_requested
+  Changed:    3 files (+24 / -2)
+  Meaningful: 1 backend files
+  Accuracy:   90
+  Maintain.:  85
+  Findings:   3
+  Followups:  2
+────────────────────────────────────────────────────────────
+

@@ -1,0 +1,46 @@
+{
+  "run_id": "kortex-fix-the-following-low-severity-issue-redundant-error-messages-in-auth-middleware-20260418-160351z",
+  "decision": "approved",
+  "summary": "Automated review generated from configured quality gates and agent analysis. 1/1 gates passed. 1 findings. Scope: 0 meaningful backend files changed.",
+  "accuracy_score": 80,
+  "maintainability_score": 75,
+  "confidence_score": 60,
+  "findings": [
+    {
+      "severity": "low",
+      "status": "open",
+      "title": "Redundant Error Messages in Auth Middleware",
+      "detail": "The `requireAuth` and `requireAdmin` functions return similar error messages for different authentication failures. This can be refactored into a single function or constant to avoid redundancy.",
+      "category": "duplication",
+      "file_paths": []
+    }
+  ],
+  "security_findings": [],
+  "debt_findings": [
+    {
+      "severity": "low",
+      "status": "open",
+      "title": "Redundant Error Messages in Auth Middleware",
+      "detail": "The `requireAuth` and `requireAdmin` functions return similar error messages for different authentication failures. This can be refactored into a single function or constant to avoid redundancy.",
+      "category": "duplication",
+      "file_paths": []
+    }
+  ],
+  "ux_findings": [],
+  "required_followups": [
+    "Consider consolidating the error messages for authentication failures into a single function or using a shared constant across these middleware functions to avoid redundancy."
+  ],
+  "waivers": [],
+  "context_checks": {
+    "api_surfaces_checked": [],
+    "backend_routes_checked": [],
+    "tests_run": [
+      "KORTEX API tests"
+    ]
+  },
+  "training_labels": {
+    "approved_for_training": true,
+    "label_type": "auto",
+    "fine_tuning_notes": "Auto-reviewed. medium debt. 2 guided products."
+  }
+}

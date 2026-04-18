@@ -1,0 +1,24 @@
+{
+  "decision": "pending",
+  "summary": "",
+  "accuracy_score": 0,
+  "maintainability_score": 0,
+  "confidence_score": 0,
+  "tech_debt_level": "unknown",
+  "findings": [],
+  "security_findings": [],
+  "debt_findings": [],
+  "ux_findings": [],
+  "required_followups": [],
+  "waivers": [],
+  "context_checks": {
+    "frontend_surfaces_checked": [],
+    "backend_routes_checked": [],
+    "tests_run": []
+  },
+  "training_labels": {
+    "approved_for_training": false,
+    "preferred_outcome": "revise",
+    "notes": ""
+  }
+}

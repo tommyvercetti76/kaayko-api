@@ -1,0 +1,10 @@
+{
+  "selected_files": [
+    "repo:functions/middleware/authMiddleware.js",
+    "repo:functions/api/smartLinks/redirectHandler.js"
+  ],
+  "reasoning": [
+    "The `requireAuth` and `requireAdmin` functions in `authMiddleware.js` return similar error messages for different authentication failures, which can be refactored to avoid redundancy.",
+    "Redundant error messages are particularly impactful in the context of security middleware where clarity is crucial. Refactoring these into a single function or constant will streamline error handling and improve maintainability."
+  ]
+}

@@ -1,0 +1,184 @@
+{
+  "selected_files": [
+    {
+      "path": "api:functions/middleware/authMiddleware.js",
+      "repo": "api",
+      "relative_path": "functions/middleware/authMiddleware.js",
+      "logical_root": "functions/middleware",
+      "size_bytes": 8842,
+      "line_count": 316,
+      "char_count": 8842,
+      "truncated": true
+    },
+    {
+      "path": "api:functions/middleware/kreatorAuthMiddleware.js",
+      "repo": "api",
+      "relative_path": "functions/middleware/kreatorAuthMiddleware.js",
+      "logical_root": "functions/middleware",
+      "size_bytes": 8223,
+      "line_count": 313,
+      "char_count": 8223,
+      "truncated": true
+    },
+    {
+      "path": "api:functions/api/weather/dataStandardization.js",
+      "repo": "api",
+      "relative_path": "functions/api/weather/dataStandardization.js",
+      "logical_root": "functions/api/weather",
+      "size_bytes": 6482,
+      "line_count": 208,
+      "char_count": 6478,
+      "truncated": false
+    },
+    {
+      "path": "api:functions/api/weather/inputStandardization.js",
+      "repo": "api",
+      "relative_path": "functions/api/weather/inputStandardization.js",
+      "logical_root": "functions/api/weather",
+      "size_bytes": 8125,
+      "line_count": 286,
+      "char_count": 8119,
+      "truncated": true
+    },
+    {
+      "path": "api:functions/middleware/apiKeyMiddleware.js",
+      "repo": "api",
+      "relative_path": "functions/middleware/apiKeyMiddleware.js",
+      "logical_root": "functions/middleware",
+      "size_bytes": 8488,
+      "line_count": 325,
+      "char_count": 8488,
+      "truncated": true
+    },
+    {
+      "path": "api:functions/middleware/rateLimit.js",
+      "repo": "api",
+      "relative_path": "functions/middleware/rateLimit.js",
+      "logical_root": "functions/middleware",
+      "size_bytes": 421,
+      "line_count": 14,
+      "char_count": 421,
+      "truncated": false
+    },
+    {
+      "path": "api:functions/middleware/securityMiddleware.js",
+      "repo": "api",
+      "relative_path": "functions/middleware/securityMiddleware.js",
+      "logical_root": "functions/middleware",
+      "size_bytes": 6652,
+      "line_count": 232,
+      "char_count": 6652,
+      "truncated": false
+    },
+    {
+      "path": "api:functions/api/weather/mlService.js",
+      "repo": "api",
+      "relative_path": "functions/api/weather/mlService.js",
+      "logical_root": "functions/api/weather",
+      "size_bytes": 5271,
+      "line_count": 169,
+      "char_count": 5257,
+      "truncated": false
+    },
+    {
+      "path": "api:functions/api/weather/modelCalibration.js",
+      "repo": "api",
+      "relative_path": "functions/api/weather/modelCalibration.js",
+      "logical_root": "functions/api/weather",
+      "size_bytes": 9763,
+      "line_count": 286,
+      "char_count": 9750,
+      "truncated": true
+    },
+    {
+      "path": "api:functions/api/weather/nearbyWater.js",
+      "repo": "api",
+      "relative_path": "functions/api/weather/nearbyWater.js",
+      "logical_root": "functions/api/weather",
+      "size_bytes": 5756,
+      "line_count": 145,
+      "char_count": 5204,
+      "truncated": false
+    },
+    {
+      "path": "api:functions/api/weather/paddleScore.js",
+      "repo": "api",
+      "relative_path": "functions/api/weather/paddleScore.js",
+      "logical_root": "functions/api/weather",
+      "size_bytes": 9705,
+      "line_count": 262,
+      "char_count": 9385,
+      "truncated": true
+    },
+    {
+      "path": "api:functions/api/weather/paddleScoreCompute.js",
+      "repo": "api",
+      "relative_path": "functions/api/weather/paddleScoreCompute.js",
+      "logical_root": "functions/api/weather",
+      "size_bytes": 7418,
+      "line_count": 173,
+      "char_count": 7406,
+      "truncated": true
+    },
+    {
+      "path": "api:functions/api/weather/paddlingout.js",
+      "repo": "api",
+      "relative_path": "functions/api/weather/paddlingout.js",
+      "logical_root": "functions/api/weather",
+      "size_bytes": 5084,
+      "line_count": 158,
+      "char_count": 5070,
+      "truncated": false
+    },
+    {
+      "path": "api:functions/api/weather/sharedWeatherUtils.js",
+      "repo": "api",
+      "relative_path": "functions/api/weather/sharedWeatherUtils.js",
+      "logical_root": "functions/api/weather",
+      "size_bytes": 6600,
+      "line_count": 221,
+      "char_count": 6598,
+      "truncated": false
+    },
+    {
+      "path": "api:functions/api/weather/smartWarnings.js",
+      "repo": "api",
+      "relative_path": "functions/api/weather/smartWarnings.js",
+      "logical_root": "functions/api/weather",
+      "size_bytes": 11940,
+      "line_count": 317,
+      "char_count": 11907,
+      "truncated": true
+    },
+    {
+      "path": "api:functions/api/weather/fastForecast.js",
+      "repo": "api",
+      "relative_path": "functions/api/weather/fastForecast.js",
+      "logical_root": "functions/api/weather",
+      "size_bytes": 14628,
+      "line_count": 365,
+      "char_count": 14608,
+      "truncated": true
+    },
+    {
+      "path": "api:functions/api/weather/forecast.js",
+      "repo": "api",
+      "relative_path": "functions/api/weather/forecast.js",
+      "logical_root": "functions/api/weather",
+      "size_bytes": 13421,
+      "line_count": 396,
+      "char_count": 13379,
+      "truncated": true
+    },
+    {
+      "path": "api:functions/api/weather/paddlePenalties.js",
+      "repo": "api",
+      "relative_path": "functions/api/weather/paddlePenalties.js",
+      "logical_root": "functions/api/weather",
+      "size_bytes": 16194,
+      "line_count": 402,
+      "char_count": 16038,
+      "truncated": true
+    }
+  ]
+}

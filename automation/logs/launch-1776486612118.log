@@ -1,0 +1,33 @@
+
+  KAAYKO API • AGENT MISSION
+
+  Area:    weather
+  Track:   weather
+  Goal:    Find bas code and edit said files
+  Apply:   safe
+  Mode:    edit
+  Model:   deepseek-coder-v2:16b
+
+  Created run: weather-find-bas-code-and-edit-said-files-20260418-043012z
+  Directory:   automation/runs/weather-find-bas-code-and-edit-said-files-20260418-043012z
+  [1/6] Collecting candidate files... 21 candidates
+  [2/6] Model selecting files... done (237.0s)
+  [3/6] Loading selected files... 4 files loaded
+  [4/6] Model analyzing (this may take a few minutes)... done (110.4s)
+  [6/6] Writing reports...
+
+────────────────────────────────────────────────────────────
+ KAAYKO API  •  RUN RESULTS
+────────────────────────────────────────────────────────────
+  Run:        weather-find-bas-code-and-edit-said-files-20260418-043012z
+  Track:      weather
+  Status:     changes_requested
+  Decision:   changes_requested
+  Changed:    2 files (+0 / -0)
+  Meaningful: 0 backend files
+  Accuracy:   45
+  Maintain.:  50
+  Findings:   4
+  Followups:  2
+────────────────────────────────────────────────────────────
+

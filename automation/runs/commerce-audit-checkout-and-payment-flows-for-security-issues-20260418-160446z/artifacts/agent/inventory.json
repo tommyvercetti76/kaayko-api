@@ -1,0 +1,105 @@
+{
+  "generated_at": "2026-04-18T16:04:46.863Z",
+  "goal_mode": "edit",
+  "files": [
+    {
+      "path": "api:functions/middleware/securityMiddleware.js",
+      "repo": "api",
+      "relative_path": "functions/middleware/securityMiddleware.js",
+      "logical_root": "functions/middleware",
+      "size_bytes": 6652,
+      "line_count": 232,
+      "score": 29
+    },
+    {
+      "path": "api:functions/api/checkout/createPaymentIntent.js",
+      "repo": "api",
+      "relative_path": "functions/api/checkout/createPaymentIntent.js",
+      "logical_root": "functions/api/checkout",
+      "size_bytes": 6615,
+      "line_count": 189,
+      "score": 26
+    },
+    {
+      "path": "api:functions/api/checkout/updatePaymentIntentEmail.js",
+      "repo": "api",
+      "relative_path": "functions/api/checkout/updatePaymentIntentEmail.js",
+      "logical_root": "functions/api/checkout",
+      "size_bytes": 2030,
+      "line_count": 79,
+      "score": 26
+    },
+    {
+      "path": "api:functions/middleware/apiKeyMiddleware.js",
+      "repo": "api",
+      "relative_path": "functions/middleware/apiKeyMiddleware.js",
+      "logical_root": "functions/middleware",
+      "size_bytes": 8488,
+      "line_count": 325,
+      "score": 24
+    },
+    {
+      "path": "api:functions/middleware/authMiddleware.js",
+      "repo": "api",
+      "relative_path": "functions/middleware/authMiddleware.js",
+      "logical_root": "functions/middleware",
+      "size_bytes": 8842,
+      "line_count": 316,
+      "score": 24
+    },
+    {
+      "path": "api:functions/middleware/kreatorAuthMiddleware.js",
+      "repo": "api",
+      "relative_path": "functions/middleware/kreatorAuthMiddleware.js",
+      "logical_root": "functions/middleware",
+      "size_bytes": 8223,
+      "line_count": 313,
+      "score": 24
+    },
+    {
+      "path": "api:functions/middleware/rateLimit.js",
+      "repo": "api",
+      "relative_path": "functions/middleware/rateLimit.js",
+      "logical_root": "functions/middleware",
+      "size_bytes": 421,
+      "line_count": 14,
+      "score": 24
+    },
+    {
+      "path": "api:functions/api/checkout/router.js",
+      "repo": "api",
+      "relative_path": "functions/api/checkout/router.js",
+      "logical_root": "functions/api/checkout",
+      "size_bytes": 733,
+      "line_count": 23,
+      "score": 21
+    },
+    {
+      "path": "api:functions/api/checkout/stripeWebhook.js",
+      "repo": "api",
+      "relative_path": "functions/api/checkout/stripeWebhook.js",
+      "logical_root": "functions/api/checkout",
+      "size_bytes": 10400,
+      "line_count": 331,
+      "score": 21
+    },
+    {
+      "path": "api:functions/api/products/images.js",
+      "repo": "api",
+      "relative_path": "functions/api/products/images.js",
+      "logical_root": "functions/api/products",
+      "size_bytes": 2695,
+      "line_count": 96,
+      "score": 16
+    },
+    {
+      "path": "api:functions/api/products/products.js",
+      "repo": "api",
+      "relative_path": "functions/api/products/products.js",
+      "logical_root": "functions/api/products",
+      "size_bytes": 6190,
+      "line_count": 171,
+      "score": 16
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+
+  KAAYKO API • AGENT MISSION
+
+  Area:    kortex
+  Track:   kortex
+  Goal:    Study and identify gaps in security
+  Apply:   safe
+  Mode:    edit
+  Model:   deepseek-coder-v2:latest
+
+  Created run: kortex-study-and-identify-gaps-in-security-20260418-024141z
+  Directory:   automation/runs/kortex-study-and-identify-gaps-in-security-20260418-024141z
+
+❌ ENOENT: no such file or directory, open '/Users/Rohan/Kaayko_v6/kaayko-api/automation/runs/kortex-study-and-identify-gaps-in-security-20260418-024141z/notes/agent-briefing.md'

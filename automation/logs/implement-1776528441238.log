@@ -1,0 +1,15 @@
+
+  KAAYKO API • AGENT MISSION
+
+  Area:    kortex
+  Track:   kortex
+  Goal:    Fix the following low severity issue: Firestore Query Handling in Tenant Context Management. Detail: The createTenantScopedQuery function uses Firestore queries that are automatically scoped by tenantId, but the query logic is not immediately clear from the method name or usage. Consider adding more descriptive comments for maintainability.
+  Apply:   safe
+  Mode:    edit
+  Model:   deepseek-coder-v2:16b
+
+  Created run: kortex-fix-the-following-low-severity-issue-firestore-query-handling-in-tenant-context--20260418-160721z
+  Directory:   automation/runs/kortex-fix-the-following-low-severity-issue-firestore-query-handling-in-tenant-context--20260418-160721z
+  [1/6] Collecting candidate files... 20 candidates
+  [2/6] Model selecting files...
+❌ Ollama inventory selection failed: spawnSync /usr/local/bin/ollama ETIMEDOUT

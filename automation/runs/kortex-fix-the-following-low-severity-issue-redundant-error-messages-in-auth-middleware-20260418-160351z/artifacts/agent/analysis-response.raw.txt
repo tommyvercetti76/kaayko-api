@@ -1,0 +1,29 @@
+```json
+{
+  "summary": "The provided content outlines a review of Firebase Cloud Functions for a Node.js application, focusing on authentication middleware and error handling.",
+  "insights": [
+    "The codebase includes redundant error messages in the auth middleware functions `requireAuth` and `requireAdmin`. This redundancy can be refactored to improve maintainability and reduce duplication."
+  ],
+  "findings": [
+    {
+      "severity": "low",
+      "title": "Redundant Error Messages in Auth Middleware",
+      "detail": "The `requireAuth` and `requireAdmin` functions return similar error messages for different authentication failures. This can be refactored into a single function or constant to avoid redundancy.",
+      "category": "duplication",
+      "file_paths": ["functions/middleware/authMiddleware.js"]
+    }
+  ],
+  "followups": [
+    "Consider consolidating the error messages for authentication failures into a single function or using a shared constant across these middleware functions to avoid redundancy."
+  ],
+  "safe_edits": [
+    {
+      "path": "functions/middleware/authMiddleware.js",
+      "kind": "rewrite",
+      "summary": "Refactor error messages for authentication failures.",
+      "confidence": 0.9,
+      "content": "// Refactored to consolidate error messages\nconst commonErrors = {\n  AUTH_TOKEN_MISSING: { code: 'AUTH_TOKEN_MISSING', message: 'No authentication token provided' },\n  AUTH_TOKEN_EXPIRED: { code: 'AUTH_TOKEN_EXPIRED', message: 'Your session has expired. Please log in again.' },\n  AUTH_TOKEN_INVALID: { code: 'AUTH_TOKEN_INVALID', message: 'The authentication token is invalid.' },\n  // Add other common error codes and messages here\n};\n\nasync function requireAuth(req, res, next) {\n  try {\n    // Existing logic...\n  }\n  catch (error) {\n    console.error('[Auth] Token verification failed:', error.message);\n    handleError(res, commonErrors[error.code || 'AUTH_FAILED'], 401);\n  }\n}\n\nfunction requireAdmin(req, res, next) {\n  // Existing logic...\n  if (!req.user.role) { handleError(res, commonErrors['NOT_ADMIN_USER'], 403); }\n}\n\nfunction requireRole(allowedRoles) {\n  return (req, res, next) => {\n    if (!req.user) { handleError(res, commonErrors['AUTH_REQUIRED'], 401); }\n    // Existing logic...\n  };\n}\n\nfunction handleError(res, errorObj, statusCode) {\n  return res.status(statusCode).json({ success: false, error: errorObj.code, message: errorObj.message });\n}"
+    }
+  ]
+}
+```

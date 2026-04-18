@@ -1,0 +1,184 @@
+{
+  "selected_files": [
+    {
+      "path": "api:functions/middleware/authMiddleware.js",
+      "repo": "api",
+      "relative_path": "functions/middleware/authMiddleware.js",
+      "logical_root": "functions",
+      "size_bytes": 8842,
+      "line_count": 316,
+      "char_count": 8842,
+      "truncated": true
+    },
+    {
+      "path": "api:functions/middleware/kreatorAuthMiddleware.js",
+      "repo": "api",
+      "relative_path": "functions/middleware/kreatorAuthMiddleware.js",
+      "logical_root": "functions",
+      "size_bytes": 8223,
+      "line_count": 313,
+      "char_count": 8223,
+      "truncated": true
+    },
+    {
+      "path": "api:functions/middleware/apiKeyMiddleware.js",
+      "repo": "api",
+      "relative_path": "functions/middleware/apiKeyMiddleware.js",
+      "logical_root": "functions",
+      "size_bytes": 8488,
+      "line_count": 325,
+      "char_count": 8488,
+      "truncated": true
+    },
+    {
+      "path": "api:functions/middleware/rateLimit.js",
+      "repo": "api",
+      "relative_path": "functions/middleware/rateLimit.js",
+      "logical_root": "functions",
+      "size_bytes": 421,
+      "line_count": 14,
+      "char_count": 421,
+      "truncated": false
+    },
+    {
+      "path": "api:functions/middleware/securityMiddleware.js",
+      "repo": "api",
+      "relative_path": "functions/middleware/securityMiddleware.js",
+      "logical_root": "functions",
+      "size_bytes": 6652,
+      "line_count": 232,
+      "char_count": 6652,
+      "truncated": false
+    },
+    {
+      "path": "api:functions/index.js",
+      "repo": "api",
+      "relative_path": "functions/index.js",
+      "logical_root": "functions",
+      "size_bytes": 5022,
+      "line_count": 122,
+      "char_count": 4986,
+      "truncated": false
+    },
+    {
+      "path": "api:functions/api/auth/authRoutes.js",
+      "repo": "api",
+      "relative_path": "functions/api/auth/authRoutes.js",
+      "logical_root": "functions",
+      "size_bytes": 2788,
+      "line_count": 109,
+      "char_count": 2782,
+      "truncated": false
+    },
+    {
+      "path": "api:functions/api/cameras/audit/capabilitySchema.js",
+      "repo": "api",
+      "relative_path": "functions/api/cameras/audit/capabilitySchema.js",
+      "logical_root": "functions",
+      "size_bytes": 2217,
+      "line_count": 127,
+      "char_count": 2217,
+      "truncated": false
+    },
+    {
+      "path": "api:functions/api/cameras/audit/officialBodies.js",
+      "repo": "api",
+      "relative_path": "functions/api/cameras/audit/officialBodies.js",
+      "logical_root": "functions",
+      "size_bytes": 7673,
+      "line_count": 127,
+      "char_count": 7673,
+      "truncated": true
+    },
+    {
+      "path": "api:functions/api/smartLinks/smartLinkValidation.js",
+      "repo": "api",
+      "relative_path": "functions/api/smartLinks/smartLinkValidation.js",
+      "logical_root": "functions",
+      "size_bytes": 2108,
+      "line_count": 84,
+      "char_count": 2108,
+      "truncated": false
+    },
+    {
+      "path": "api:functions/api/weather/inputStandardization.js",
+      "repo": "api",
+      "relative_path": "functions/api/weather/inputStandardization.js",
+      "logical_root": "functions",
+      "size_bytes": 8125,
+      "line_count": 286,
+      "char_count": 8119,
+      "truncated": true
+    },
+    {
+      "path": "api:functions/api/weather/sharedWeatherUtils.js",
+      "repo": "api",
+      "relative_path": "functions/api/weather/sharedWeatherUtils.js",
+      "logical_root": "functions",
+      "size_bytes": 6600,
+      "line_count": 221,
+      "char_count": 6598,
+      "truncated": false
+    },
+    {
+      "path": "api:functions/api/checkout/createPaymentIntent.js",
+      "repo": "api",
+      "relative_path": "functions/api/checkout/createPaymentIntent.js",
+      "logical_root": "functions",
+      "size_bytes": 6615,
+      "line_count": 189,
+      "char_count": 6587,
+      "truncated": false
+    },
+    {
+      "path": "api:functions/api/checkout/stripeWebhook.js",
+      "repo": "api",
+      "relative_path": "functions/api/checkout/stripeWebhook.js",
+      "logical_root": "functions",
+      "size_bytes": 10400,
+      "line_count": 331,
+      "char_count": 10342,
+      "truncated": true
+    },
+    {
+      "path": "api:functions/api/smartLinks/redirectHandler.js",
+      "repo": "api",
+      "relative_path": "functions/api/smartLinks/redirectHandler.js",
+      "logical_root": "functions",
+      "size_bytes": 12403,
+      "line_count": 401,
+      "char_count": 12394,
+      "truncated": true
+    },
+    {
+      "path": "api:functions/api/weather/fastForecast.js",
+      "repo": "api",
+      "relative_path": "functions/api/weather/fastForecast.js",
+      "logical_root": "functions",
+      "size_bytes": 14628,
+      "line_count": 365,
+      "char_count": 14608,
+      "truncated": true
+    },
+    {
+      "path": "api:functions/api/weather/forecast.js",
+      "repo": "api",
+      "relative_path": "functions/api/weather/forecast.js",
+      "logical_root": "functions",
+      "size_bytes": 13421,
+      "line_count": 396,
+      "char_count": 13379,
+      "truncated": true
+    },
+    {
+      "path": "api:functions/api/admin/adminUsers.js",
+      "repo": "api",
+      "relative_path": "functions/api/admin/adminUsers.js",
+      "logical_root": "functions",
+      "size_bytes": 6486,
+      "line_count": 263,
+      "char_count": 6486,
+      "truncated": false
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+
+  KAAYKO API • AGENT MISSION
+
+  Area:    kamera
+  Track:   kamera
+  Goal:    Find tech debt
+  Apply:   safe
+  Mode:    edit
+  Model:   deepseek-coder-v2:latest
+
+  Created run: kamera-find-tech-debt-20260418-041243z
+  Directory:   automation/runs/kamera-find-tech-debt-20260418-041243z
+  [1/6] Collecting candidate files... 41 candidates
+  [2/6] Model selecting files... done (26.7s)
+  [3/6] Loading selected files... 4 files loaded
+  [4/6] Model analyzing (this may take a few minutes)... done (71.7s)
+  [6/6] Writing reports...
+
+────────────────────────────────────────────────────────────
+ KAAYKO API  •  RUN RESULTS
+────────────────────────────────────────────────────────────
+  Run:        kamera-find-tech-debt-20260418-041243z
+  Track:      kamera
+  Status:     changes_requested
+  Decision:   changes_requested
+  Changed:    2 files (+0 / -0)
+  Meaningful: 0 backend files
+  Accuracy:   80
+  Maintain.:  75
+  Findings:   4
+  Followups:  1
+────────────────────────────────────────────────────────────
+

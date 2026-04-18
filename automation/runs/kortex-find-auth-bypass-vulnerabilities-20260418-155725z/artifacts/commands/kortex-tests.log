@@ -1,0 +1,56 @@
+# KORTEX API tests
+cwd: /Users/Rohan/Kaayko_v6/kaayko-api/functions
+command: npm run test:kortex
+exit_code: 0
+duration_ms: 1118
+
+## stdout
+
+> test:kortex
+> node ./node_modules/jest/bin/jest.js __tests__/kortex-api.test.js
+
+  console.error
+    [SmartLinks] Error fetching link: Error: Short code not found
+        at Object.getShortLink (/Users/Rohan/Kaayko_v6/kaayko-api/functions/api/smartLinks/smartLinkService.js:189:19)
+        at processTicksAndRejections (node:internal/process/task_queues:105:5)
+        at /Users/Rohan/Kaayko_v6/kaayko-api/functions/api/smartLinks/smartLinks.js:370:18 {
+      code: 'NOT_FOUND'
+    }
+
+      371 |     res.json({ success: true, link });
+      372 |   } catch (error) {
+    > 373 |     console.error('[SmartLinks] Error fetching link:', error);
+          |             ^
+      374 |     
+      375 |     if (error.code === 'NOT_FOUND') {
+      376 |       return res.status(404).json({
+
+      at error (api/smartLinks/smartLinks.js:373:13)
+
+
+
+## stderr
+PASS __tests__/kortex-api.test.js
+  Kortex API — Health & Public Endpoints
+    ✓ GET /smartlinks/health returns healthy status (14 ms)
+    ✓ GET /smartlinks/:code for unknown link returns 404 (29 ms)
+    ✓ GET /smartlinks/:code for existing link returns link data (3 ms)
+  Kortex API — Auth-protected CRUD requires admin
+    ✓ POST /smartlinks without auth returns 401 AUTH_TOKEN_MISSING (9 ms)
+    ✓ POST /smartlinks with non-admin token returns 403 (2 ms)
+    ✓ GET /smartlinks (list) without auth returns 401 (1 ms)
+    ✓ PUT /smartlinks/:code without auth returns 401 (2 ms)
+    ✓ DELETE /smartlinks/:code without auth returns 401 (1 ms)
+    ✓ POST /smartlinks with Firebase admin token passes auth gate (5 ms)
+  Kortex API — Admin migration endpoint requires admin
+    ✓ GET /smartlinks/admin/migrate without auth returns 401 (2 ms)
+  Kortex API — Tenant registration is rate-limited public endpoint
+    ✓ POST /smartlinks/tenant-registration with missing fields returns 400 (1 ms)
+  Kortex API — Error response shape is standard
+    ✓ Auth errors include success:false and code field (1 ms)
+
+Test Suites: 1 passed, 1 total
+Tests:       12 passed, 12 total
+Snapshots:   0 total
+Time:        0.342 s, estimated 1 s
+Ran all test suites matching __tests__/kortex-api.test.js.

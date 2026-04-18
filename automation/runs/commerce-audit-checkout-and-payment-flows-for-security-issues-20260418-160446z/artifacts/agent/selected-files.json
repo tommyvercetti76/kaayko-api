@@ -1,0 +1,44 @@
+{
+  "selected_files": [
+    {
+      "path": "api:functions/middleware/securityMiddleware.js",
+      "repo": "api",
+      "relative_path": "functions/middleware/securityMiddleware.js",
+      "logical_root": "functions/middleware",
+      "size_bytes": 6652,
+      "line_count": 232,
+      "char_count": 6652,
+      "truncated": false
+    },
+    {
+      "path": "api:functions/api/checkout/createPaymentIntent.js",
+      "repo": "api",
+      "relative_path": "functions/api/checkout/createPaymentIntent.js",
+      "logical_root": "functions/api/checkout",
+      "size_bytes": 6615,
+      "line_count": 189,
+      "char_count": 6587,
+      "truncated": false
+    },
+    {
+      "path": "api:functions/api/checkout/updatePaymentIntentEmail.js",
+      "repo": "api",
+      "relative_path": "functions/api/checkout/updatePaymentIntentEmail.js",
+      "logical_root": "functions/api/checkout",
+      "size_bytes": 2030,
+      "line_count": 79,
+      "char_count": 2026,
+      "truncated": false
+    },
+    {
+      "path": "api:functions/middleware/authMiddleware.js",
+      "repo": "api",
+      "relative_path": "functions/middleware/authMiddleware.js",
+      "logical_root": "functions/middleware",
+      "size_bytes": 8842,
+      "line_count": 316,
+      "char_count": 8842,
+      "truncated": true
+    }
+  ]
+}

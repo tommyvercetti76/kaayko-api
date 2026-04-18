@@ -1,0 +1,60 @@
+{
+  "run_id": "kortex-fix-the-following-low-severity-issue-firestore-query-handling-in-tenant-context--20260418-160721z",
+  "track": "kortex",
+  "requested_area": "kortex",
+  "title": "Fix the following low severity issue: Firestore Query Handling in Tenant Context Management. Detail: The createTenantScopedQuery function uses Firestore queries that are automatically scoped by tenantId, but the query logic is not immediately clear from the method name or usage. Consider adding more descriptive comments for maintainability.",
+  "status": "agent_failed",
+  "source": "agent",
+  "repo": "api",
+  "changed_files": [],
+  "git_snapshots": [],
+  "quality_gates": [
+    {
+      "id": "kortex-tests",
+      "label": "KORTEX API tests",
+      "cwd": "functions",
+      "command": "npm run test:kortex",
+      "status": null,
+      "last_run_at": null,
+      "exit_code": null,
+      "duration_ms": null,
+      "log_path": null
+    }
+  ],
+  "coaching": {
+    "profile_ids": [
+      "kortex",
+      "shared"
+    ],
+    "guided_products": [
+      "KORTEX Platform API",
+      "Shared API Infrastructure"
+    ],
+    "focused_profile_ids": [
+      "kortex"
+    ],
+    "focused_products": [
+      "KORTEX Platform API"
+    ],
+    "source_docs": [
+      "README.md",
+      "functions/api/smartLinks/README.md",
+      "functions/middleware/README.md"
+    ],
+    "focused_source_docs": [
+      "README.md",
+      "functions/api/smartLinks/README.md"
+    ]
+  },
+  "artifacts": {
+    "agent_inventory_path": "automation/runs/kortex-fix-the-following-low-severity-issue-firestore-query-handling-in-tenant-context--20260418-160721z/artifacts/agent/inventory.json"
+  },
+  "agent": {
+    "stage": "timeout",
+    "goal_mode": "edit",
+    "inventory_candidates": 20,
+    "error": "Marked stale — stuck for over 10 minutes"
+  },
+  "created_at": "2026-04-18T16:07:21.297Z",
+  "updated_at": "2026-04-18T16:17:21.359Z"
+}

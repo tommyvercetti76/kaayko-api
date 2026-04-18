@@ -1,0 +1,16 @@
+
+  KAAYKO API • AGENT MISSION
+
+  Area:    kortex
+  Track:   kortex
+  Goal:    Fix the following high severity issue: Publicly Accessible Smart Link Redirects. Detail: The `/l/:id` and `/resolve` routes are not authenticated, exposing link details to unauthorized users.
+  Apply:   safe
+  Mode:    edit
+  Model:   deepseek-coder-v2:16b
+
+  Created run: kortex-fix-the-following-high-severity-issue-publicly-accessible-smart-link-redirects-d-20260418-151100z
+  Directory:   automation/runs/kortex-fix-the-following-high-severity-issue-publicly-accessible-smart-link-redirects-d-20260418-151100z
+  [1/6] Collecting candidate files... 20 candidates
+  [2/6] Model selecting files... done (8.5s)
+  [3/6] Loading selected files... 4 files loaded
+  [4/6] Model analyzing (this may take a few minutes)...

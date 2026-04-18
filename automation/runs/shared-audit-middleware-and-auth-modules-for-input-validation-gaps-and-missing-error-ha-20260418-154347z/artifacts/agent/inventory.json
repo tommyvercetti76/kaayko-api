@@ -1,0 +1,726 @@
+{
+  "generated_at": "2026-04-18T15:43:47.121Z",
+  "goal_mode": "audit",
+  "files": [
+    {
+      "path": "api:functions/middleware/authMiddleware.js",
+      "repo": "api",
+      "relative_path": "functions/middleware/authMiddleware.js",
+      "logical_root": "functions",
+      "size_bytes": 8842,
+      "line_count": 316,
+      "score": 34
+    },
+    {
+      "path": "api:functions/middleware/kreatorAuthMiddleware.js",
+      "repo": "api",
+      "relative_path": "functions/middleware/kreatorAuthMiddleware.js",
+      "logical_root": "functions",
+      "size_bytes": 8223,
+      "line_count": 313,
+      "score": 34
+    },
+    {
+      "path": "api:functions/middleware/apiKeyMiddleware.js",
+      "repo": "api",
+      "relative_path": "functions/middleware/apiKeyMiddleware.js",
+      "logical_root": "functions",
+      "size_bytes": 8488,
+      "line_count": 325,
+      "score": 29
+    },
+    {
+      "path": "api:functions/middleware/rateLimit.js",
+      "repo": "api",
+      "relative_path": "functions/middleware/rateLimit.js",
+      "logical_root": "functions",
+      "size_bytes": 421,
+      "line_count": 14,
+      "score": 29
+    },
+    {
+      "path": "api:functions/middleware/securityMiddleware.js",
+      "repo": "api",
+      "relative_path": "functions/middleware/securityMiddleware.js",
+      "logical_root": "functions",
+      "size_bytes": 6652,
+      "line_count": 232,
+      "score": 29
+    },
+    {
+      "path": "api:functions/api/weather/inputStandardization.js",
+      "repo": "api",
+      "relative_path": "functions/api/weather/inputStandardization.js",
+      "logical_root": "functions",
+      "size_bytes": 8125,
+      "line_count": 286,
+      "score": 26
+    },
+    {
+      "path": "api:functions/api/weather/sharedWeatherUtils.js",
+      "repo": "api",
+      "relative_path": "functions/api/weather/sharedWeatherUtils.js",
+      "logical_root": "functions",
+      "size_bytes": 6600,
+      "line_count": 221,
+      "score": 22
+    },
+    {
+      "path": "api:functions/api/auth/authRoutes.js",
+      "repo": "api",
+      "relative_path": "functions/api/auth/authRoutes.js",
+      "logical_root": "functions",
+      "size_bytes": 2788,
+      "line_count": 109,
+      "score": 21
+    },
+    {
+      "path": "api:functions/api/cameras/audit/capabilitySchema.js",
+      "repo": "api",
+      "relative_path": "functions/api/cameras/audit/capabilitySchema.js",
+      "logical_root": "functions",
+      "size_bytes": 2217,
+      "line_count": 127,
+      "score": 21
+    },
+    {
+      "path": "api:functions/api/cameras/audit/officialBodies.js",
+      "repo": "api",
+      "relative_path": "functions/api/cameras/audit/officialBodies.js",
+      "logical_root": "functions",
+      "size_bytes": 7673,
+      "line_count": 127,
+      "score": 21
+    },
+    {
+      "path": "api:functions/api/smartLinks/smartLinkValidation.js",
+      "repo": "api",
+      "relative_path": "functions/api/smartLinks/smartLinkValidation.js",
+      "logical_root": "functions",
+      "size_bytes": 2108,
+      "line_count": 84,
+      "score": 21
+    },
+    {
+      "path": "api:functions/api/weather/dataStandardization.js",
+      "repo": "api",
+      "relative_path": "functions/api/weather/dataStandardization.js",
+      "logical_root": "functions",
+      "size_bytes": 6482,
+      "line_count": 208,
+      "score": 21
+    },
+    {
+      "path": "api:functions/index.js",
+      "repo": "api",
+      "relative_path": "functions/index.js",
+      "logical_root": "functions",
+      "size_bytes": 5022,
+      "line_count": 122,
+      "score": 20
+    },
+    {
+      "path": "api:functions/api/smartLinks/redirectHandler.js",
+      "repo": "api",
+      "relative_path": "functions/api/smartLinks/redirectHandler.js",
+      "logical_root": "functions",
+      "size_bytes": 12403,
+      "line_count": 401,
+      "score": 17
+    },
+    {
+      "path": "api:functions/api/weather/fastForecast.js",
+      "repo": "api",
+      "relative_path": "functions/api/weather/fastForecast.js",
+      "logical_root": "functions",
+      "size_bytes": 14628,
+      "line_count": 365,
+      "score": 17
+    },
+    {
+      "path": "api:functions/api/weather/forecast.js",
+      "repo": "api",
+      "relative_path": "functions/api/weather/forecast.js",
+      "logical_root": "functions",
+      "size_bytes": 13421,
+      "line_count": 396,
+      "score": 17
+    },
+    {
+      "path": "api:functions/api/admin/adminUsers.js",
+      "repo": "api",
+      "relative_path": "functions/api/admin/adminUsers.js",
+      "logical_root": "functions",
+      "size_bytes": 6486,
+      "line_count": 263,
+      "score": 16
+    },
+    {
+      "path": "api:functions/api/admin/getOrder.js",
+      "repo": "api",
+      "relative_path": "functions/api/admin/getOrder.js",
+      "logical_root": "functions",
+      "size_bytes": 3347,
+      "line_count": 140,
+      "score": 16
+    },
+    {
+      "path": "api:functions/api/admin/updateOrderStatus.js",
+      "repo": "api",
+      "relative_path": "functions/api/admin/updateOrderStatus.js",
+      "logical_root": "functions",
+      "size_bytes": 4677,
+      "line_count": 159,
+      "score": 16
+    },
+    {
+      "path": "api:functions/api/ai/gptActions.js",
+      "repo": "api",
+      "relative_path": "functions/api/ai/gptActions.js",
+      "logical_root": "functions",
+      "size_bytes": 7362,
+      "line_count": 268,
+      "score": 16
+    },
+    {
+      "path": "api:functions/api/cameras/camerasRoutes.js",
+      "repo": "api",
+      "relative_path": "functions/api/cameras/camerasRoutes.js",
+      "logical_root": "functions",
+      "size_bytes": 2532,
+      "line_count": 62,
+      "score": 16
+    },
+    {
+      "path": "api:functions/api/cameras/data_presets/index.js",
+      "repo": "api",
+      "relative_path": "functions/api/cameras/data_presets/index.js",
+      "logical_root": "functions",
+      "size_bytes": 981,
+      "line_count": 24,
+      "score": 16
+    },
+    {
+      "path": "api:functions/api/cameras/engine/evCalc.js",
+      "repo": "api",
+      "relative_path": "functions/api/cameras/engine/evCalc.js",
+      "logical_root": "functions",
+      "size_bytes": 1765,
+      "line_count": 56,
+      "score": 16
+    },
+    {
+      "path": "api:functions/api/cameras/engine/presetEngine.js",
+      "repo": "api",
+      "relative_path": "functions/api/cameras/engine/presetEngine.js",
+      "logical_root": "functions",
+      "size_bytes": 5245,
+      "line_count": 123,
+      "score": 16
+    },
+    {
+      "path": "api:functions/api/cameras/lensesRoutes.js",
+      "repo": "api",
+      "relative_path": "functions/api/cameras/lensesRoutes.js",
+      "logical_root": "functions",
+      "size_bytes": 1622,
+      "line_count": 44,
+      "score": 16
+    },
+    {
+      "path": "api:functions/api/cameras/presetsRoutes.js",
+      "repo": "api",
+      "relative_path": "functions/api/cameras/presetsRoutes.js",
+      "logical_root": "functions",
+      "size_bytes": 2629,
+      "line_count": 84,
+      "score": 16
+    },
+    {
+      "path": "api:functions/api/cameras/smartRoutes.js",
+      "repo": "api",
+      "relative_path": "functions/api/cameras/smartRoutes.js",
+      "logical_root": "functions",
+      "size_bytes": 4901,
+      "line_count": 139,
+      "score": 16
+    },
+    {
+      "path": "api:functions/api/cameras/validate.js",
+      "repo": "api",
+      "relative_path": "functions/api/cameras/validate.js",
+      "logical_root": "functions",
+      "size_bytes": 3915,
+      "line_count": 107,
+      "score": 16
+    },
+    {
+      "path": "api:functions/api/checkout/createPaymentIntent.js",
+      "repo": "api",
+      "relative_path": "functions/api/checkout/createPaymentIntent.js",
+      "logical_root": "functions",
+      "size_bytes": 6615,
+      "line_count": 189,
+      "score": 16
+    },
+    {
+      "path": "api:functions/api/checkout/router.js",
+      "repo": "api",
+      "relative_path": "functions/api/checkout/router.js",
+      "logical_root": "functions",
+      "size_bytes": 733,
+      "line_count": 23,
+      "score": 16
+    },
+    {
+      "path": "api:functions/api/checkout/stripeWebhook.js",
+      "repo": "api",
+      "relative_path": "functions/api/checkout/stripeWebhook.js",
+      "logical_root": "functions",
+      "size_bytes": 10400,
+      "line_count": 331,
+      "score": 16
+    },
+    {
+      "path": "api:functions/api/checkout/updatePaymentIntentEmail.js",
+      "repo": "api",
+      "relative_path": "functions/api/checkout/updatePaymentIntentEmail.js",
+      "logical_root": "functions",
+      "size_bytes": 2030,
+      "line_count": 79,
+      "score": 16
+    },
+    {
+      "path": "api:functions/api/core/docs.js",
+      "repo": "api",
+      "relative_path": "functions/api/core/docs.js",
+      "logical_root": "functions",
+      "size_bytes": 4136,
+      "line_count": 144,
+      "score": 16
+    },
+    {
+      "path": "api:functions/api/kreators/testRoutes.js",
+      "repo": "api",
+      "relative_path": "functions/api/kreators/testRoutes.js",
+      "logical_root": "functions",
+      "size_bytes": 8744,
+      "line_count": 321,
+      "score": 16
+    },
+    {
+      "path": "api:functions/api/kutz/aiClient.js",
+      "repo": "api",
+      "relative_path": "functions/api/kutz/aiClient.js",
+      "logical_root": "functions",
+      "size_bytes": 5014,
+      "line_count": 131,
+      "score": 16
+    },
+    {
+      "path": "api:functions/api/kutz/fitbit.js",
+      "repo": "api",
+      "relative_path": "functions/api/kutz/fitbit.js",
+      "logical_root": "functions",
+      "size_bytes": 10126,
+      "line_count": 307,
+      "score": 16
+    },
+    {
+      "path": "api:functions/api/kutz/kutzRouter.js",
+      "repo": "api",
+      "relative_path": "functions/api/kutz/kutzRouter.js",
+      "logical_root": "functions",
+      "size_bytes": 2028,
+      "line_count": 57,
+      "score": 16
+    },
+    {
+      "path": "api:functions/api/kutz/parsePhoto.js",
+      "repo": "api",
+      "relative_path": "functions/api/kutz/parsePhoto.js",
+      "logical_root": "functions",
+      "size_bytes": 8118,
+      "line_count": 192,
+      "score": 16
+    },
+    {
+      "path": "api:functions/api/kutz/searchFoods.js",
+      "repo": "api",
+      "relative_path": "functions/api/kutz/searchFoods.js",
+      "logical_root": "functions",
+      "size_bytes": 5778,
+      "line_count": 148,
+      "score": 16
+    },
+    {
+      "path": "api:functions/api/kutz/suggest.js",
+      "repo": "api",
+      "relative_path": "functions/api/kutz/suggest.js",
+      "logical_root": "functions",
+      "size_bytes": 11384,
+      "line_count": 278,
+      "score": 16
+    },
+    {
+      "path": "api:functions/api/kutz/weeklyReport.js",
+      "repo": "api",
+      "relative_path": "functions/api/kutz/weeklyReport.js",
+      "logical_root": "functions",
+      "size_bytes": 4052,
+      "line_count": 101,
+      "score": 16
+    },
+    {
+      "path": "api:functions/api/products/images.js",
+      "repo": "api",
+      "relative_path": "functions/api/products/images.js",
+      "logical_root": "functions",
+      "size_bytes": 2695,
+      "line_count": 96,
+      "score": 16
+    },
+    {
+      "path": "api:functions/api/products/products.js",
+      "repo": "api",
+      "relative_path": "functions/api/products/products.js",
+      "logical_root": "functions",
+      "size_bytes": 6190,
+      "line_count": 171,
+      "score": 16
+    },
+    {
+      "path": "api:functions/api/smartLinks/attributionService.js",
+      "repo": "api",
+      "relative_path": "functions/api/smartLinks/attributionService.js",
+      "logical_root": "functions",
+      "size_bytes": 8142,
+      "line_count": 303,
+      "score": 16
+    },
+    {
+      "path": "api:functions/api/smartLinks/publicApiRouter.js",
+      "repo": "api",
+      "relative_path": "functions/api/smartLinks/publicApiRouter.js",
+      "logical_root": "functions",
+      "size_bytes": 10208,
+      "line_count": 396,
+      "score": 16
+    },
+    {
+      "path": "api:functions/api/smartLinks/publicRouter.js",
+      "repo": "api",
+      "relative_path": "functions/api/smartLinks/publicRouter.js",
+      "logical_root": "functions",
+      "size_bytes": 7274,
+      "line_count": 214,
+      "score": 16
+    },
+    {
+      "path": "api:functions/api/smartLinks/rateLimitService.js",
+      "repo": "api",
+      "relative_path": "functions/api/smartLinks/rateLimitService.js",
+      "logical_root": "functions",
+      "size_bytes": 8778,
+      "line_count": 314,
+      "score": 16
+    },
+    {
+      "path": "api:functions/api/smartLinks/smartLinkDefaults.js",
+      "repo": "api",
+      "relative_path": "functions/api/smartLinks/smartLinkDefaults.js",
+      "logical_root": "functions",
+      "size_bytes": 3519,
+      "line_count": 108,
+      "score": 16
+    },
+    {
+      "path": "api:functions/api/smartLinks/smartLinkEnrichment.js",
+      "repo": "api",
+      "relative_path": "functions/api/smartLinks/smartLinkEnrichment.js",
+      "logical_root": "functions",
+      "size_bytes": 4500,
+      "line_count": 163,
+      "score": 16
+    },
+    {
+      "path": "api:functions/api/smartLinks/smartLinkService.js",
+      "repo": "api",
+      "relative_path": "functions/api/smartLinks/smartLinkService.js",
+      "logical_root": "functions",
+      "size_bytes": 7563,
+      "line_count": 284,
+      "score": 16
+    },
+    {
+      "path": "api:functions/api/smartLinks/tenantContext.js",
+      "repo": "api",
+      "relative_path": "functions/api/smartLinks/tenantContext.js",
+      "logical_root": "functions",
+      "size_bytes": 7720,
+      "line_count": 265,
+      "score": 16
+    },
+    {
+      "path": "api:functions/api/smartLinks/webhookService.js",
+      "repo": "api",
+      "relative_path": "functions/api/smartLinks/webhookService.js",
+      "logical_root": "functions",
+      "size_bytes": 10144,
+      "line_count": 393,
+      "score": 16
+    },
+    {
+      "path": "api:functions/api/weather/mlService.js",
+      "repo": "api",
+      "relative_path": "functions/api/weather/mlService.js",
+      "logical_root": "functions",
+      "size_bytes": 5271,
+      "line_count": 169,
+      "score": 16
+    },
+    {
+      "path": "api:functions/api/weather/modelCalibration.js",
+      "repo": "api",
+      "relative_path": "functions/api/weather/modelCalibration.js",
+      "logical_root": "functions",
+      "size_bytes": 9763,
+      "line_count": 286,
+      "score": 16
+    },
+    {
+      "path": "api:functions/api/weather/nearbyWater.js",
+      "repo": "api",
+      "relative_path": "functions/api/weather/nearbyWater.js",
+      "logical_root": "functions",
+      "size_bytes": 5756,
+      "line_count": 145,
+      "score": 16
+    },
+    {
+      "path": "api:functions/api/weather/paddleScore.js",
+      "repo": "api",
+      "relative_path": "functions/api/weather/paddleScore.js",
+      "logical_root": "functions",
+      "size_bytes": 9705,
+      "line_count": 262,
+      "score": 16
+    },
+    {
+      "path": "api:functions/api/weather/paddleScoreCompute.js",
+      "repo": "api",
+      "relative_path": "functions/api/weather/paddleScoreCompute.js",
+      "logical_root": "functions",
+      "size_bytes": 7418,
+      "line_count": 173,
+      "score": 16
+    },
+    {
+      "path": "api:functions/api/weather/paddlingout.js",
+      "repo": "api",
+      "relative_path": "functions/api/weather/paddlingout.js",
+      "logical_root": "functions",
+      "size_bytes": 5084,
+      "line_count": 158,
+      "score": 16
+    },
+    {
+      "path": "api:functions/api/weather/smartWarnings.js",
+      "repo": "api",
+      "relative_path": "functions/api/weather/smartWarnings.js",
+      "logical_root": "functions",
+      "size_bytes": 11940,
+      "line_count": 317,
+      "score": 16
+    },
+    {
+      "path": "api:functions/utils/shared/cache.js",
+      "repo": "api",
+      "relative_path": "functions/utils/shared/cache.js",
+      "logical_root": "functions",
+      "size_bytes": 3030,
+      "line_count": 120,
+      "score": 16
+    },
+    {
+      "path": "api:functions/scheduled/forecastScheduler.js",
+      "repo": "api",
+      "relative_path": "functions/scheduled/forecastScheduler.js",
+      "logical_root": "functions",
+      "size_bytes": 7403,
+      "line_count": 258,
+      "score": 15
+    },
+    {
+      "path": "api:functions/cache/forecastCache.js",
+      "repo": "api",
+      "relative_path": "functions/cache/forecastCache.js",
+      "logical_root": "functions",
+      "size_bytes": 8985,
+      "line_count": 286,
+      "score": 13
+    },
+    {
+      "path": "api:functions/scripts/camera-validation-packet.js",
+      "repo": "api",
+      "relative_path": "functions/scripts/camera-validation-packet.js",
+      "logical_root": "functions",
+      "size_bytes": 7702,
+      "line_count": 241,
+      "score": 13
+    },
+    {
+      "path": "api:functions/api/billing/router.js",
+      "repo": "api",
+      "relative_path": "functions/api/billing/router.js",
+      "logical_root": "functions",
+      "size_bytes": 12669,
+      "line_count": 433,
+      "score": 12
+    },
+    {
+      "path": "api:functions/api/deepLinks/deeplinkRoutes.js",
+      "repo": "api",
+      "relative_path": "functions/api/deepLinks/deeplinkRoutes.js",
+      "logical_root": "functions",
+      "size_bytes": 17597,
+      "line_count": 522,
+      "score": 12
+    },
+    {
+      "path": "api:functions/api/kreators/kreatorProductRoutes.js",
+      "repo": "api",
+      "relative_path": "functions/api/kreators/kreatorProductRoutes.js",
+      "logical_root": "functions",
+      "size_bytes": 12296,
+      "line_count": 428,
+      "score": 12
+    },
+    {
+      "path": "api:functions/api/kreators/kreatorRoutes.js",
+      "repo": "api",
+      "relative_path": "functions/api/kreators/kreatorRoutes.js",
+      "logical_root": "functions",
+      "size_bytes": 28658,
+      "line_count": 1040,
+      "score": 12
+    },
+    {
+      "path": "api:functions/api/kutz/parseFoods.js",
+      "repo": "api",
+      "relative_path": "functions/api/kutz/parseFoods.js",
+      "logical_root": "functions",
+      "size_bytes": 12321,
+      "line_count": 242,
+      "score": 12
+    },
+    {
+      "path": "api:functions/api/smartLinks/clickTracking.js",
+      "repo": "api",
+      "relative_path": "functions/api/smartLinks/clickTracking.js",
+      "logical_root": "functions",
+      "size_bytes": 12307,
+      "line_count": 457,
+      "score": 12
+    },
+    {
+      "path": "api:functions/api/smartLinks/smartLinks.js",
+      "repo": "api",
+      "relative_path": "functions/api/smartLinks/smartLinks.js",
+      "logical_root": "functions",
+      "size_bytes": 15657,
+      "line_count": 498,
+      "score": 12
+    },
+    {
+      "path": "api:functions/api/weather/paddlePenalties.js",
+      "repo": "api",
+      "relative_path": "functions/api/weather/paddlePenalties.js",
+      "logical_root": "functions",
+      "size_bytes": 16194,
+      "line_count": 402,
+      "score": 12
+    },
+    {
+      "path": "api:functions/services/adminUserService.js",
+      "repo": "api",
+      "relative_path": "functions/services/adminUserService.js",
+      "logical_root": "functions",
+      "size_bytes": 6080,
+      "line_count": 271,
+      "score": 12
+    },
+    {
+      "path": "api:functions/api/cameras/data_presets/landscape.json",
+      "repo": "api",
+      "relative_path": "functions/api/cameras/data_presets/landscape.json",
+      "logical_root": "functions",
+      "size_bytes": 20476,
+      "line_count": 559,
+      "score": 11
+    },
+    {
+      "path": "api:functions/api/cameras/data_presets/automotive.json",
+      "repo": "api",
+      "relative_path": "functions/api/cameras/data_presets/automotive.json",
+      "logical_root": "functions",
+      "size_bytes": 6945,
+      "line_count": 163,
+      "score": 10
+    },
+    {
+      "path": "api:functions/api/cameras/data_presets/concert.json",
+      "repo": "api",
+      "relative_path": "functions/api/cameras/data_presets/concert.json",
+      "logical_root": "functions",
+      "size_bytes": 7147,
+      "line_count": 163,
+      "score": 10
+    },
+    {
+      "path": "api:functions/api/cameras/data_presets/drone.json",
+      "repo": "api",
+      "relative_path": "functions/api/cameras/data_presets/drone.json",
+      "logical_root": "functions",
+      "size_bytes": 6992,
+      "line_count": 165,
+      "score": 10
+    },
+    {
+      "path": "api:functions/api/cameras/data_presets/fashion.json",
+      "repo": "api",
+      "relative_path": "functions/api/cameras/data_presets/fashion.json",
+      "logical_root": "functions",
+      "size_bytes": 7144,
+      "line_count": 163,
+      "score": 10
+    },
+    {
+      "path": "api:functions/api/cameras/data_presets/food.json",
+      "repo": "api",
+      "relative_path": "functions/api/cameras/data_presets/food.json",
+      "logical_root": "functions",
+      "size_bytes": 6848,
+      "line_count": 164,
+      "score": 10
+    },
+    {
+      "path": "api:functions/api/cameras/data_presets/newborn.json",
+      "repo": "api",
+      "relative_path": "functions/api/cameras/data_presets/newborn.json",
+      "logical_root": "functions",
+      "size_bytes": 7127,
+      "line_count": 164,
+      "score": 10
+    },
+    {
+      "path": "api:functions/api/cameras/data_presets/product.json",
+      "repo": "api",
+      "relative_path": "functions/api/cameras/data_presets/product.json",
+      "logical_root": "functions",
+      "size_bytes": 6947,
+      "line_count": 163,
+      "score": 10
+    }
+  ]
+}

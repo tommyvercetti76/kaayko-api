@@ -1,0 +1,32 @@
+```json
+{
+  "selected_files": [
+    "repo:path/api/middleware/authMiddleware.js",
+    "repo:path/api/middleware/kreatorAuthMiddleware.js",
+    "repo:path/api/middleware/rateLimit.js",
+    "repo:path/api/middleware/securityMiddleware.js",
+    "repo:path/api/weather/dataStandardization.js",
+    "repo:path/api/weather/inputStandardization.js",
+    "repo:path/api/weather/mlService.js",
+    "repo:path/api/weather/modelCalibration.js",
+    "repo:path/api/weather/nearbyWater.js",
+    "repo:path/api/weather/paddleScore.js",
+    "repo:path/api/weather/paddleScoreCompute.js",
+    "repo:path/api/weather/paddlingout.js",
+    "repo:path/api/weather/sharedWeatherUtils.js",
+    "repo:path/api/weather/smartWarnings.js",
+    "repo:path/functions/scheduled/forecastScheduler.js"
+  ],
+  "reasoning": [
+    "authMiddleware and kreatorAuthMiddleware are crucial for auditing auth guards.",
+    "rateLimit is essential for security audits, especially in a cloud function environment.",
+    "securityMiddleware helps ensure that all routes adhere to the same security practices.",
+    "Data standardization and input standardization files are critical for ensuring data integrity.",
+    "ML service and model calibration are key for understanding how predictions are made and validated.",
+    "Nearby water and paddle score endpoints are directly related to weather forecast functionality.",
+    "Shared utilities help maintain consistency across multiple modules, which is important in a shared infrastructure context.",
+    "Smart warnings and penalties can reveal potential issues with forecasts and scores.",
+    "Scheduled functions for forecast and paddle score warming are relevant as they deal with time-sensitive operations."
+  ]
+}
+```

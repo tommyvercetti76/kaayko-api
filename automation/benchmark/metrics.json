@@ -1,0 +1,56 @@
+{
+  "total_agent_runs": 6,
+  "edit_runs": 6,
+  "audit_runs": 0,
+  "safe_edit_rate": "83.3%",
+  "syntax_pass_rate": "0.0%",
+  "total_findings": 0,
+  "total_suggestions": 0,
+  "total_vulnerabilities": 0,
+  "avg_findings_per_run": "0.0",
+  "avg_files_inspected": "5.3",
+  "total_edits_applied": 0,
+  "total_edits_rolled_back": 2,
+  "severity_distribution": {
+    "critical": 0,
+    "high": 0,
+    "medium": 0,
+    "low": 0,
+    "info": 0
+  },
+  "by_model": {
+    "deepseek-coder-v2:latest": {
+      "runs": 5,
+      "findings": 0,
+      "edits": 0,
+      "rollbacks": 2,
+      "syntax_pass": 0
+    },
+    "deepseek-coder-v2:16b": {
+      "runs": 1,
+      "findings": 0,
+      "edits": 0,
+      "rollbacks": 0,
+      "syntax_pass": 0
+    }
+  },
+  "by_track": {
+    "commerce": {
+      "runs": 1,
+      "findings": 0
+    },
+    "kamera": {
+      "runs": 1,
+      "findings": 0
+    },
+    "kortex": {
+      "runs": 2,
+      "findings": 0
+    },
+    "weather": {
+      "runs": 2,
+      "findings": 0
+    }
+  },
+  "training_eligible": 0
+}

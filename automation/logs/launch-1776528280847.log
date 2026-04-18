@@ -1,0 +1,17 @@
+
+  KAAYKO API • AGENT MISSION
+
+  Area:    weather
+  Track:   weather
+  Goal:    Audit auth and access control gaps
+  Apply:   none
+  Mode:    audit
+  Model:   deepseek-coder-v2:16b
+
+  Created run: weather-audit-auth-and-access-control-gaps-20260418-160440z
+  Directory:   automation/runs/weather-audit-auth-and-access-control-gaps-20260418-160440z
+  [1/6] Collecting candidate files... 21 candidates
+  [2/6] Model selecting files... done (18.7s)
+  [3/6] Loading selected files... 18 files loaded
+  [4/6] Model analyzing (this may take a few minutes)...
+❌ Ollama agent analysis failed: spawnSync /usr/local/bin/ollama ETIMEDOUT

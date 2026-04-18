@@ -1,0 +1,186 @@
+{
+  "generated_at": "2026-04-18T15:57:25.382Z",
+  "goal_mode": "edit",
+  "files": [
+    {
+      "path": "api:functions/middleware/authMiddleware.js",
+      "repo": "api",
+      "relative_path": "functions/middleware/authMiddleware.js",
+      "logical_root": "functions/middleware",
+      "size_bytes": 8842,
+      "line_count": 316,
+      "score": 29
+    },
+    {
+      "path": "api:functions/middleware/kreatorAuthMiddleware.js",
+      "repo": "api",
+      "relative_path": "functions/middleware/kreatorAuthMiddleware.js",
+      "logical_root": "functions/middleware",
+      "size_bytes": 8223,
+      "line_count": 313,
+      "score": 29
+    },
+    {
+      "path": "api:functions/middleware/apiKeyMiddleware.js",
+      "repo": "api",
+      "relative_path": "functions/middleware/apiKeyMiddleware.js",
+      "logical_root": "functions/middleware",
+      "size_bytes": 8488,
+      "line_count": 325,
+      "score": 24
+    },
+    {
+      "path": "api:functions/middleware/rateLimit.js",
+      "repo": "api",
+      "relative_path": "functions/middleware/rateLimit.js",
+      "logical_root": "functions/middleware",
+      "size_bytes": 421,
+      "line_count": 14,
+      "score": 24
+    },
+    {
+      "path": "api:functions/middleware/securityMiddleware.js",
+      "repo": "api",
+      "relative_path": "functions/middleware/securityMiddleware.js",
+      "logical_root": "functions/middleware",
+      "size_bytes": 6652,
+      "line_count": 232,
+      "score": 24
+    },
+    {
+      "path": "api:functions/api/auth/authRoutes.js",
+      "repo": "api",
+      "relative_path": "functions/api/auth/authRoutes.js",
+      "logical_root": "functions/api/auth",
+      "size_bytes": 2788,
+      "line_count": 109,
+      "score": 21
+    },
+    {
+      "path": "api:functions/api/smartLinks/attributionService.js",
+      "repo": "api",
+      "relative_path": "functions/api/smartLinks/attributionService.js",
+      "logical_root": "functions/api/smartLinks",
+      "size_bytes": 8142,
+      "line_count": 303,
+      "score": 16
+    },
+    {
+      "path": "api:functions/api/smartLinks/publicApiRouter.js",
+      "repo": "api",
+      "relative_path": "functions/api/smartLinks/publicApiRouter.js",
+      "logical_root": "functions/api/smartLinks",
+      "size_bytes": 10208,
+      "line_count": 396,
+      "score": 16
+    },
+    {
+      "path": "api:functions/api/smartLinks/publicRouter.js",
+      "repo": "api",
+      "relative_path": "functions/api/smartLinks/publicRouter.js",
+      "logical_root": "functions/api/smartLinks",
+      "size_bytes": 7274,
+      "line_count": 214,
+      "score": 16
+    },
+    {
+      "path": "api:functions/api/smartLinks/rateLimitService.js",
+      "repo": "api",
+      "relative_path": "functions/api/smartLinks/rateLimitService.js",
+      "logical_root": "functions/api/smartLinks",
+      "size_bytes": 8778,
+      "line_count": 314,
+      "score": 16
+    },
+    {
+      "path": "api:functions/api/smartLinks/smartLinkDefaults.js",
+      "repo": "api",
+      "relative_path": "functions/api/smartLinks/smartLinkDefaults.js",
+      "logical_root": "functions/api/smartLinks",
+      "size_bytes": 3519,
+      "line_count": 108,
+      "score": 16
+    },
+    {
+      "path": "api:functions/api/smartLinks/smartLinkEnrichment.js",
+      "repo": "api",
+      "relative_path": "functions/api/smartLinks/smartLinkEnrichment.js",
+      "logical_root": "functions/api/smartLinks",
+      "size_bytes": 4500,
+      "line_count": 163,
+      "score": 16
+    },
+    {
+      "path": "api:functions/api/smartLinks/smartLinkService.js",
+      "repo": "api",
+      "relative_path": "functions/api/smartLinks/smartLinkService.js",
+      "logical_root": "functions/api/smartLinks",
+      "size_bytes": 7563,
+      "line_count": 284,
+      "score": 16
+    },
+    {
+      "path": "api:functions/api/smartLinks/smartLinkValidation.js",
+      "repo": "api",
+      "relative_path": "functions/api/smartLinks/smartLinkValidation.js",
+      "logical_root": "functions/api/smartLinks",
+      "size_bytes": 2108,
+      "line_count": 84,
+      "score": 16
+    },
+    {
+      "path": "api:functions/api/smartLinks/tenantContext.js",
+      "repo": "api",
+      "relative_path": "functions/api/smartLinks/tenantContext.js",
+      "logical_root": "functions/api/smartLinks",
+      "size_bytes": 7720,
+      "line_count": 265,
+      "score": 16
+    },
+    {
+      "path": "api:functions/api/smartLinks/webhookService.js",
+      "repo": "api",
+      "relative_path": "functions/api/smartLinks/webhookService.js",
+      "logical_root": "functions/api/smartLinks",
+      "size_bytes": 10144,
+      "line_count": 393,
+      "score": 16
+    },
+    {
+      "path": "api:functions/api/billing/router.js",
+      "repo": "api",
+      "relative_path": "functions/api/billing/router.js",
+      "logical_root": "functions/api/billing",
+      "size_bytes": 12669,
+      "line_count": 433,
+      "score": 12
+    },
+    {
+      "path": "api:functions/api/smartLinks/clickTracking.js",
+      "repo": "api",
+      "relative_path": "functions/api/smartLinks/clickTracking.js",
+      "logical_root": "functions/api/smartLinks",
+      "size_bytes": 12307,
+      "line_count": 457,
+      "score": 12
+    },
+    {
+      "path": "api:functions/api/smartLinks/redirectHandler.js",
+      "repo": "api",
+      "relative_path": "functions/api/smartLinks/redirectHandler.js",
+      "logical_root": "functions/api/smartLinks",
+      "size_bytes": 12403,
+      "line_count": 401,
+      "score": 12
+    },
+    {
+      "path": "api:functions/api/smartLinks/smartLinks.js",
+      "repo": "api",
+      "relative_path": "functions/api/smartLinks/smartLinks.js",
+      "logical_root": "functions/api/smartLinks",
+      "size_bytes": 15657,
+      "line_count": 498,
+      "score": 12
+    }
+  ]
+}

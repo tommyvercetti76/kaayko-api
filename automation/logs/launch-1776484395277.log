@@ -1,0 +1,33 @@
+
+  KAAYKO API • AGENT MISSION
+
+  Area:    weather
+  Track:   weather
+  Goal:    Find all Vulnerabilities
+  Apply:   safe
+  Mode:    edit
+  Model:   deepseek-coder-v2:latest
+
+  Created run: weather-find-all-vulnerabilities-20260418-035315z
+  Directory:   automation/runs/weather-find-all-vulnerabilities-20260418-035315z
+  [1/6] Collecting candidate files... 21 candidates
+  [2/6] Model selecting files... done (13.6s)
+  [3/6] Loading selected files... 6 files loaded
+  [4/6] Model analyzing (this may take a few minutes)... done (193.0s)
+  [6/6] Writing reports...
+
+────────────────────────────────────────────────────────────
+ KAAYKO API  •  RUN RESULTS
+────────────────────────────────────────────────────────────
+  Run:        weather-find-all-vulnerabilities-20260418-035315z
+  Track:      weather
+  Status:     changes_requested
+  Decision:   changes_requested
+  Changed:    2 files (+0 / -0)
+  Meaningful: 0 backend files
+  Accuracy:   45
+  Maintain.:  50
+  Findings:   6
+  Followups:  2
+────────────────────────────────────────────────────────────
+
