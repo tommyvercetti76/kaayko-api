@@ -1,0 +1,12 @@
+```json
+{
+  "selected_files": [
+    "repo:functions/middleware/authMiddleware.js",
+    "repo:functions/api/smartLinks/redirectHandler.js"
+  ],
+  "reasoning": [
+    "The `authMiddleware.js` file contains the `requireAuth` and `requireAdmin` functions which are candidates for refactoring to avoid redundant error messages.",
+    "The `redirectHandler.js` file is relevant as it handles public redirects, ensuring that unauthenticated users cannot access admin data or mutation endpoints."
+  ]
+}
+```

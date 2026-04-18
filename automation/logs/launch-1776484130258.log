@@ -1,0 +1,34 @@
+
+  KAAYKO API • AGENT MISSION
+
+  Area:    kortex
+  Track:   kortex
+  Goal:    Find all Vulnerabilities
+  Apply:   safe
+  Mode:    edit
+  Model:   deepseek-coder-v2:latest
+
+  Created run: kortex-find-all-vulnerabilities-20260418-034850z
+  Directory:   automation/runs/kortex-find-all-vulnerabilities-20260418-034850z
+  [1/6] Collecting candidate files... 20 candidates
+  [2/6] Model selecting files... done (25.9s)
+  [3/6] Loading selected files... 4 files loaded
+  [4/6] Model analyzing (this may take a few minutes)... done (121.0s)
+  [5/6] Applying 2 safe edits...
+  [6/6] Writing reports...
+
+────────────────────────────────────────────────────────────
+ KAAYKO API  •  RUN RESULTS
+────────────────────────────────────────────────────────────
+  Run:        kortex-find-all-vulnerabilities-20260418-034850z
+  Track:      kortex
+  Status:     changes_requested
+  Decision:   changes_requested
+  Changed:    2 files (+0 / -0)
+  Meaningful: 0 backend files
+  Accuracy:   80
+  Maintain.:  75
+  Findings:   2
+  Followups:  2
+────────────────────────────────────────────────────────────
+

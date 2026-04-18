@@ -1,0 +1,44 @@
+{
+  "selected_files": [
+    {
+      "path": "api:functions/middleware/authMiddleware.js",
+      "repo": "api",
+      "relative_path": "functions/middleware/authMiddleware.js",
+      "logical_root": "functions/middleware",
+      "size_bytes": 8842,
+      "line_count": 316,
+      "char_count": 8842,
+      "truncated": true
+    },
+    {
+      "path": "api:functions/api/smartLinks/publicRouter.js",
+      "repo": "api",
+      "relative_path": "functions/api/smartLinks/publicRouter.js",
+      "logical_root": "functions/api/smartLinks",
+      "size_bytes": 7274,
+      "line_count": 214,
+      "char_count": 7256,
+      "truncated": true
+    },
+    {
+      "path": "api:functions/api/smartLinks/tenantContext.js",
+      "repo": "api",
+      "relative_path": "functions/api/smartLinks/tenantContext.js",
+      "logical_root": "functions/api/smartLinks",
+      "size_bytes": 7720,
+      "line_count": 265,
+      "char_count": 7720,
+      "truncated": true
+    },
+    {
+      "path": "api:functions/api/billing/router.js",
+      "repo": "api",
+      "relative_path": "functions/api/billing/router.js",
+      "logical_root": "functions/api/billing",
+      "size_bytes": 12669,
+      "line_count": 433,
+      "char_count": 12657,
+      "truncated": true
+    }
+  ]
+}

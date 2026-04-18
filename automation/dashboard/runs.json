@@ -1,0 +1,934 @@
+{
+  "generated_at": "2026-04-18T16:30:06.959Z",
+  "runs": [
+    {
+      "run_id": "kortex-fix-the-following-low-severity-issue-redundant-error-messages-in-auth-middleware-20260418-162956z",
+      "title": "Fix the following low severity issue: Redundant Error Messages in Auth Middleware. Detail: The `requireAuth` and `requireAdmin` functions return similar error messages for different authentication failures. This can be refactored into a single function or constant to avoid redundancy.",
+      "track": "kortex",
+      "requested_area": "kortex",
+      "status": "agent_selecting",
+      "learnings_published_at": null,
+      "review_decision": "pending",
+      "training_eligible": false,
+      "training_reason": "Review decision is not approved.",
+      "suggestions_count": 0,
+      "vulnerabilities_count": 0,
+      "rejected_rewrites_count": 0,
+      "accuracy_score": 0,
+      "maintainability_score": 0,
+      "confidence_score": 0,
+      "changed_files_count": 0,
+      "total_churn": 0,
+      "updated_at": "2026-04-18T16:29:56.218Z",
+      "created_at": "2026-04-18T16:29:56.198Z",
+      "changed_files": [],
+      "quality_gates": [
+        {
+          "id": "kortex-tests",
+          "label": "KORTEX API tests",
+          "cwd": "functions",
+          "command": "npm run test:kortex",
+          "status": null,
+          "last_run_at": null,
+          "exit_code": null,
+          "duration_ms": null,
+          "log_path": null
+        }
+      ],
+      "findings": [],
+      "suggestion_findings": [],
+      "vulnerability_findings": [],
+      "required_followups": [],
+      "guided_profile_ids": [
+        "kortex",
+        "shared"
+      ],
+      "guided_products": [
+        "KORTEX Platform API",
+        "Shared API Infrastructure"
+      ],
+      "guided_products_count": 2,
+      "focused_profile_ids": [
+        "kortex",
+        "shared"
+      ],
+      "focused_products": [
+        "KORTEX Platform API",
+        "Shared API Infrastructure"
+      ],
+      "focused_products_count": 2,
+      "coached_products": [
+        "KORTEX Platform API",
+        "Shared API Infrastructure"
+      ],
+      "coached_products_count": 2,
+      "agent_model": "configured-model",
+      "agent_provider": null,
+      "agent_goal_mode": "edit",
+      "agent_inspected_files_count": 0,
+      "agent_applied_files_count": 0,
+      "agent_selected_files": [],
+      "agent_applied_files": [],
+      "agent_applied_edits_detail": [],
+      "agent_summary": "",
+      "agent_verification": null,
+      "coaching_source_docs": [
+        "README.md",
+        "functions/api/smartLinks/README.md",
+        "functions/middleware/README.md"
+      ],
+      "coaching_doc_snapshots": [
+        {
+          "path": "README.md",
+          "status": "ok",
+          "summary": "Kaayko API What this repo powers | Product | Purpose | Mounted base paths on `api` | Primary frontend consumers | Product guide | | Kreator | Creator applications, onboarding, profile, admin review | `/kreators` | `kaayko/src/kreator/*` | [`docs/products/KREATOR.md`](./docs/products/KREATOR.md) | Architecture Runtime: Firebase Functions v2, Node.js 22, Express app exported as `api`. Storage and state: Firebase Admin, Firestore, Cloud Storage, Firebase Auth. Payments: Stripe checkout/payment intent and webhook flows."
+        },
+        {
+          "path": "functions/api/smartLinks/README.md",
+          "status": "ok",
+          "summary": "🔗 Smart Links API v4 — Short codes & Link Management This module implements the Smart Links service used by Kaayko to create short shareable links (short codes + optional semantic paths), handle redirects and track analytics. `smartLinks.js` — primary Express router for `/api/smartlinks` `smartLinkService.js` — core CRUD + stats business logic (writes to Firestore) `redirectHandler.js` — redirect logic, platform detection, click tracking `publicRouter.js` — lightweight public router for `/l/:id` and `/resolve` (deferred linking) helpers: `smartLinkValidation.js`, `smartLinkDefaults.js`, `smartLinkEnrichment.js` For each endpoint we show: Endpoint, Method, Description, Auth, Request (path / query / body), Response (shape + example), Errors, Side effects."
+        }
+      ]
+    },
+    {
+      "run_id": "kortex-fix-the-following-low-severity-issue-firestore-query-handling-in-tenant-context--20260418-160721z",
+      "title": "Fix the following low severity issue: Firestore Query Handling in Tenant Context Management. Detail: The createTenantScopedQuery function uses Firestore queries that are automatically scoped by tenantId, but the query logic is not immediately clear from the method name or usage. Consider adding more descriptive comments for maintainability.",
+      "track": "kortex",
+      "requested_area": "kortex",
+      "status": "agent_failed",
+      "learnings_published_at": null,
+      "review_decision": "pending",
+      "training_eligible": false,
+      "training_reason": "Review decision is not approved.",
+      "suggestions_count": 0,
+      "vulnerabilities_count": 0,
+      "rejected_rewrites_count": 0,
+      "accuracy_score": 0,
+      "maintainability_score": 0,
+      "confidence_score": 0,
+      "changed_files_count": 0,
+      "total_churn": 0,
+      "updated_at": "2026-04-18T16:17:21.359Z",
+      "created_at": "2026-04-18T16:07:21.297Z",
+      "changed_files": [],
+      "quality_gates": [
+        {
+          "id": "kortex-tests",
+          "label": "KORTEX API tests",
+          "cwd": "functions",
+          "command": "npm run test:kortex",
+          "status": null,
+          "last_run_at": null,
+          "exit_code": null,
+          "duration_ms": null,
+          "log_path": null
+        }
+      ],
+      "findings": [],
+      "suggestion_findings": [],
+      "vulnerability_findings": [],
+      "required_followups": [],
+      "guided_profile_ids": [
+        "kortex",
+        "shared"
+      ],
+      "guided_products": [
+        "KORTEX Platform API",
+        "Shared API Infrastructure"
+      ],
+      "guided_products_count": 2,
+      "focused_profile_ids": [
+        "kortex"
+      ],
+      "focused_products": [
+        "KORTEX Platform API"
+      ],
+      "focused_products_count": 1,
+      "coached_products": [
+        "KORTEX Platform API",
+        "Shared API Infrastructure"
+      ],
+      "coached_products_count": 2,
+      "agent_model": "configured-model",
+      "agent_provider": null,
+      "agent_goal_mode": "edit",
+      "agent_inspected_files_count": 0,
+      "agent_applied_files_count": 0,
+      "agent_selected_files": [],
+      "agent_applied_files": [],
+      "agent_applied_edits_detail": [],
+      "agent_summary": "",
+      "agent_verification": null,
+      "coaching_source_docs": [
+        "README.md",
+        "functions/api/smartLinks/README.md",
+        "functions/middleware/README.md"
+      ],
+      "coaching_doc_snapshots": [
+        {
+          "path": "README.md",
+          "status": "ok",
+          "summary": "Kaayko API What this repo powers | Product | Purpose | Mounted base paths on `api` | Primary frontend consumers | Product guide | | Kreator | Creator applications, onboarding, profile, admin review | `/kreators` | `kaayko/src/kreator/*` | [`docs/products/KREATOR.md`](./docs/products/KREATOR.md) | Architecture Runtime: Firebase Functions v2, Node.js 22, Express app exported as `api`. Storage and state: Firebase Admin, Firestore, Cloud Storage, Firebase Auth. Payments: Stripe checkout/payment intent and webhook flows."
+        },
+        {
+          "path": "functions/api/smartLinks/README.md",
+          "status": "ok",
+          "summary": "🔗 Smart Links API v4 — Short codes & Link Management This module implements the Smart Links service used by Kaayko to create short shareable links (short codes + optional semantic paths), handle redirects and track analytics. `smartLinks.js` — primary Express router for `/api/smartlinks` `smartLinkService.js` — core CRUD + stats business logic (writes to Firestore) `redirectHandler.js` — redirect logic, platform detection, click tracking `publicRouter.js` — lightweight public router for `/l/:id` and `/resolve` (deferred linking) helpers: `smartLinkValidation.js`, `smartLinkDefaults.js`, `smartLinkEnrichment.js` For each endpoint we show: Endpoint, Method, Description, Auth, Request (path / query / body), Response (shape + example), Errors, Side effects."
+        }
+      ]
+    },
+    {
+      "run_id": "weather-audit-auth-and-access-control-gaps-20260418-160440z",
+      "title": "Audit auth and access control gaps",
+      "track": "weather",
+      "requested_area": "weather",
+      "status": "agent_failed",
+      "learnings_published_at": null,
+      "review_decision": "pending",
+      "training_eligible": false,
+      "training_reason": "Review decision is not approved.",
+      "suggestions_count": 0,
+      "vulnerabilities_count": 0,
+      "rejected_rewrites_count": 0,
+      "accuracy_score": 0,
+      "maintainability_score": 0,
+      "confidence_score": 0,
+      "changed_files_count": 0,
+      "total_churn": 0,
+      "updated_at": "2026-04-18T16:14:59.811Z",
+      "created_at": "2026-04-18T16:04:40.976Z",
+      "changed_files": [],
+      "quality_gates": [
+        {
+          "id": "weather-tests",
+          "label": "Weather API tests",
+          "cwd": "functions",
+          "command": "node ./node_modules/jest/bin/jest.js --runInBand __tests__/weather-paddle-score.test.js --forceExit --detectOpenHandles",
+          "status": null,
+          "last_run_at": null,
+          "exit_code": null,
+          "duration_ms": null,
+          "log_path": null
+        }
+      ],
+      "findings": [],
+      "suggestion_findings": [],
+      "vulnerability_findings": [],
+      "required_followups": [],
+      "guided_profile_ids": [
+        "weather",
+        "shared"
+      ],
+      "guided_products": [
+        "Weather & Forecast API",
+        "Shared API Infrastructure"
+      ],
+      "guided_products_count": 2,
+      "focused_profile_ids": [
+        "weather"
+      ],
+      "focused_products": [
+        "Weather & Forecast API"
+      ],
+      "focused_products_count": 1,
+      "coached_products": [
+        "Weather & Forecast API",
+        "Shared API Infrastructure"
+      ],
+      "coached_products_count": 2,
+      "agent_model": "configured-model",
+      "agent_provider": null,
+      "agent_goal_mode": "audit",
+      "agent_inspected_files_count": 18,
+      "agent_applied_files_count": 0,
+      "agent_selected_files": [
+        "api:functions/middleware/authMiddleware.js",
+        "api:functions/middleware/kreatorAuthMiddleware.js",
+        "api:functions/api/weather/dataStandardization.js",
+        "api:functions/api/weather/inputStandardization.js",
+        "api:functions/middleware/apiKeyMiddleware.js",
+        "api:functions/middleware/rateLimit.js",
+        "api:functions/middleware/securityMiddleware.js",
+        "api:functions/api/weather/mlService.js",
+        "api:functions/api/weather/modelCalibration.js",
+        "api:functions/api/weather/nearbyWater.js",
+        "api:functions/api/weather/paddleScore.js",
+        "api:functions/api/weather/paddleScoreCompute.js",
+        "api:functions/api/weather/paddlingout.js",
+        "api:functions/api/weather/sharedWeatherUtils.js",
+        "api:functions/api/weather/smartWarnings.js",
+        "api:functions/api/weather/fastForecast.js",
+        "api:functions/api/weather/forecast.js",
+        "api:functions/api/weather/paddlePenalties.js"
+      ],
+      "agent_applied_files": [],
+      "agent_applied_edits_detail": [],
+      "agent_summary": "",
+      "agent_verification": null,
+      "coaching_source_docs": [
+        "README.md",
+        "functions/api/weather/README.md",
+        "functions/middleware/README.md"
+      ],
+      "coaching_doc_snapshots": [
+        {
+          "path": "README.md",
+          "status": "ok",
+          "summary": "Kaayko API What this repo powers | Product | Purpose | Mounted base paths on `api` | Primary frontend consumers | Product guide | | Kreator | Creator applications, onboarding, profile, admin review | `/kreators` | `kaayko/src/kreator/*` | [`docs/products/KREATOR.md`](./docs/products/KREATOR.md) | Architecture Runtime: Firebase Functions v2, Node.js 22, Express app exported as `api`. Storage and state: Firebase Admin, Firestore, Cloud Storage, Firebase Auth. Payments: Stripe checkout/payment intent and webhook flows."
+        },
+        {
+          "path": "functions/api/weather/README.md",
+          "status": "ok",
+          "summary": "🌦️ Weather APIs *Complete weather and paddle condition intelligence powered by ML** 📁 Files in this Module *Main API Endpoints:** _Mount status — All weather routers are mounted in `functions/index.js` and are reachable at runtime. The module mounts are:_ `/paddlingOut` → `paddlingout.js` (listed and mounted) `/paddleScore` → `paddleScore.js` (ML-powered paddle score) `/fastForecast` → `fastForecast.js` (public, cached forecasts)"
+        }
+      ]
+    },
+    {
+      "run_id": "commerce-audit-checkout-and-payment-flows-for-security-issues-20260418-160446z",
+      "title": "Audit checkout and payment flows for security issues",
+      "track": "commerce",
+      "requested_area": "commerce",
+      "status": "agent_failed",
+      "learnings_published_at": null,
+      "review_decision": "pending",
+      "training_eligible": false,
+      "training_reason": "Review decision is not approved.",
+      "suggestions_count": 0,
+      "vulnerabilities_count": 0,
+      "rejected_rewrites_count": 0,
+      "accuracy_score": 0,
+      "maintainability_score": 0,
+      "confidence_score": 0,
+      "changed_files_count": 0,
+      "total_churn": 0,
+      "updated_at": "2026-04-18T16:05:04.952Z",
+      "created_at": "2026-04-18T16:04:46.842Z",
+      "changed_files": [],
+      "quality_gates": [
+        {
+          "id": "store-tests",
+          "label": "Store API tests",
+          "cwd": "functions",
+          "command": "npm run test:store",
+          "status": null,
+          "last_run_at": null,
+          "exit_code": null,
+          "duration_ms": null,
+          "log_path": null
+        }
+      ],
+      "findings": [],
+      "suggestion_findings": [],
+      "vulnerability_findings": [],
+      "required_followups": [],
+      "guided_profile_ids": [
+        "commerce",
+        "shared"
+      ],
+      "guided_products": [
+        "Commerce & Checkout API",
+        "Shared API Infrastructure"
+      ],
+      "guided_products_count": 2,
+      "focused_profile_ids": [
+        "commerce"
+      ],
+      "focused_products": [
+        "Commerce & Checkout API"
+      ],
+      "focused_products_count": 1,
+      "coached_products": [
+        "Commerce & Checkout API",
+        "Shared API Infrastructure"
+      ],
+      "coached_products_count": 2,
+      "agent_model": "configured-model",
+      "agent_provider": null,
+      "agent_goal_mode": "edit",
+      "agent_inspected_files_count": 4,
+      "agent_applied_files_count": 0,
+      "agent_selected_files": [
+        "api:functions/middleware/securityMiddleware.js",
+        "api:functions/api/checkout/createPaymentIntent.js",
+        "api:functions/api/checkout/updatePaymentIntentEmail.js",
+        "api:functions/middleware/authMiddleware.js"
+      ],
+      "agent_applied_files": [],
+      "agent_applied_edits_detail": [],
+      "agent_summary": "",
+      "agent_verification": null,
+      "coaching_source_docs": [
+        "README.md",
+        "functions/api/products/README.md",
+        "functions/api/checkout/README.md",
+        "functions/middleware/README.md"
+      ],
+      "coaching_doc_snapshots": [
+        {
+          "path": "README.md",
+          "status": "ok",
+          "summary": "Kaayko API What this repo powers | Product | Purpose | Mounted base paths on `api` | Primary frontend consumers | Product guide | | Kreator | Creator applications, onboarding, profile, admin review | `/kreators` | `kaayko/src/kreator/*` | [`docs/products/KREATOR.md`](./docs/products/KREATOR.md) | Architecture Runtime: Firebase Functions v2, Node.js 22, Express app exported as `api`. Storage and state: Firebase Admin, Firestore, Cloud Storage, Firebase Auth. Payments: Stripe checkout/payment intent and webhook flows."
+        },
+        {
+          "path": "functions/api/products/README.md",
+          "status": "ok",
+          "summary": "🛍️ Products & Images APIs *E-commerce product catalog and image serving** 📁 Files in this Module 1. **`products.js`** - Product catalog API 2. **`images.js`** - Image proxy service 🛍️ API #1: Products `GET /api/products` - List all products `GET /api/products/:productId` - Get single product"
+        },
+        {
+          "path": "functions/api/checkout/README.md",
+          "status": "ok",
+          "summary": "Kaayko Checkout System Complete email notification system for Stripe payments with customer confirmations and admin alerts. 🎯 Overview ✅ Email collection during Stripe checkout (mandatory) ✅ Order confirmation page with email display ✅ Webhook processing for payment events ✅ Dual email notifications (customer + admin) ✅ Order storage in Firestore"
+        }
+      ]
+    },
+    {
+      "run_id": "kortex-fix-the-following-low-severity-issue-redundant-error-messages-in-auth-middleware-20260418-160351z",
+      "title": "Fix the following low severity issue: Redundant Error Messages in Auth Middleware. Detail: The requireAuth and requireAdmin functions return similar error messages for different authentication failures. This can be refactored into a single function or constant to avoid redundancy.",
+      "track": "kortex",
+      "requested_area": "kortex",
+      "status": "reviewed",
+      "learnings_published_at": null,
+      "review_decision": "approved",
+      "training_eligible": false,
+      "training_reason": "Accuracy score is below 90.",
+      "suggestions_count": 2,
+      "vulnerabilities_count": 0,
+      "rejected_rewrites_count": 0,
+      "accuracy_score": 80,
+      "maintainability_score": 75,
+      "confidence_score": 60,
+      "changed_files_count": 39,
+      "total_churn": 16,
+      "updated_at": "2026-04-18T16:04:49.143Z",
+      "created_at": "2026-04-18T16:03:51.039Z",
+      "changed_files": [
+        "api:automation/benchmark/findings-review.md",
+        "api:automation/benchmark/metrics.json",
+        "api:automation/config/api-coaching.json",
+        "api:automation/config/api-loop.json",
+        "api:automation/config/runtime.json",
+        "api:automation/dashboard/",
+        "api:automation/kaayko-api",
+        "api:automation/logs/implement-1776525060143.log",
+        "api:automation/logs/implement-1776528230992.log",
+        "api:automation/logs/launch-1776480101786.log",
+        "api:automation/logs/launch-1776484130258.log",
+        "api:automation/logs/launch-1776484395277.log",
+        "api:automation/logs/launch-1776485064831.log",
+        "api:automation/logs/launch-1776485563323.log",
+        "api:automation/logs/launch-1776486208176.log",
+        "api:automation/logs/launch-1776486612118.log",
+        "api:automation/logs/launch-1776521811930.log",
+        "api:automation/logs/launch-1776524915579.log",
+        "api:automation/logs/launch-1776527027040.log",
+        "api:automation/logs/launch-1776528280847.log",
+        "api:automation/run-local-loop.sh",
+        "api:automation/runs/",
+        "api:automation/scripts/agent-files.js",
+        "api:automation/scripts/agent-prompts.js",
+        "api:automation/scripts/agent-runner.js",
+        "api:automation/scripts/agent-verify.js",
+        "api:automation/scripts/benchmark.js",
+        "api:automation/scripts/finding-intelligence.js",
+        "api:automation/scripts/loop-dashboard.js",
+        "api:automation/scripts/loop-helpers.js",
+        "api:automation/scripts/ollama-client.js",
+        "api:automation/scripts/pipeline-queue.js",
+        "api:automation/scripts/portfolio-loop.js",
+        "api:automation/scripts/resource-governor.js",
+        "api:automation/scripts/scout.js",
+        "api:automation/templates/decision-log.md",
+        "api:automation/templates/review.json",
+        "api:automation/templates/review.md",
+        "api:automation/templates/spec.md"
+      ],
+      "quality_gates": [
+        {
+          "id": "kortex-tests",
+          "label": "KORTEX API tests",
+          "cwd": "functions",
+          "command": "npm run test:kortex",
+          "status": "passed",
+          "blocking_reason": null,
+          "last_run_at": "2026-04-18T16:04:49.139Z",
+          "exit_code": 0,
+          "duration_ms": 979,
+          "log_path": "automation/runs/kortex-fix-the-following-low-severity-issue-redundant-error-messages-in-auth-middleware-20260418-160351z/artifacts/commands/kortex-tests.log"
+        }
+      ],
+      "findings": [
+        {
+          "severity": "low",
+          "status": "open",
+          "title": "Redundant Error Messages in Auth Middleware",
+          "detail": "The `requireAuth` and `requireAdmin` functions return similar error messages for different authentication failures. This can be refactored into a single function or constant to avoid redundancy.",
+          "category": "duplication",
+          "file_paths": []
+        }
+      ],
+      "suggestion_findings": [
+        {
+          "severity": "low",
+          "status": "open",
+          "title": "Redundant Error Messages in Auth Middleware",
+          "detail": "The `requireAuth` and `requireAdmin` functions return similar error messages for different authentication failures. This can be refactored into a single function or constant to avoid redundancy.",
+          "category": "duplication",
+          "file_paths": []
+        }
+      ],
+      "vulnerability_findings": [],
+      "required_followups": [
+        "Consider consolidating the error messages for authentication failures into a single function or using a shared constant across these middleware functions to avoid redundancy."
+      ],
+      "guided_profile_ids": [
+        "kortex",
+        "shared"
+      ],
+      "guided_products": [
+        "KORTEX Platform API",
+        "Shared API Infrastructure"
+      ],
+      "guided_products_count": 2,
+      "focused_profile_ids": [
+        "kortex",
+        "shared"
+      ],
+      "focused_products": [
+        "KORTEX Platform API",
+        "Shared API Infrastructure"
+      ],
+      "focused_products_count": 2,
+      "coached_products": [
+        "KORTEX Platform API",
+        "Shared API Infrastructure"
+      ],
+      "coached_products_count": 2,
+      "agent_model": "deepseek-coder-v2:16b",
+      "agent_provider": "ollama",
+      "agent_goal_mode": "edit",
+      "agent_inspected_files_count": 2,
+      "agent_applied_files_count": 0,
+      "agent_selected_files": [
+        "api:functions/middleware/authMiddleware.js",
+        "api:functions/api/smartLinks/redirectHandler.js"
+      ],
+      "agent_applied_files": [],
+      "agent_applied_edits_detail": [],
+      "agent_summary": "The provided content outlines a review of Firebase Cloud Functions for a Node.js application, focusing on authentication middleware and error handling.",
+      "agent_verification": {
+        "summary": "no_edits",
+        "syntax_passed": true,
+        "lint_passed": true,
+        "lint_skipped": true,
+        "smoke_test_passed": false,
+        "smoke_test_skipped": true
+      },
+      "coaching_source_docs": [
+        "README.md",
+        "functions/api/smartLinks/README.md",
+        "functions/middleware/README.md"
+      ],
+      "coaching_doc_snapshots": [
+        {
+          "path": "README.md",
+          "status": "ok",
+          "summary": "Kaayko API What this repo powers | Product | Purpose | Mounted base paths on `api` | Primary frontend consumers | Product guide | | Kreator | Creator applications, onboarding, profile, admin review | `/kreators` | `kaayko/src/kreator/*` | [`docs/products/KREATOR.md`](./docs/products/KREATOR.md) | Architecture Runtime: Firebase Functions v2, Node.js 22, Express app exported as `api`. Storage and state: Firebase Admin, Firestore, Cloud Storage, Firebase Auth. Payments: Stripe checkout/payment intent and webhook flows."
+        },
+        {
+          "path": "functions/api/smartLinks/README.md",
+          "status": "ok",
+          "summary": "🔗 Smart Links API v4 — Short codes & Link Management This module implements the Smart Links service used by Kaayko to create short shareable links (short codes + optional semantic paths), handle redirects and track analytics. `smartLinks.js` — primary Express router for `/api/smartlinks` `smartLinkService.js` — core CRUD + stats business logic (writes to Firestore) `redirectHandler.js` — redirect logic, platform detection, click tracking `publicRouter.js` — lightweight public router for `/l/:id` and `/resolve` (deferred linking) helpers: `smartLinkValidation.js`, `smartLinkDefaults.js`, `smartLinkEnrichment.js` For each endpoint we show: Endpoint, Method, Description, Auth, Request (path / query / body), Response (shape + example), Errors, Side effects."
+        }
+      ]
+    },
+    {
+      "run_id": "kortex-find-auth-bypass-vulnerabilities-20260418-155725z",
+      "title": "Find auth bypass vulnerabilities",
+      "track": "kortex",
+      "requested_area": "kortex",
+      "status": "reviewed",
+      "learnings_published_at": null,
+      "review_decision": "approved",
+      "training_eligible": false,
+      "training_reason": "Accuracy score is below 90.",
+      "suggestions_count": 4,
+      "vulnerabilities_count": 0,
+      "rejected_rewrites_count": 0,
+      "accuracy_score": 80,
+      "maintainability_score": 75,
+      "confidence_score": 60,
+      "changed_files_count": 37,
+      "total_churn": 16,
+      "updated_at": "2026-04-18T16:00:31.473Z",
+      "created_at": "2026-04-18T15:57:25.349Z",
+      "changed_files": [
+        "api:automation/benchmark/findings-review.md",
+        "api:automation/benchmark/metrics.json",
+        "api:automation/config/api-coaching.json",
+        "api:automation/config/api-loop.json",
+        "api:automation/config/runtime.json",
+        "api:automation/dashboard/",
+        "api:automation/kaayko-api",
+        "api:automation/logs/implement-1776525060143.log",
+        "api:automation/logs/launch-1776480101786.log",
+        "api:automation/logs/launch-1776484130258.log",
+        "api:automation/logs/launch-1776484395277.log",
+        "api:automation/logs/launch-1776485064831.log",
+        "api:automation/logs/launch-1776485563323.log",
+        "api:automation/logs/launch-1776486208176.log",
+        "api:automation/logs/launch-1776486612118.log",
+        "api:automation/logs/launch-1776521811930.log",
+        "api:automation/logs/launch-1776524915579.log",
+        "api:automation/logs/launch-1776527027040.log",
+        "api:automation/run-local-loop.sh",
+        "api:automation/runs/",
+        "api:automation/scripts/agent-files.js",
+        "api:automation/scripts/agent-prompts.js",
+        "api:automation/scripts/agent-runner.js",
+        "api:automation/scripts/agent-verify.js",
+        "api:automation/scripts/benchmark.js",
+        "api:automation/scripts/finding-intelligence.js",
+        "api:automation/scripts/loop-dashboard.js",
+        "api:automation/scripts/loop-helpers.js",
+        "api:automation/scripts/ollama-client.js",
+        "api:automation/scripts/pipeline-queue.js",
+        "api:automation/scripts/portfolio-loop.js",
+        "api:automation/scripts/resource-governor.js",
+        "api:automation/scripts/scout.js",
+        "api:automation/templates/decision-log.md",
+        "api:automation/templates/review.json",
+        "api:automation/templates/review.md",
+        "api:automation/templates/spec.md"
+      ],
+      "quality_gates": [
+        {
+          "id": "kortex-tests",
+          "label": "KORTEX API tests",
+          "cwd": "functions",
+          "command": "npm run test:kortex",
+          "status": "passed",
+          "blocking_reason": null,
+          "last_run_at": "2026-04-18T16:00:31.470Z",
+          "exit_code": 0,
+          "duration_ms": 1118,
+          "log_path": "automation/runs/kortex-find-auth-bypass-vulnerabilities-20260418-155725z/artifacts/commands/kortex-tests.log"
+        }
+      ],
+      "findings": [
+        {
+          "severity": "low",
+          "status": "open",
+          "title": "Redundant Error Messages in Auth Middleware",
+          "detail": "The requireAuth and requireAdmin functions return similar error messages for different authentication failures. This can be refactored into a single function or constant to avoid redundancy.",
+          "category": "maintainability",
+          "file_paths": []
+        },
+        {
+          "severity": "low",
+          "status": "open",
+          "title": "Firestore Query Handling in Tenant Context Management",
+          "detail": "The createTenantScopedQuery function uses Firestore queries that are automatically scoped by tenantId, but the query logic is not immediately clear from the method name or usage. Consider adding more descriptive comments for maintainability.",
+          "category": "maintainability",
+          "file_paths": []
+        }
+      ],
+      "suggestion_findings": [
+        {
+          "severity": "low",
+          "status": "open",
+          "title": "Redundant Error Messages in Auth Middleware",
+          "detail": "The requireAuth and requireAdmin functions return similar error messages for different authentication failures. This can be refactored into a single function or constant to avoid redundancy.",
+          "category": "maintainability",
+          "file_paths": []
+        },
+        {
+          "severity": "low",
+          "status": "open",
+          "title": "Firestore Query Handling in Tenant Context Management",
+          "detail": "The createTenantScopedQuery function uses Firestore queries that are automatically scoped by tenantId, but the query logic is not immediately clear from the method name or usage. Consider adding more descriptive comments for maintainability.",
+          "category": "maintainability",
+          "file_paths": []
+        }
+      ],
+      "vulnerability_findings": [],
+      "required_followups": [
+        "Consider creating a constants file to store error messages used across the application to reduce redundancy and improve maintainability.",
+        "Add more detailed comments in Firestore query handling functions like createTenantScopedQuery to enhance understandability for future developers."
+      ],
+      "guided_profile_ids": [
+        "kortex",
+        "shared"
+      ],
+      "guided_products": [
+        "KORTEX Platform API",
+        "Shared API Infrastructure"
+      ],
+      "guided_products_count": 2,
+      "focused_profile_ids": [
+        "kortex"
+      ],
+      "focused_products": [
+        "KORTEX Platform API"
+      ],
+      "focused_products_count": 1,
+      "coached_products": [
+        "KORTEX Platform API",
+        "Shared API Infrastructure"
+      ],
+      "coached_products_count": 2,
+      "agent_model": "deepseek-coder-v2:16b",
+      "agent_provider": "ollama",
+      "agent_goal_mode": "edit",
+      "agent_inspected_files_count": 4,
+      "agent_applied_files_count": 0,
+      "agent_selected_files": [
+        "api:functions/middleware/authMiddleware.js",
+        "api:functions/api/smartLinks/publicRouter.js",
+        "api:functions/api/smartLinks/tenantContext.js",
+        "api:functions/api/billing/router.js"
+      ],
+      "agent_applied_files": [],
+      "agent_applied_edits_detail": [],
+      "agent_summary": "The provided files from the Kaayko API showcase a comprehensive implementation of Firebase Cloud Functions for handling various aspects including authentication, smart link management, billing, and tenant isolation. The code is well-documented and follows best practices in terms of security measures such as Firebase Auth verification and role-based access control (RBAC). However, there are opportunities to enhance maintainability by refactoring repetitive error messages into constants and improving the handling of Firestore queries for better readability.",
+      "agent_verification": {
+        "summary": "no_edits",
+        "syntax_passed": true,
+        "lint_passed": true,
+        "lint_skipped": true,
+        "smoke_test_passed": false,
+        "smoke_test_skipped": true
+      },
+      "coaching_source_docs": [
+        "README.md",
+        "functions/api/smartLinks/README.md",
+        "functions/middleware/README.md"
+      ],
+      "coaching_doc_snapshots": [
+        {
+          "path": "README.md",
+          "status": "ok",
+          "summary": "Kaayko API What this repo powers | Product | Purpose | Mounted base paths on `api` | Primary frontend consumers | Product guide | | Kreator | Creator applications, onboarding, profile, admin review | `/kreators` | `kaayko/src/kreator/*` | [`docs/products/KREATOR.md`](./docs/products/KREATOR.md) | Architecture Runtime: Firebase Functions v2, Node.js 22, Express app exported as `api`. Storage and state: Firebase Admin, Firestore, Cloud Storage, Firebase Auth. Payments: Stripe checkout/payment intent and webhook flows."
+        },
+        {
+          "path": "functions/api/smartLinks/README.md",
+          "status": "ok",
+          "summary": "🔗 Smart Links API v4 — Short codes & Link Management This module implements the Smart Links service used by Kaayko to create short shareable links (short codes + optional semantic paths), handle redirects and track analytics. `smartLinks.js` — primary Express router for `/api/smartlinks` `smartLinkService.js` — core CRUD + stats business logic (writes to Firestore) `redirectHandler.js` — redirect logic, platform detection, click tracking `publicRouter.js` — lightweight public router for `/l/:id` and `/resolve` (deferred linking) helpers: `smartLinkValidation.js`, `smartLinkDefaults.js`, `smartLinkEnrichment.js` For each endpoint we show: Endpoint, Method, Description, Auth, Request (path / query / body), Response (shape + example), Errors, Side effects."
+        }
+      ]
+    },
+    {
+      "run_id": "shared-audit-middleware-and-auth-modules-for-input-validation-gaps-and-missing-error-ha-20260418-154347z",
+      "title": "Audit middleware and auth modules for input validation gaps and missing error handling",
+      "track": "shared",
+      "requested_area": "shared",
+      "status": "agent_failed",
+      "learnings_published_at": null,
+      "review_decision": "pending",
+      "training_eligible": false,
+      "training_reason": "Review decision is not approved.",
+      "suggestions_count": 0,
+      "vulnerabilities_count": 0,
+      "rejected_rewrites_count": 0,
+      "accuracy_score": 0,
+      "maintainability_score": 0,
+      "confidence_score": 0,
+      "changed_files_count": 0,
+      "total_churn": 0,
+      "updated_at": "2026-04-18T15:54:58.122Z",
+      "created_at": "2026-04-18T15:43:47.078Z",
+      "changed_files": [],
+      "quality_gates": [
+        {
+          "id": "smoke-tests",
+          "label": "API smoke tests",
+          "cwd": "functions",
+          "command": "npm run test:smoke",
+          "status": null,
+          "last_run_at": null,
+          "exit_code": null,
+          "duration_ms": null,
+          "log_path": null
+        }
+      ],
+      "findings": [],
+      "suggestion_findings": [],
+      "vulnerability_findings": [],
+      "required_followups": [],
+      "guided_profile_ids": [
+        "shared",
+        "kortex",
+        "commerce",
+        "kamera",
+        "kreator",
+        "kutz",
+        "weather"
+      ],
+      "guided_products": [
+        "Shared API Infrastructure",
+        "KORTEX Platform API",
+        "Commerce & Checkout API",
+        "Kamera Quest API",
+        "Kreator Program API",
+        "Kutz Nutrition API",
+        "Weather & Forecast API"
+      ],
+      "guided_products_count": 7,
+      "focused_profile_ids": [
+        "shared"
+      ],
+      "focused_products": [
+        "Shared API Infrastructure"
+      ],
+      "focused_products_count": 1,
+      "coached_products": [
+        "Shared API Infrastructure",
+        "KORTEX Platform API",
+        "Commerce & Checkout API",
+        "Kamera Quest API",
+        "Kreator Program API",
+        "Kutz Nutrition API",
+        "Weather & Forecast API"
+      ],
+      "coached_products_count": 7,
+      "agent_model": "configured-model",
+      "agent_provider": null,
+      "agent_goal_mode": "audit",
+      "agent_inspected_files_count": 18,
+      "agent_applied_files_count": 0,
+      "agent_selected_files": [
+        "api:functions/middleware/authMiddleware.js",
+        "api:functions/middleware/kreatorAuthMiddleware.js",
+        "api:functions/middleware/apiKeyMiddleware.js",
+        "api:functions/middleware/rateLimit.js",
+        "api:functions/middleware/securityMiddleware.js",
+        "api:functions/index.js",
+        "api:functions/api/auth/authRoutes.js",
+        "api:functions/api/cameras/audit/capabilitySchema.js",
+        "api:functions/api/cameras/audit/officialBodies.js",
+        "api:functions/api/smartLinks/smartLinkValidation.js",
+        "api:functions/api/weather/inputStandardization.js",
+        "api:functions/api/weather/sharedWeatherUtils.js",
+        "api:functions/api/checkout/createPaymentIntent.js",
+        "api:functions/api/checkout/stripeWebhook.js",
+        "api:functions/api/smartLinks/redirectHandler.js",
+        "api:functions/api/weather/fastForecast.js",
+        "api:functions/api/weather/forecast.js",
+        "api:functions/api/admin/adminUsers.js"
+      ],
+      "agent_applied_files": [],
+      "agent_applied_edits_detail": [],
+      "agent_summary": "",
+      "agent_verification": null,
+      "coaching_source_docs": [
+        "README.md",
+        "functions/middleware/README.md",
+        "functions/api/smartLinks/README.md",
+        "functions/api/products/README.md",
+        "functions/api/checkout/README.md",
+        "functions/api/cameras/README.md",
+        "functions/api/kreators/README.md",
+        "functions/api/kutz/README.md",
+        "functions/api/weather/README.md"
+      ],
+      "coaching_doc_snapshots": [
+        {
+          "path": "README.md",
+          "status": "ok",
+          "summary": "Kaayko API What this repo powers | Product | Purpose | Mounted base paths on `api` | Primary frontend consumers | Product guide | | Kreator | Creator applications, onboarding, profile, admin review | `/kreators` | `kaayko/src/kreator/*` | [`docs/products/KREATOR.md`](./docs/products/KREATOR.md) | Architecture Runtime: Firebase Functions v2, Node.js 22, Express app exported as `api`. Storage and state: Firebase Admin, Firestore, Cloud Storage, Firebase Auth. Payments: Stripe checkout/payment intent and webhook flows."
+        },
+        {
+          "path": "functions/middleware/README.md",
+          "status": "missing",
+          "summary": "Document not found in the current workspace."
+        }
+      ]
+    },
+    {
+      "run_id": "weather-find-all-vulnerabilities-in-weather-endpoints-20260418-154827z",
+      "title": "Find all vulnerabilities in weather endpoints",
+      "track": "weather",
+      "requested_area": "weather",
+      "status": "agent_failed",
+      "learnings_published_at": null,
+      "review_decision": "pending",
+      "training_eligible": false,
+      "training_reason": "Review decision is not approved.",
+      "suggestions_count": 0,
+      "vulnerabilities_count": 0,
+      "rejected_rewrites_count": 0,
+      "accuracy_score": 0,
+      "maintainability_score": 0,
+      "confidence_score": 0,
+      "changed_files_count": 0,
+      "total_churn": 0,
+      "updated_at": "2026-04-18T15:48:27.726Z",
+      "created_at": "2026-04-18T15:48:27.693Z",
+      "changed_files": [],
+      "quality_gates": [
+        {
+          "id": "weather-tests",
+          "label": "Weather API tests",
+          "cwd": "functions",
+          "command": "node ./node_modules/jest/bin/jest.js --runInBand __tests__/weather-paddle-score.test.js --forceExit --detectOpenHandles",
+          "status": null,
+          "last_run_at": null,
+          "exit_code": null,
+          "duration_ms": null,
+          "log_path": null
+        }
+      ],
+      "findings": [],
+      "suggestion_findings": [],
+      "vulnerability_findings": [],
+      "required_followups": [],
+      "guided_profile_ids": [
+        "weather",
+        "shared"
+      ],
+      "guided_products": [
+        "Weather & Forecast API",
+        "Shared API Infrastructure"
+      ],
+      "guided_products_count": 2,
+      "focused_profile_ids": [
+        "weather"
+      ],
+      "focused_products": [
+        "Weather & Forecast API"
+      ],
+      "focused_products_count": 1,
+      "coached_products": [
+        "Weather & Forecast API",
+        "Shared API Infrastructure"
+      ],
+      "coached_products_count": 2,
+      "agent_model": "configured-model",
+      "agent_provider": null,
+      "agent_goal_mode": "edit",
+      "agent_inspected_files_count": 0,
+      "agent_applied_files_count": 0,
+      "agent_selected_files": [],
+      "agent_applied_files": [],
+      "agent_applied_edits_detail": [],
+      "agent_summary": "",
+      "agent_verification": null,
+      "coaching_source_docs": [
+        "README.md",
+        "functions/api/weather/README.md",
+        "functions/middleware/README.md"
+      ],
+      "coaching_doc_snapshots": [
+        {
+          "path": "README.md",
+          "status": "ok",
+          "summary": "Kaayko API What this repo powers | Product | Purpose | Mounted base paths on `api` | Primary frontend consumers | Product guide | | Kreator | Creator applications, onboarding, profile, admin review | `/kreators` | `kaayko/src/kreator/*` | [`docs/products/KREATOR.md`](./docs/products/KREATOR.md) | Architecture Runtime: Firebase Functions v2, Node.js 22, Express app exported as `api`. Storage and state: Firebase Admin, Firestore, Cloud Storage, Firebase Auth. Payments: Stripe checkout/payment intent and webhook flows."
+        },
+        {
+          "path": "functions/api/weather/README.md",
+          "status": "ok",
+          "summary": "🌦️ Weather APIs *Complete weather and paddle condition intelligence powered by ML** 📁 Files in this Module *Main API Endpoints:** _Mount status — All weather routers are mounted in `functions/index.js` and are reachable at runtime. The module mounts are:_ `/paddlingOut` → `paddlingout.js` (listed and mounted) `/paddleScore` → `paddleScore.js` (ML-powered paddle score) `/fastForecast` → `fastForecast.js` (public, cached forecasts)"
+        }
+      ]
+    }
+  ]
+}

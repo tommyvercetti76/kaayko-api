@@ -1,0 +1,24 @@
+{
+  "selected_files": [
+    {
+      "path": "api:functions/middleware/authMiddleware.js",
+      "repo": "api",
+      "relative_path": "functions/middleware/authMiddleware.js",
+      "logical_root": "functions/middleware",
+      "size_bytes": 8842,
+      "line_count": 316,
+      "char_count": 8842,
+      "truncated": true
+    },
+    {
+      "path": "api:functions/api/smartLinks/redirectHandler.js",
+      "repo": "api",
+      "relative_path": "functions/api/smartLinks/redirectHandler.js",
+      "logical_root": "functions/api/smartLinks",
+      "size_bytes": 12403,
+      "line_count": 401,
+      "char_count": 12394,
+      "truncated": true
+    }
+  ]
+}

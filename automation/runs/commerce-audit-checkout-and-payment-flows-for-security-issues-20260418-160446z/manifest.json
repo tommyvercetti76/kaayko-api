@@ -1,0 +1,99 @@
+{
+  "run_id": "commerce-audit-checkout-and-payment-flows-for-security-issues-20260418-160446z",
+  "track": "commerce",
+  "requested_area": "commerce",
+  "title": "Audit checkout and payment flows for security issues",
+  "status": "agent_failed",
+  "source": "agent",
+  "repo": "api",
+  "changed_files": [],
+  "git_snapshots": [],
+  "quality_gates": [
+    {
+      "id": "store-tests",
+      "label": "Store API tests",
+      "cwd": "functions",
+      "command": "npm run test:store",
+      "status": null,
+      "last_run_at": null,
+      "exit_code": null,
+      "duration_ms": null,
+      "log_path": null
+    }
+  ],
+  "coaching": {
+    "profile_ids": [
+      "commerce",
+      "shared"
+    ],
+    "guided_products": [
+      "Commerce & Checkout API",
+      "Shared API Infrastructure"
+    ],
+    "focused_profile_ids": [
+      "commerce"
+    ],
+    "focused_products": [
+      "Commerce & Checkout API"
+    ],
+    "source_docs": [
+      "README.md",
+      "functions/api/products/README.md",
+      "functions/api/checkout/README.md",
+      "functions/middleware/README.md"
+    ],
+    "focused_source_docs": [
+      "README.md",
+      "functions/api/products/README.md",
+      "functions/api/checkout/README.md"
+    ],
+    "validation_focus": [
+      "Validate product fetch, image serving, voting, and checkout as one paired flow.",
+      "Confirm Stripe payment intent creation returns the correct client secret shape.",
+      "Verify vote rate limiting middleware is still active and correctly scoped.",
+      "Ensure image serving enforces content-type and does not expose directory listings.",
+      "Verify middleware execution order is preserved for every mounted router.",
+      "Ensure auth claim validation runs before any data mutation endpoint.",
+      "Confirm error handlers return consistent shapes without leaking stack traces.",
+      "Validate Firebase Admin SDK is initialized once and not duplicated per-request."
+    ],
+    "risk_focus": [
+      "Stripe webhook and intent handling are transaction-critical \u2014 no silent fallbacks.",
+      "Rate limiting on vote endpoints must not be removed or weakened during cleanup.",
+      "Image serving routes must validate productId before reading from storage.",
+      "Checkout email update must not allow overwriting a confirmed payment's email.",
+      "Middleware order bugs are silent \u2014 a reorder can bypass security checks entirely.",
+      "Firebase Admin double-initialization causes memory and auth failures.",
+      "Error shape inconsistencies cause frontend parsing failures across multiple products.",
+      "CORS misconfiguration can silently allow unauthorized cross-origin requests."
+    ],
+    "route_focus": [
+      "GET /products",
+      "GET /products/:id",
+      "POST /products/:id/vote",
+      "GET /images/:productId/:fileName",
+      "POST /createPaymentIntent",
+      "POST /createPaymentIntent/updateEmail",
+      "/health",
+      "/api/**"
+    ]
+  },
+  "artifacts": {
+    "agent_inventory_path": "automation/runs/commerce-audit-checkout-and-payment-flows-for-security-issues-20260418-160446z/artifacts/agent/inventory.json",
+    "agent_selected_files_path": "automation/runs/commerce-audit-checkout-and-payment-flows-for-security-issues-20260418-160446z/artifacts/agent/selected-files.json"
+  },
+  "agent": {
+    "stage": "timeout",
+    "goal_mode": "edit",
+    "inventory_candidates": 11,
+    "selected_files": [
+      "api:functions/middleware/securityMiddleware.js",
+      "api:functions/api/checkout/createPaymentIntent.js",
+      "api:functions/api/checkout/updatePaymentIntentEmail.js",
+      "api:functions/middleware/authMiddleware.js"
+    ],
+    "error": "Marked stale \u2014 stuck for over 10 minutes"
+  },
+  "created_at": "2026-04-18T16:04:46.842Z",
+  "updated_at": "2026-04-18T16:05:04.952Z"
+}

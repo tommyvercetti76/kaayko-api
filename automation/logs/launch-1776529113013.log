@@ -1,0 +1,14 @@
+
+  KAAYKO API • AGENT MISSION
+
+  Area:    shared
+  Track:   shared
+  Goal:    audit shared services
+  Apply:   none
+  Mode:    audit
+  Model:   deepseek-coder-v2:16b
+
+  Created run: shared-audit-shared-services-20260418-161833z
+  Directory:   automation/runs/shared-audit-shared-services-20260418-161833z
+  [1/6] Collecting candidate files... 80 candidates
+  [2/6] Model selecting files...

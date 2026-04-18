@@ -1,0 +1,33 @@
+
+  KAAYKO API • AGENT MISSION
+
+  Area:    commerce
+  Track:   commerce
+  Goal:    Vulnerabilities identify
+  Apply:   safe
+  Mode:    edit
+  Model:   deepseek-coder-v2:latest
+
+  Created run: commerce-vulnerabilities-identify-20260418-040424z
+  Directory:   automation/runs/commerce-vulnerabilities-identify-20260418-040424z
+  [1/6] Collecting candidate files... 11 candidates
+  [2/6] Model selecting files... done (21.9s)
+  [3/6] Loading selected files... 5 files loaded
+  [4/6] Model analyzing (this may take a few minutes)... done (76.7s)
+  [6/6] Writing reports...
+
+────────────────────────────────────────────────────────────
+ KAAYKO API  •  RUN RESULTS
+────────────────────────────────────────────────────────────
+  Run:        commerce-vulnerabilities-identify-20260418-040424z
+  Track:      commerce
+  Status:     changes_requested
+  Decision:   changes_requested
+  Changed:    2 files (+0 / -0)
+  Meaningful: 0 backend files
+  Accuracy:   80
+  Maintain.:  75
+  Findings:   3
+  Followups:  1
+────────────────────────────────────────────────────────────
+

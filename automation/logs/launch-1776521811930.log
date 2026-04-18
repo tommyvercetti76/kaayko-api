@@ -1,0 +1,33 @@
+
+  KAAYKO API • AGENT MISSION
+
+  Area:    commerce
+  Track:   commerce
+  Goal:    Investigate the current failing tests and fix the root cause
+  Apply:   safe
+  Mode:    edit
+  Model:   deepseek-coder-v2:16b
+
+  Created run: commerce-investigate-the-current-failing-tests-and-fix-the-root-cause-20260418-141651z
+  Directory:   automation/runs/commerce-investigate-the-current-failing-tests-and-fix-the-root-cause-20260418-141651z
+  [1/6] Collecting candidate files... 11 candidates
+  [2/6] Model selecting files... done (26.3s)
+  [3/6] Loading selected files... 4 files loaded
+  [4/6] Model analyzing (this may take a few minutes)... done (48.8s)
+  [6/6] Writing reports...
+
+────────────────────────────────────────────────────────────
+ KAAYKO API  •  RUN RESULTS
+────────────────────────────────────────────────────────────
+  Run:        commerce-investigate-the-current-failing-tests-and-fix-the-root-cause-20260418-141651z
+  Track:      commerce
+  Status:     changes_requested
+  Decision:   changes_requested
+  Changed:    3 files (+24 / -2)
+  Meaningful: 1 backend files
+  Accuracy:   90
+  Maintain.:  85
+  Findings:   4
+  Followups:  1
+────────────────────────────────────────────────────────────
+

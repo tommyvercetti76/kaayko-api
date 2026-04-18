@@ -1,0 +1,16 @@
+```json
+{
+  "selected_files": [
+    "repo:functions/middleware/securityMiddleware.js",
+    "repo:functions/api/checkout/createPaymentIntent.js",
+    "repo:functions/api/checkout/updatePaymentIntentEmail.js",
+    "repo:functions/middleware/authMiddleware.js"
+  ],
+  "reasoning": [
+    "securityMiddleware.js is crucial for security checks and protects the checkout flow.",
+    "createPaymentIntent.js handles critical payment processing which must be secure.",
+    "updatePaymentIntentEmail.js ensures sensitive data handling during checkout is handled correctly.",
+    "authMiddleware.js maintains authentication throughout the API, ensuring only authorized users can access certain endpoints."
+  ]
+}
+```

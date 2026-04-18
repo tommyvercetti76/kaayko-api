@@ -1,0 +1,17 @@
+
+  KAAYKO API • AGENT MISSION
+
+  Area:    shared
+  Track:   shared
+  Goal:    Audit middleware and auth modules for input validation gaps and missing error handling
+  Apply:   none
+  Mode:    audit
+  Model:   deepseek-coder-v2:16b
+
+  Created run: shared-audit-middleware-and-auth-modules-for-input-validation-gaps-and-missing-error-ha-20260418-154347z
+  Directory:   automation/runs/shared-audit-middleware-and-auth-modules-for-input-validation-gaps-and-missing-error-ha-20260418-154347z
+  [1/6] Collecting candidate files... 80 candidates
+  [2/6] Model selecting files... done (70.9s)
+  [3/6] Loading selected files... 18 files loaded
+  [4/6] Model analyzing (this may take a few minutes)...
+❌ Ollama agent analysis failed: spawnSync /usr/local/bin/ollama ETIMEDOUT

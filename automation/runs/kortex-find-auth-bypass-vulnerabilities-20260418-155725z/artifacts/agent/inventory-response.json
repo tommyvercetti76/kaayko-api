@@ -1,0 +1,14 @@
+{
+  "selected_files": [
+    "repo:functions/middleware/authMiddleware.js",
+    "repo:functions/api/smartLinks/publicRouter.js",
+    "repo:functions/api/smartLinks/tenantContext.js",
+    "repo:functions/api/billing/router.js"
+  ],
+  "reasoning": [
+    "authMiddleware.js is critical for verifying tenant isolation and ensuring auth claims are validated before any data mutation.",
+    "publicRouter.js handles public paths that must not resolve admin routes, focusing on path validation to prevent unauthorized access.",
+    "tenantContext.js ensures each request context includes the correct tenant information, which is crucial for isolating data by tenant.",
+    "router.js in billing module focuses on read-only operations from a tenant's perspective and ensuring no direct mutation endpoints are accessible."
+  ]
+}

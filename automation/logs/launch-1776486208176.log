@@ -1,0 +1,18 @@
+
+  KAAYKO API • AGENT MISSION
+
+  Area:    kutz
+  Track:   kutz
+  Goal:    find vulnerabilities
+  Apply:   safe
+  Mode:    edit
+  Model:   qwen3:8b
+
+  Created run: kutz-find-vulnerabilities-20260418-042328z
+  Directory:   automation/runs/kutz-find-vulnerabilities-20260418-042328z
+  [1/6] Collecting candidate files... 13 candidates
+  [2/6] Model selecting files... done (100.2s)
+  [3/6] Loading selected files... 7 files loaded
+  [4/6] Model analyzing (this may take a few minutes)... done (516.0s)
+
+❌ Could not parse JSON from Ollama agent analysis response.
