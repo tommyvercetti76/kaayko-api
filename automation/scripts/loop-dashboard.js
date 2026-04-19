@@ -662,20 +662,15 @@ function buildDashboardHtml(summary) {
     </div>`;
   }).join("");
 
-  // ── Target cards (module selection + health combined) ──
-  const targetCards = moduleHealth.map((m) => {
+  // ── Module strip (horizontal pill row for Mission Control) ──
+  const moduleStrip = moduleHealth.map((m) => {
     const selected = m.area === selectedModule.area;
-    let statusColor = "var(--green)"; let statusText = "\u2713"; let barPct = 100;
-    if (m.runs === 0) { statusColor = "var(--text-dim)"; statusText = "\u2014"; barPct = 0; }
-    else if (m.vulns > 0) { statusColor = "var(--red)"; statusText = `${m.vulns} vln`; barPct = Math.max(10, 100 - m.vulns * 15); }
-    else if (m.sugs > 0) { statusColor = "var(--amber)"; statusText = `${m.sugs} sug`; barPct = Math.max(20, 100 - m.sugs * 5); }
-    return `<div class="target-card${selected ? " selected" : ""}" data-area="${esc(m.area)}" data-icon="${m.icon}" data-name="${esc(m.name)}">
-      <span class="tc-icon">${m.icon}</span>
-      <span class="tc-name">${esc(m.name)}</span>
-      <span class="tc-status" style="color:${statusColor}">${statusText}</span>
-      <div class="tc-bar"><div class="tc-bar-fill" style="width:${barPct}%;background:${statusColor}"></div></div>
-      <span class="tc-meta">${m.runs ? `${m.runs} run${m.runs !== 1 ? "s" : ""}` : "never"}</span>
-    </div>`;
+    let dotColor = "#34d399";
+    if (m.runs === 0) dotColor = "#4b5563";
+    else if (m.vulns > 0) dotColor = "#ef4444";
+    else if (m.sugs > 0) dotColor = "#f59e0b";
+    const tooltip = `${m.name}: ${m.vulns} vulns, ${m.runs} run${m.runs !== 1 ? "s" : ""}`;
+    return `<button class="mc-mod${selected ? " active" : ""}" data-area="${esc(m.area)}" data-icon="${m.icon}" data-name="${esc(m.name)}" title="${esc(tooltip)}"><span class="mc-mod-icon">${m.icon}</span><span class="mc-mod-name">${esc(m.name)}</span><span class="mc-mod-dot" style="background:${dotColor}"></span></button>`;
   }).join("");
 
   // ── Engine pills (model selector strip) ──
@@ -693,68 +688,31 @@ function buildDashboardHtml(summary) {
     </button>`;
   }).join("");
 
-  // ── Quick missions (contextual, data-driven) ──
-  const quickMissions = [];
-  actions.slice(0,4).forEach((a) => {
-    const pClass = a.priority<=1?"qo-urgent":(a.priority<=2?"qo-warn":"qo-info");
-    const goalText = (a.text||"").replace(/<[^>]*>/g,"").slice(0,80);
-    quickMissions.push(`<div class="qo-card ${pClass}" data-area="${esc(a.area||"")}" data-mode="${esc(a.action||"audit")}" data-goal="${esc(goalText)}">
-      <span class="qo-icon">${a.icon}</span>
-      <div class="qo-title">${a.text}</div>
-      <div class="qo-sub">${esc(a.area||"")} \u00b7 ${esc(a.action||"audit")}</div>
-    </div>`);
+  // ── Quick missions (clean list rows) ──
+  const qmItems = [];
+  actions.slice(0, 4).forEach((a) => {
+    const urgency = a.priority <= 1 ? "urgent" : (a.priority <= 2 ? "warn" : "info");
+    const goalText = (a.text || "").replace(/<[^>]*>/g, "").slice(0, 120);
+    qmItems.push({ urgency, area: a.area || "", mode: a.action || "audit", goal: goalText, text: a.text || goalText });
   });
-  if (quickMissions.length < 4) {
-    missionPresets.slice(0, 4 - quickMissions.length).forEach((p) => {
-      quickMissions.push(`<div class="qo-card qo-info" data-area="${esc(selectedModule.area)}" data-mode="${esc(p.mode)}" data-goal="${esc(p.goal)}">
-        <span class="qo-icon">${p.mode==="audit"?"\ud83d\udd0d":(p.mode==="edit"?"\u270f\ufe0f":"\ud83d\udc41")}</span>
-        <div class="qo-title">${esc(p.label)}</div>
-        <div class="qo-sub">${esc(p.mode)}</div>
-      </div>`);
+  if (qmItems.length < 3) {
+    missionPresets.slice(0, 3 - qmItems.length).forEach((p) => {
+      qmItems.push({ urgency: "info", area: selectedModule.area, mode: p.mode, goal: p.goal, text: p.label });
     });
   }
-  const quickMissionsHtml = quickMissions.join("");
+  const quickMissionsHtml = qmItems.map((m) =>
+    `<div class="mc-mission mc-m-${esc(m.urgency)}" data-area="${esc(m.area)}" data-mode="${esc(m.mode)}" data-goal="${esc(m.goal)}"><span class="mc-m-dot"></span><span class="mc-m-title">${m.text}</span><span class="mc-m-meta">${esc(m.area)} \u00b7 ${esc(m.mode)}</span><span class="mc-m-go">\u2192</span></div>`
+  ).join("");
 
-  // ── Command bar mode buttons ──
+  // ── Mode buttons ──
   const modeIcons = { audit: "\ud83d\udd0d", edit: "\u270f\ufe0f", "dry-run": "\ud83d\udc41" };
   const cmdModeButtons = launchModes.map((mode) => {
     const selected = mode.id === defaultLaunchMode;
-    return `<button class="cmd-mode-btn${selected?" active":""}" type="button" data-mode="${esc(mode.id)}"><span class="cmd-mode-icon">${modeIcons[mode.id]||""}</span>${esc(mode.label)}</button>`;
+    return `<button class="mc-mode-btn${selected ? " active" : ""}" type="button" data-mode="${esc(mode.id)}"><span class="mc-mode-icon">${modeIcons[mode.id] || ""}</span>${esc(mode.label)}</button>`;
   }).join("");
 
-  // ── Module dropdown items ──
-  const dropdownItems = modules.map((m) => {
-    const mh = moduleHealth.find((x) => x.area === m.area) || {};
-    const statusDot = mh.vulns > 0 ? `<span class="dd-status" style="color:var(--red)">\u25cf</span>` : (mh.runs > 0 ? `<span class="dd-status" style="color:var(--green)">\u25cf</span>` : `<span class="dd-status" style="color:var(--text-dim)">\u25cb</span>`);
-    return `<div class="cmd-dropdown-item" data-area="${esc(m.area)}" data-icon="${m.icon}" data-name="${esc(m.name)}"><span class="dd-icon">${m.icon}</span>${esc(m.name)}${statusDot}</div>`;
-  }).join("");
-
-  // ── Engine strip with confirm bar ──
-  const engineStripHtml = `<div class="engine-strip">
-      <span class="engine-label">Engine</span>
-      ${enginePills}
-      <div class="engine-confirm" id="engine-confirm">
-        <span class="engine-confirm-label" id="ec-label"></span>
-        <button class="engine-confirm-btn ec-activate" id="ec-activate" onclick="confirmEngine()">Activate</button>
-        <button class="engine-confirm-btn ec-cancel" onclick="cancelEngineSelect()">\u2715</button>
-      </div>
-    </div>`;
-
-  // ── Assembled command bar HTML ──
-  const cmdBarHtml = `<div class="cmd-bar" id="cmd-bar">
-      <div class="cmd-tag" id="cmd-tag" onclick="toggleDropdown(event)">
-        <span class="cmd-icon" id="cmd-icon">${selectedModule.icon}</span>
-        <span id="cmd-area-label">${esc(selectedModule.name)}</span>
-        <span class="cmd-caret">\u25bc</span>
-        <div class="cmd-dropdown" id="cmd-dropdown">${dropdownItems}</div>
-      </div>
-      <span class="cmd-sep">\u25b8</span>
-      <input class="cmd-input" id="lp-goal" type="text" placeholder="Describe what the agent should do\u2026" autocomplete="off">
-      <input id="lp-area" type="hidden" value="${esc(selectedModule.area)}">
-      <input id="lp-mode" type="hidden" value="${defaultLaunchMode}">
-      <div class="cmd-mode">${cmdModeButtons}</div>
-      <button class="cmd-launch" id="lp-launch" onclick="launchMission()" disabled>LAUNCH</button>
-    </div>`;
+  // ── Active model short name for header badge ──
+  const activeModelLabel = esc(shortName(summary.runtime.model || "none"));
 
   // ── Assemble time label ──
   let timeLabel = "";
@@ -877,28 +835,7 @@ function buildDashboardHtml(summary) {
   .finding-meta{display:flex;gap:3px;align-items:center;flex-wrap:wrap}
   .finding-meta code{font-size:.58rem}
 
-  /* ── Launch pad ── */
-  .launch-bar{background:var(--surface);border:1px solid rgba(34,211,238,0.12);border-radius:7px;padding:10px;margin-bottom:8px}
-  .launch-bar .panel-title::before{content:"\\25b6 "}
-  .mod-chips{display:flex;flex-wrap:wrap;gap:3px;margin-bottom:6px}
-  .mod-chip{appearance:none;font-family:var(--mono);font-size:.6rem;background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:3px 6px;cursor:pointer;color:var(--text);transition:all .15s}
-  .mod-chip:hover{border-color:var(--cyan);color:var(--text-bright)}
-  .mod-chip.selected{border-color:var(--cyan);background:rgba(34,211,238,0.1);color:var(--cyan);font-weight:600}
-  .launch-input-row{display:flex;gap:5px;margin-bottom:6px}
-  .launch-input-row input{flex:1;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:6px 8px;color:var(--text-bright);font-family:var(--mono);font-size:.7rem;outline:none}
-  .launch-input-row input:focus{border-color:var(--cyan)}
-  #lp-launch{background:var(--cyan);color:var(--bg);border:none;border-radius:4px;padding:6px 14px;font-family:var(--mono);font-size:.68rem;font-weight:700;cursor:pointer;transition:opacity .15s;flex-shrink:0}
-  #lp-launch:hover{opacity:.85}#lp-launch:disabled{opacity:.35;cursor:not-allowed}
-  .mode-chips{display:flex;gap:3px;margin-bottom:6px}
-  .mode-chip{appearance:none;font-family:var(--mono);font-size:.6rem;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:3px 8px;cursor:pointer;color:var(--text);transition:all .15s}
-  .mode-chip:hover{border-color:var(--cyan)}
-  .mode-chip.selected{border-color:var(--cyan);background:rgba(34,211,238,0.08);color:var(--cyan)}
-  .preset-row{display:flex;flex-wrap:wrap;gap:3px}
-  .preset-btn{appearance:none;background:rgba(107,127,148,0.06);border:1px solid rgba(107,127,148,0.12);border-radius:99px;padding:3px 7px;font-family:var(--mono);font-size:.58rem;color:var(--text-dim);cursor:pointer;transition:all .15s}
-  .preset-btn:hover{border-color:rgba(34,211,238,0.25);color:var(--text-bright)}
-  .launch-status{font-family:var(--mono);font-size:.62rem;color:var(--text-dim);margin-top:4px}
-  .launch-log-area{margin-top:10px}
-  .launch-log{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:10px;max-height:260px;overflow-y:auto;font-size:.7rem;line-height:1.4;color:var(--text);font-family:var(--mono);white-space:pre-wrap}
+  /* ── Launch pad (legacy rules removed — see .mc-* classes) ── */
 
   /* ── Shared ── */
   .status-badge{font-family:var(--mono);font-size:.62rem;padding:2px 6px;border-radius:3px;display:inline-block;font-weight:600}
@@ -971,79 +908,69 @@ function buildDashboardHtml(summary) {
   @media(max-width:960px){.score-bar{flex-wrap:wrap}.sb-cell{min-width:25%}}
 
   /* ── Mission Control ── */
-  .mission-ctrl{background:var(--surface);border:1px solid rgba(34,211,238,0.12);border-radius:10px;padding:14px;margin-bottom:10px;position:relative;overflow:hidden}
-  .mission-ctrl::before{content:'';position:absolute;inset:-1px;border-radius:11px;background:linear-gradient(135deg,rgba(34,211,238,0.08),transparent 60%);pointer-events:none;z-index:0}
-  .mission-ctrl>*{position:relative;z-index:1}
-  .mission-ctrl .panel-title{margin-bottom:10px}
+  .mission-ctrl{background:var(--surface);border:1px solid var(--border);border-radius:10px;margin-bottom:10px;overflow:hidden}
 
-  /* ── Command Bar ── */
-  .cmd-bar{display:flex;align-items:center;background:var(--bg);border:1.5px solid var(--border);border-radius:8px;padding:2px;margin-bottom:12px;transition:border-color .2s,box-shadow .2s}
-  .cmd-bar:focus-within{border-color:var(--cyan);box-shadow:0 0 16px rgba(34,211,238,0.08)}
-  .cmd-tag{display:flex;align-items:center;gap:5px;background:rgba(34,211,238,0.1);border:1px solid rgba(34,211,238,0.2);border-radius:6px;padding:6px 10px;margin:2px;font-family:var(--mono);font-size:.72rem;font-weight:600;color:var(--cyan);cursor:pointer;white-space:nowrap;transition:all .15s;user-select:none;position:relative}
-  .cmd-tag:hover{background:rgba(34,211,238,0.18)}
-  .cmd-tag .cmd-icon{font-size:.85rem}
-  .cmd-tag .cmd-caret{font-size:.5rem;margin-left:2px;opacity:.6}
-  .cmd-dropdown{position:absolute;top:calc(100% + 4px);left:0;background:var(--surface);border:1px solid var(--border-hi);border-radius:7px;padding:4px;min-width:160px;z-index:100;box-shadow:0 8px 24px rgba(0,0,0,0.4);display:none}
-  .cmd-dropdown.open{display:block}
-  .cmd-dropdown-item{display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:5px;cursor:pointer;font-family:var(--mono);font-size:.68rem;color:var(--text);transition:all .1s}
-  .cmd-dropdown-item:hover{background:rgba(34,211,238,0.08);color:var(--text-bright)}
-  .cmd-dropdown-item.dd-active{color:var(--cyan);font-weight:600}
-  .cmd-dropdown-item .dd-icon{font-size:.9rem}
-  .cmd-dropdown-item .dd-status{font-size:.5rem;margin-left:auto}
-  .cmd-sep{color:var(--border);font-size:.8rem;margin:0 2px;user-select:none}
-  .cmd-input{flex:1;background:transparent;border:none;padding:8px 10px;color:var(--text-bright);font-family:var(--mono);font-size:.78rem;outline:none;min-width:0}
-  .cmd-input::placeholder{color:var(--text-dim);font-style:italic}
-  .cmd-mode{display:flex;align-items:center;border-left:1px solid var(--border);margin:4px 0;padding-left:2px;flex-shrink:0}
-  .cmd-mode-btn{appearance:none;background:transparent;border:none;font-family:var(--mono);font-size:.62rem;padding:6px 8px;cursor:pointer;color:var(--text-dim);transition:all .15s;border-radius:4px;text-transform:uppercase;letter-spacing:.04em;display:flex;align-items:center;gap:3px}
-  .cmd-mode-btn:hover{color:var(--text-bright)}
-  .cmd-mode-btn.active{color:var(--cyan);background:rgba(34,211,238,0.08);font-weight:600}
-  .cmd-mode-icon{font-size:.7rem}
-  .cmd-launch{background:var(--cyan);color:var(--bg);border:none;border-radius:6px;padding:8px 18px;font-family:var(--mono);font-size:.72rem;font-weight:700;cursor:pointer;margin:2px;transition:all .15s;letter-spacing:.05em;flex-shrink:0}
-  .cmd-launch:hover{opacity:.85;box-shadow:0 0 16px rgba(34,211,238,0.25)}
-  .cmd-launch:disabled{opacity:.25;cursor:not-allowed;box-shadow:none}
+  /* MC header row */
+  .mc-header{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--border)}
+  .mc-title{font-family:var(--mono);font-size:.62rem;font-weight:700;color:var(--cyan);letter-spacing:.1em;text-transform:uppercase}
+  .mc-engine-row{display:flex;align-items:center;gap:7px}
+  .mc-engine-label{font-family:var(--mono);font-size:.52rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em}
+  .mc-engine-badge{display:inline-flex;align-items:center;gap:5px;background:var(--surface2);border:1px solid var(--border);border-radius:5px;padding:4px 9px;font-family:var(--mono);font-size:.62rem;color:var(--green);cursor:pointer;transition:all .15s;appearance:none;user-select:none}
+  .mc-engine-badge:hover{border-color:var(--border-hi);color:var(--text-bright)}
+  .mc-engine-caret{font-size:.46rem;color:var(--text-dim);margin-left:1px;transition:transform .2s}
+  .mc-engine-badge.open .mc-engine-caret{transform:rotate(180deg)}
 
-  /* ── MC two-column layout ── */
-  .mc-cols{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
-  @media(max-width:700px){.mc-cols{grid-template-columns:1fr}}
-  .section-label{font-family:var(--mono);font-size:.56rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px;display:flex;align-items:center;gap:8px}
-  .section-label::after{content:'';flex:1;height:1px;background:var(--border)}
+  /* Module strip */
+  .mc-modules{display:flex;gap:2px;padding:6px 10px;border-bottom:1px solid var(--border);overflow-x:auto;scrollbar-width:none}
+  .mc-modules::-webkit-scrollbar{display:none}
+  .mc-mod{display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border-radius:6px;cursor:pointer;font-family:var(--mono);font-size:.65rem;color:var(--text-dim);white-space:nowrap;transition:all .15s;background:transparent;border:1px solid transparent;appearance:none}
+  .mc-mod:hover{color:var(--text);background:var(--surface2);border-color:var(--border)}
+  .mc-mod.active{color:var(--cyan);background:rgba(34,211,238,0.07);border-color:rgba(34,211,238,0.22);font-weight:600}
+  .mc-mod-icon{font-size:.82rem}
+  .mc-mod-name{letter-spacing:.01em}
+  .mc-mod-dot{width:5px;height:5px;border-radius:50%;flex-shrink:0;margin-left:1px}
 
-  /* ── Target Grid ── */
-  .target-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(85px,1fr));gap:5px}
-  .target-card{background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:8px 6px;cursor:pointer;transition:all .2s;text-align:center;position:relative}
-  .target-card:hover{border-color:var(--border-hi);transform:translateY(-1px)}
-  .target-card.selected{border-color:var(--cyan);background:rgba(34,211,238,0.06);box-shadow:0 0 14px rgba(34,211,238,0.1)}
-  .target-card.selected::after{content:'';position:absolute;bottom:-1px;left:20%;right:20%;height:2px;background:var(--cyan);border-radius:1px}
-  .tc-icon{font-size:1.1rem;display:block;margin-bottom:2px}
-  .tc-name{font-family:var(--mono);font-size:.62rem;font-weight:700;color:var(--text-bright);display:block;margin-bottom:2px}
-  .tc-status{font-family:var(--mono);font-size:.54rem;font-weight:600;display:block;margin-bottom:3px}
-  .tc-bar{height:2px;background:var(--bg);border-radius:1px;overflow:hidden;margin-bottom:2px}
-  .tc-bar-fill{height:100%;border-radius:1px;transition:width .3s}
-  .tc-meta{font-family:var(--mono);font-size:.48rem;color:var(--text-dim);display:block}
+  /* Command zone */
+  .mc-cmd{padding:10px 14px;border-bottom:1px solid var(--border)}
+  .mc-input-wrap{display:flex;align-items:center;background:var(--bg);border:1.5px solid var(--border);border-radius:7px;margin-bottom:8px;transition:border-color .2s,box-shadow .2s}
+  .mc-input-wrap:focus-within{border-color:var(--cyan);box-shadow:0 0 0 3px rgba(34,211,238,0.05)}
+  .mc-input{flex:1;background:transparent;border:none;padding:10px 12px;color:var(--text-bright);font-family:var(--mono);font-size:.76rem;outline:none}
+  .mc-input::placeholder{color:var(--text-dim);font-style:italic}
+  .mc-actions-row{display:flex;align-items:center;gap:4px}
+  .mc-mode{display:flex;gap:3px}
+  .mc-mode-btn{appearance:none;background:transparent;border:1px solid var(--border);border-radius:5px;font-family:var(--mono);font-size:.6rem;padding:5px 9px;cursor:pointer;color:var(--text-dim);transition:all .15s;text-transform:uppercase;letter-spacing:.04em;display:flex;align-items:center;gap:4px}
+  .mc-mode-btn:hover{color:var(--text);border-color:var(--border-hi)}
+  .mc-mode-btn.active{color:var(--cyan);border-color:rgba(34,211,238,0.4);background:rgba(34,211,238,0.07);font-weight:600}
+  .mc-mode-icon{font-size:.68rem}
+  .mc-spacer{flex:1}
+  .mc-launch{background:var(--cyan);color:var(--bg);border:none;border-radius:6px;padding:7px 20px;font-family:var(--mono);font-size:.7rem;font-weight:700;cursor:pointer;transition:all .15s;letter-spacing:.06em;flex-shrink:0}
+  .mc-launch:hover{opacity:.85;box-shadow:0 0 14px rgba(34,211,238,0.25)}
+  .mc-launch:disabled{opacity:.2;cursor:not-allowed;box-shadow:none}
 
-  /* ── Quick Ops ── */
-  .quickops{display:grid;gap:5px}
-  .qo-card{background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:8px 10px 8px 12px;cursor:pointer;transition:all .2s;position:relative;overflow:hidden}
-  .qo-card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;border-radius:7px 0 0 7px}
-  .qo-card.qo-urgent::before{background:var(--red)}
-  .qo-card.qo-warn::before{background:var(--amber)}
-  .qo-card.qo-info::before{background:var(--cyan)}
-  .qo-card:hover{border-color:var(--border-hi);transform:translateY(-1px);box-shadow:0 2px 8px rgba(0,0,0,0.2)}
-  .qo-card:hover::after{content:'click to load \\2197';position:absolute;top:6px;right:8px;font-family:var(--mono);font-size:.48rem;color:var(--text-dim);letter-spacing:.03em;text-transform:uppercase}
-  .qo-icon{font-size:.8rem;margin-right:6px;float:left}
-  .qo-title{font-size:.66rem;font-weight:500;color:var(--text-bright);line-height:1.3;margin-bottom:2px}
-  .qo-title b{color:var(--text-bright)}
-  .qo-sub{font-family:var(--mono);font-size:.52rem;color:var(--text-dim);clear:both}
+  /* Quick missions */
+  .mc-missions{border-bottom:1px solid var(--border)}
+  .mc-mission{display:flex;align-items:center;gap:9px;padding:8px 14px;cursor:pointer;transition:background .12s;border-bottom:1px solid rgba(30,45,61,0.5)}
+  .mc-mission:last-child{border-bottom:none}
+  .mc-mission:hover{background:rgba(34,211,238,0.03)}
+  .mc-mission:hover .mc-m-go{color:var(--cyan);opacity:1}
+  .mc-m-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+  .mc-m-urgent .mc-m-dot{background:var(--red)}
+  .mc-m-warn .mc-m-dot{background:var(--amber)}
+  .mc-m-info .mc-m-dot{background:var(--cyan);opacity:.6}
+  .mc-m-title{flex:1;font-size:.7rem;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+  .mc-m-meta{font-family:var(--mono);font-size:.56rem;color:var(--text-dim);flex-shrink:0}
+  .mc-m-go{font-size:.62rem;color:var(--text-dim);opacity:.4;flex-shrink:0;transition:all .15s}
 
-  /* ── Engine Strip ── */
-  .engine-strip{display:flex;align-items:center;gap:5px;flex-wrap:wrap;padding-top:10px;border-top:1px solid var(--border)}
-  .engine-label{font-family:var(--mono);font-size:.54rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em;margin-right:4px;flex-shrink:0}
-  .engine-pill{appearance:none;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:4px 8px;font-family:var(--mono);font-size:.58rem;color:var(--text);cursor:pointer;transition:all .15s;display:inline-flex;align-items:center;gap:4px;position:relative}
-  .engine-pill:hover{border-color:var(--border-hi);color:var(--text-bright);background:var(--surface2)}
+  /* Engine panel */
+  .mc-engine-panel{display:none;padding:8px 14px;border-bottom:1px solid var(--border);background:var(--bg)}
+  .mc-engine-panel.open{display:block}
+  .mc-engine-pills{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px}
+  .engine-pill{appearance:none;background:var(--surface);border:1px solid var(--border);border-radius:5px;padding:4px 8px;font-family:var(--mono);font-size:.58rem;color:var(--text);cursor:pointer;transition:all .15s;display:inline-flex;align-items:center;gap:4px}
+  .engine-pill:hover{border-color:var(--border-hi);color:var(--text-bright)}
   .engine-pill.ep-active{border-color:var(--green);background:rgba(52,211,153,0.08);color:var(--green);font-weight:600}
   .engine-pill.ep-active .ep-label::before{content:'\u25b8 ';font-size:.5rem}
   .engine-pill.ep-selected{border-color:var(--cyan);background:rgba(34,211,238,0.08);color:var(--cyan);box-shadow:0 0 8px rgba(34,211,238,0.1)}
-  .engine-confirm{display:none;align-items:center;gap:6px;margin-left:auto;padding-left:10px;flex-shrink:0}
+  .engine-confirm{display:none;align-items:center;gap:6px;flex-wrap:wrap}
   .engine-confirm.visible{display:flex}
   .engine-confirm-label{font-family:var(--mono);font-size:.56rem;color:var(--text-dim)}
   .engine-confirm-btn{appearance:none;font-family:var(--mono);font-size:.58rem;font-weight:600;border-radius:4px;padding:3px 10px;cursor:pointer;transition:all .15s;border:1px solid}
@@ -1064,10 +991,17 @@ function buildDashboardHtml(summary) {
   .ep-dot.filled{background:currentColor;opacity:.7}
   .engine-pill.ep-active .ep-dot.filled{background:var(--green);opacity:1}
 
-  /* ── Abort / Kill ── */
-  .launch-status-row{display:flex;align-items:center;gap:8px;min-height:20px}
-  .cmd-kill{background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.4);color:var(--red);border-radius:5px;padding:3px 10px;font-family:var(--mono);font-size:.66rem;cursor:pointer;transition:all .15s}
-  .cmd-kill:hover{background:rgba(239,68,68,0.25)}
+  /* MC status + kill row */
+  .mc-status-row{display:flex;align-items:center;gap:8px;padding:7px 14px;min-height:34px}
+  .mc-status-text{font-family:var(--mono);font-size:.62rem;color:var(--text-dim);flex:1}
+  .mc-kill{background:transparent;border:1px solid rgba(239,68,68,0.4);color:var(--red);border-radius:4px;padding:3px 10px;font-family:var(--mono);font-size:.6rem;cursor:pointer;transition:all .15s;flex-shrink:0}
+  .mc-kill:hover{background:rgba(239,68,68,0.12)}
+
+  /* MC log area */
+  .mc-log{padding:0 14px 14px}
+  .mc-log-pre{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:10px;max-height:220px;overflow-y:auto;font-family:var(--mono);font-size:.66rem;line-height:1.45;color:var(--text);white-space:pre-wrap;scrollbar-width:thin;scrollbar-color:var(--border) transparent}
+  .mc-log-pre::-webkit-scrollbar{width:4px}
+  .mc-log-pre::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
 
   /* ── Finding card expansion ── */
   .finding-header{cursor:pointer;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
@@ -1131,47 +1065,49 @@ function buildDashboardHtml(summary) {
     <div class="sb-cell"><span class="sb-val" style="color:var(--text-dim)">${scannedModules.length}/${modules.length}</span><span class="sb-label">modules scanned</span></div>
   </div>
 
-  ${actions.length ? `
   <!-- Mission Control -->
   <div class="mission-ctrl" id="launchpad">
-    <div class="panel-title">Mission Control</div>
-    ${cmdBarHtml}
-    <div class="mc-cols">
-      <div>
-        <div class="section-label">Target</div>
-        <div class="target-grid">${targetCards}</div>
-      </div>
-      <div>
-        <div class="section-label">Quick Missions</div>
-        <div class="quickops">${quickMissionsHtml}</div>
-      </div>
-    </div>
-    ${engineStripHtml}
-    <div class="launch-status-row"><div id="lp-status" class="launch-status"></div><button id="lp-abort" class="cmd-kill" style="display:none" onclick="killMission()">&#x23F9; ABORT</button></div>
-    <div id="lp-log-area" class="launch-log-area" style="display:none">
-      <pre id="lp-log" class="launch-log"></pre>
-    </div>
-  </div>` : `
-  <!-- Mission Control (no actions yet) -->
-  <div class="mission-ctrl" id="launchpad">
-    <div class="panel-title">Mission Control</div>
-    ${cmdBarHtml}
-    <div class="mc-cols">
-      <div>
-        <div class="section-label">Target</div>
-        <div class="target-grid">${targetCards}</div>
-      </div>
-      <div>
-        <div class="section-label">Quick Missions</div>
-        <div class="quickops">${quickMissionsHtml}</div>
+    <div class="mc-header">
+      <span class="mc-title">Mission Control</span>
+      <div class="mc-engine-row">
+        <span class="mc-engine-label">Engine</span>
+        <button class="mc-engine-badge" id="engine-badge" onclick="toggleEnginePanel()">
+          <span class="ep-status installed" id="engine-badge-status"></span>
+          <span id="engine-active-label">${activeModelLabel}</span>
+          <span class="mc-engine-caret">\u25be</span>
+        </button>
       </div>
     </div>
-    ${engineStripHtml}
-    <div class="launch-status-row"><div id="lp-status" class="launch-status"></div><button id="lp-abort" class="cmd-kill" style="display:none" onclick="killMission()">&#x23F9; ABORT</button></div>
-    <div id="lp-log-area" class="launch-log-area" style="display:none">
-      <pre id="lp-log" class="launch-log"></pre>
+    <div class="mc-modules" id="mc-modules">${moduleStrip}</div>
+    <div class="mc-cmd">
+      <div class="mc-input-wrap">
+        <input class="mc-input" id="lp-goal" type="text" placeholder="Describe what the agent should do\u2026" autocomplete="off">
+        <input id="lp-area" type="hidden" value="${esc(selectedModule.area)}">
+        <input id="lp-mode" type="hidden" value="${defaultLaunchMode}">
+      </div>
+      <div class="mc-actions-row">
+        <div class="mc-mode" id="mc-mode-btns">${cmdModeButtons}</div>
+        <div class="mc-spacer"></div>
+        <button class="mc-launch" id="lp-launch" onclick="launchMission()" disabled>LAUNCH</button>
+      </div>
     </div>
-  </div>`}
+    <div class="mc-missions" id="mc-missions">${quickMissionsHtml}</div>
+    <div class="mc-engine-panel" id="mc-engine-panel">
+      <div class="mc-engine-pills">${enginePills}</div>
+      <div class="engine-confirm" id="engine-confirm">
+        <span class="engine-confirm-label" id="ec-label"></span>
+        <button class="engine-confirm-btn ec-activate" id="ec-activate" onclick="confirmEngine()">Activate</button>
+        <button class="engine-confirm-btn ec-cancel" onclick="cancelEngineSelect()">\u2715</button>
+      </div>
+    </div>
+    <div class="mc-status-row">
+      <span id="lp-status" class="mc-status-text"></span>
+      <button id="lp-abort" class="mc-kill" style="display:none" onclick="killMission()">\u23f9 ABORT</button>
+    </div>
+    <div id="lp-log-area" class="mc-log" style="display:none">
+      <pre id="lp-log" class="mc-log-pre"></pre>
+    </div>
+  </div>
 
   <div class="grid-main">
     <!-- Left column -->
@@ -1229,21 +1165,19 @@ function esc(s){const d=document.createElement('div');d.textContent=s;return d.i
 function postHeaders(){return {'Content-Type':'application/json','X-CSRF-Token':window.__CSRF_TOKEN||''}}
 function timeAgo(iso){if(!iso)return'';const ms=Date.now()-new Date(iso).getTime();if(ms<0)return'now';const m=Math.floor(ms/60000);if(m<1)return'now';if(m<60)return m+'m';const h=Math.floor(m/60);if(h<24)return h+'h';const d=Math.floor(h/24);return d+'d'}
 function refreshTimestamps(){document.querySelectorAll('.tl-time[data-ts]').forEach(el=>{const a=timeAgo(el.dataset.ts);if(a)el.textContent=a})}
-function extractFileRefs(f){const txt=(f.detail||'')+' '+(f.title||'');return (txt.match(/(?:functions|api|src|middleware|services)\/[\w/.\\-]+\\.(?:js|ts|json)/gi)||[])}
+function extractFileRefs(f){const txt=(f.detail||'')+' '+(f.title||'');const m=txt.match(/[\\w/.-]+\\.(?:js|ts|json)/gi);return m?m.filter(function(p){return p.indexOf('/')!==-1;}):[];}
 
 // ── Mission controls ──
-function selectTarget(area,icon,name){document.getElementById('lp-area').value=area;const ci=document.getElementById('cmd-icon');if(ci)ci.textContent=icon||'';const cl=document.getElementById('cmd-area-label');if(cl)cl.textContent=name||area;document.querySelectorAll('.target-card').forEach(c=>c.classList.toggle('selected',c.dataset.area===area));document.querySelectorAll('.cmd-dropdown-item').forEach(d=>d.classList.toggle('dd-active',d.dataset.area===area))}
-function toggleDropdown(e){e.stopPropagation();const dd=document.getElementById('cmd-dropdown');if(dd)dd.classList.toggle('open')}
-function closeDropdown(){const dd=document.getElementById('cmd-dropdown');if(dd)dd.classList.remove('open')}
-document.addEventListener('click',closeDropdown);
-function setLaunchMode(mode){document.getElementById('lp-mode').value=mode;document.querySelectorAll('.cmd-mode-btn').forEach(c=>c.classList.toggle('active',c.dataset.mode===mode))}
-function fillMission(area,mode,goal){const card=document.querySelector('.target-card[data-area="'+area+'"]');if(card)selectTarget(area,card.dataset.icon,card.dataset.name);setLaunchMode(mode||'audit');const gi=document.getElementById('lp-goal');if(gi){gi.value=goal||'';gi.focus()}const lp=document.getElementById('launchpad');if(lp)lp.scrollIntoView({behavior:'smooth'})}
+function selectTarget(area,icon,name){document.getElementById('lp-area').value=area;document.querySelectorAll('.mc-mod').forEach(c=>c.classList.toggle('active',c.dataset.area===area))}
+function setLaunchMode(mode){document.getElementById('lp-mode').value=mode;document.querySelectorAll('.mc-mode-btn').forEach(c=>c.classList.toggle('active',c.dataset.mode===mode))}
+function fillMission(area,mode,goal){const mod=document.querySelector('.mc-mod[data-area="'+area+'"]');if(mod)selectTarget(area,mod.dataset.icon,mod.dataset.name);setLaunchMode(mode||'audit');const gi=document.getElementById('lp-goal');if(gi){gi.value=goal||'';gi.focus()}const lp=document.getElementById('launchpad');if(lp)lp.scrollIntoView({behavior:'smooth'})}
 
 // ── Engine select/confirm ──
 let selectedEngine=null;
 function selectEngine(pill){const id=pill.dataset.model;if(selectedEngine===id){cancelEngineSelect();return}selectedEngine=id;document.querySelectorAll('.engine-pill').forEach(p=>p.classList.remove('ep-selected'));pill.classList.add('ep-selected');const bar=document.getElementById('engine-confirm');const lbl=document.getElementById('ec-label');const btn=document.getElementById('ec-activate');const installed=pill.dataset.installed==='true';lbl.textContent=id;if(installed){btn.textContent='Activate';btn.className='engine-confirm-btn ec-activate'}else{btn.textContent='Pull';btn.className='engine-confirm-btn ec-pull'}bar.classList.add('visible')}
 function cancelEngineSelect(){selectedEngine=null;document.querySelectorAll('.engine-pill').forEach(p=>p.classList.remove('ep-selected'));document.getElementById('engine-confirm').classList.remove('visible')}
 function confirmEngine(){if(!selectedEngine)return;const pill=document.querySelector('.engine-pill[data-model="'+selectedEngine+'"]');if(!pill)return;const installed=pill.dataset.installed==='true';if(installed){switchModel(selectedEngine);cancelEngineSelect()}else{pullModel(selectedEngine,pill);cancelEngineSelect()}}
+function toggleEnginePanel(){const p=document.getElementById('mc-engine-panel');const b=document.getElementById('engine-badge');if(!p)return;const open=p.classList.toggle('open');if(b)b.classList.toggle('open',open)}
 
 // ── Server health ──
 async function checkServer(){const wasOnline=serverOnline;try{const c=new AbortController();const t=setTimeout(()=>c.abort(),2000);const r=await fetch(BASE+'/api/health',{signal:c.signal,mode:'cors'});clearTimeout(t);if(r.ok){const d=await r.json();serverOnline=true;const dot=document.getElementById('server-dot'),lbl=document.getElementById('server-label');if(dot&&d.busy){dot.className='server-dot online';dot.style.background='var(--amber)';dot.style.boxShadow='0 0 6px var(--amber)';lbl.textContent='busy: '+d.activeMission.area;lbl.style.color='var(--amber)';const ab=document.getElementById('lp-abort');if(ab)ab.style.display=''}else if(dot){dot.className='server-dot online';dot.style.background='';dot.style.boxShadow='';lbl.textContent='online';lbl.style.color='';const ab=document.getElementById('lp-abort');if(ab&&!activePollToken)ab.style.display='none'}if(!wasOnline&&serverOnline){refreshModels();loadQueue()}}}catch{serverOnline=false}const d=document.getElementById('server-dot'),l=document.getElementById('server-label');if(!serverOnline&&d){d.className='server-dot offline';d.style.background='';d.style.boxShadow='';l.textContent='offline';l.style.color=''}const b=document.getElementById('lp-launch');if(b)b.disabled=!serverOnline;const fab=document.getElementById('fix-all-btn');if(fab&&!fab.dataset.running)fab.disabled=!serverOnline}
@@ -1263,7 +1197,7 @@ async function pullModel(id,btn){if(!serverOnline)return;btn.disabled=true;const
 
 async function pollPull(id,btn,lbl,origText){let tries=0;const poll=async()=>{tries++;try{const r=await fetch(BASE+'/api/models');const d=await r.json();if(d.ok){const m=d.models.find(x=>x.id===id);if(m&&m.installed){lbl.textContent=origText;const st=btn.querySelector('.ep-status');if(st)st.className='ep-status installed';btn.dataset.installed='true';btn.disabled=false;setTimeout(()=>refreshModels(),500);return}}}catch{}if(tries<60)setTimeout(poll,5000);else{lbl.textContent=origText;const st=btn.querySelector('.ep-status');if(st)st.className='ep-status not-installed';btn.disabled=false}};setTimeout(poll,3000)}
 
-async function refreshModels(){if(!serverOnline)return;try{const r=await fetch(BASE+'/api/models');const d=await r.json();if(d.ok&&d.models){d.models.forEach(m=>{const p=document.querySelector('.engine-pill[data-model="'+m.id+'"]');if(!p)return;const s=p.querySelector('.ep-status');if(s)s.className='ep-status '+(m.installed?'installed':'not-installed');p.dataset.installed=String(!!m.installed);if(m.active){document.querySelectorAll('.engine-pill').forEach(x=>x.classList.remove('ep-active'));p.classList.add('ep-active')}})}}catch{}}
+async function refreshModels(){if(!serverOnline)return;try{const r=await fetch(BASE+'/api/models');const d=await r.json();if(d.ok&&d.models){const sn=id=>id.replace('qwen2.5-coder:','qwen:').replace('deepseek-coder-v2:','ds-v2:').replace('llama3.1:','llama:');d.models.forEach(m=>{const p=document.querySelector('.engine-pill[data-model="'+m.id+'"]');if(!p)return;const s=p.querySelector('.ep-status');if(s)s.className='ep-status '+(m.installed?'installed':'not-installed');p.dataset.installed=String(!!m.installed);if(m.active){document.querySelectorAll('.engine-pill').forEach(x=>x.classList.remove('ep-active'));p.classList.add('ep-active');const lbl=document.getElementById('engine-active-label');if(lbl)lbl.textContent=sn(m.id);const bs=document.querySelector('#engine-badge .ep-status');if(bs)bs.className='ep-status '+(m.installed?'installed':'not-installed')}})}}catch{}}
 
 // ── Queue panel ──
 async function loadQueue(){if(!serverOnline)return;try{const r=await fetch(BASE+'/api/queue');const d=await r.json();if(!d.ok)return;const counts=d.counts||{};const qc=document.getElementById('queue-counts');if(qc)qc.textContent=counts.pending+' pending \u00b7 '+(counts.processing||0)+' running \u00b7 '+counts.done+' done';const el=document.getElementById('queue-container');if(!el)return;const items=[...(d.processing||[]).map(x=>({...x,_state:'processing'})),...(d.pending||[])];if(!items.length){el.innerHTML='<p class="qm-empty">Queue empty.</p>';return}el.innerHTML=items.slice(0,8).map(q=>{const pri=q.priorityLabel||'normal';const state=q._state==='processing';return'<div class="queue-mini-row"><span class="qm-track'+(state?' qm-processing':'')+'">'+esc(q.track||'?')+'</span><span class="qm-goal">'+esc((q.goal||'').slice(0,60))+'</span><span class="qm-pri '+esc(pri)+'">'+esc(pri)+'</span></div>'}).join('')+(items.length>8?'<p class="qm-empty">…and '+(items.length-8)+' more</p>':'')}catch{}}
@@ -1314,7 +1248,7 @@ async function pollImplement(idx,btn,pid,attempts){attempts=(attempts||0)+1;if(a
 async function queueFinding(idx,btn){if(!serverOnline)return;const f=window._findingsData[idx];if(!f)return;btn.disabled=true;btn.textContent='\u23f3';try{const r=await fetch(BASE+'/api/queue',{method:'POST',headers:postHeaders(),body:JSON.stringify({track:f.track,goal:'Fix: '+f.title+'. '+(f.detail||'').slice(0,300),goalMode:'edit',priority:f.severity==='critical'?'critical':f.severity==='high'?'high':'normal',source:'dashboard',metadata:{fingerprint:f.fingerprint,severity:f.severity}})});const d=await r.json();if(d.ok){btn.textContent='\u2713';loadQueue()}else{btn.textContent='\u26a0';btn.disabled=false}}catch(e){btn.textContent='\u26a0';btn.disabled=false}}
 
 // ── Suppress finding ──
-async function suppressFinding(idx,btn){const f=window._findingsData[idx];if(!f)return;if(!confirm('Suppress "'+f.title+'"?\n\nThis will add it to suppressions.json so it is hidden on future sweeps.'))return;btn.disabled=true;btn.textContent='\u23f3';try{const r=await fetch(BASE+'/api/suppress',{method:'POST',headers:postHeaders(),body:JSON.stringify({fingerprint:f.fingerprint,title:f.title,severity:f.severity,track:f.track,reason:'Suppressed via dashboard'})});const d=await r.json();if(d.ok){btn.textContent='\u2713';const card=document.getElementById('finding-'+idx);if(card){card.style.opacity='0.3';card.title='Suppressed and saved to suppressions.json'}}else{btn.textContent='\u26a0';btn.disabled=false}}catch(e){btn.textContent='\u26a0';btn.disabled=false}}
+async function suppressFinding(idx,btn){const f=window._findingsData[idx];if(!f)return;if(!confirm('Suppress "'+f.title+'"? It will be hidden on future sweeps.'))return;btn.disabled=true;btn.textContent='\u23f3';try{const r=await fetch(BASE+'/api/suppress',{method:'POST',headers:postHeaders(),body:JSON.stringify({fingerprint:f.fingerprint,title:f.title,severity:f.severity,track:f.track,reason:'Suppressed via dashboard'})});const d=await r.json();if(d.ok){btn.textContent='\u2713';const card=document.getElementById('finding-'+idx);if(card){card.style.opacity='0.3';card.title='Suppressed and saved to suppressions.json'}}else{btn.textContent='\u26a0';btn.disabled=false}}catch(e){btn.textContent='\u26a0';btn.disabled=false}}
 
 // ── Fix All with pre-flight conflict map ──
 async function fixAll(){if(!serverOnline)return;const btn=document.getElementById('fix-all-btn');const info=document.getElementById('fix-all-info');const progress=document.getElementById('fix-all-progress');const pipeline=document.getElementById('fix-all-pipeline');const statsEl=document.getElementById('fix-all-stats');const conflictEl=document.getElementById('fix-all-conflicts');if(!btn)return;
@@ -1384,11 +1318,10 @@ setTimeout(()=>pollFixAll(id,total,attempts),3000)}
 function toggleDetail(id){const r=document.getElementById(id);if(!r)return;r.style.display=r.style.display==='none'?'block':'none'}
 
 // ── Wire events ──
-document.querySelectorAll('.target-card').forEach(c=>c.addEventListener('click',()=>selectTarget(c.dataset.area,c.dataset.icon,c.dataset.name)));
-document.querySelectorAll('.cmd-mode-btn').forEach(b=>b.addEventListener('click',()=>setLaunchMode(b.dataset.mode)));
-document.querySelectorAll('.qo-card').forEach(c=>c.addEventListener('click',()=>fillMission(c.dataset.area,c.dataset.mode,c.dataset.goal)));
+document.querySelectorAll('.mc-mod').forEach(c=>c.addEventListener('click',()=>selectTarget(c.dataset.area,c.dataset.icon,c.dataset.name)));
+document.querySelectorAll('.mc-mode-btn').forEach(b=>b.addEventListener('click',()=>setLaunchMode(b.dataset.mode)));
+document.querySelectorAll('.mc-mission').forEach(c=>c.addEventListener('click',()=>fillMission(c.dataset.area,c.dataset.mode,c.dataset.goal)));
 document.querySelectorAll('.engine-pill').forEach(p=>p.addEventListener('click',()=>selectEngine(p)));
-document.querySelectorAll('.cmd-dropdown-item').forEach(d=>d.addEventListener('click',(e)=>{e.stopPropagation();selectTarget(d.dataset.area,d.dataset.icon,d.dataset.name);closeDropdown()}));
 
 selectTarget('${esc(selectedModule.area)}','${selectedModule.icon}','${esc(selectedModule.name)}');setLaunchMode('${esc(defaultLaunchMode)}');
 refreshTimestamps();setInterval(refreshTimestamps,60000);
