@@ -718,9 +718,12 @@ function buildDashboardHtml(summary) {
   .hdr-badge{font-family:var(--mono);font-size:.62rem;background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:3px 6px;color:var(--text-dim)}
   .hdr-badge b{color:var(--green)}
   .dash{max-width:1200px;margin:0 auto;padding:10px 14px 24px}
-  .grid-main{display:grid;grid-template-columns:1fr 300px;gap:10px}
+  .grid-main{display:grid;grid-template-columns:1fr 300px;gap:10px;align-items:start}
   @media(max-width:960px){.grid-main{grid-template-columns:1fr}}
   .stack{display:grid;gap:8px}
+  .findings-scroll{max-height:420px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--border) transparent}
+  .findings-scroll::-webkit-scrollbar{width:4px}
+  .findings-scroll::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
   .panel{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px;overflow:hidden}
   .panel-title{font-family:var(--mono);font-size:.66rem;font-weight:600;color:var(--cyan);letter-spacing:.06em;text-transform:uppercase;margin-bottom:8px;padding-bottom:5px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
   details.panel{padding:0}
@@ -943,8 +946,10 @@ function buildDashboardHtml(summary) {
         <div class="panel-title">Findings (${findingGroups.length} unique)
           <button class="model-btn" onclick="loadFindings()" id="findings-refresh-btn" style="font-size:.62rem;padding:2px 6px">\u21bb live</button>
         </div>
+        <div class="findings-scroll">
         ${findingsHtml || `<p class="empty">No open findings.</p>`}
         <div id="findings-container"></div>
+        </div>
       </div>
 
       <!-- Models (collapsed) -->
