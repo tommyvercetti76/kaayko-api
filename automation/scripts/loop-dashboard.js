@@ -206,8 +206,10 @@ function generateDashboard(config, args = {}, silent = false) {
       learnings_published: records.filter((r) => r.learnings_published_at).length,
       approved: records.filter((r) => r.review_decision === "approved").length,
       training_eligible: records.filter((r) => r.training_eligible).length,
-      suggestions: totalSuggestions,
-      vulnerabilities: totalVulnerabilities,
+      suggestions: suggestionFindings.length,
+      vulnerabilities: vulnerabilityFindings.length,
+      suggestions_raw: totalSuggestions,
+      vulnerabilities_raw: totalVulnerabilities,
       suppressed: totalSuppressed,
       rejected_rewrites: totalRejectedRewrites,
       coached_products: guidedProductsSet.size,
@@ -378,8 +380,8 @@ function buildDashboardMarkdown(summary) {
 - Learnings snapshots: ${summary.totals.learnings_published}
 - Approved runs: ${summary.totals.approved}
 - Training-eligible runs: ${summary.totals.training_eligible}
-- Suggestions surfaced: ${summary.totals.suggestions}
-- Vulnerabilities surfaced: ${summary.totals.vulnerabilities}
+- Suggestions surfaced: ${summary.totals.suggestions}${summary.totals.suggestions_raw !== summary.totals.suggestions ? ` (${summary.totals.suppressed} suppressed, ${summary.totals.suggestions_raw} raw)` : ""}
+- Vulnerabilities surfaced: ${summary.totals.vulnerabilities}${summary.totals.vulnerabilities_raw !== summary.totals.vulnerabilities ? ` (${summary.totals.suppressed} suppressed, ${summary.totals.vulnerabilities_raw} raw)` : ""}
 - Rejected rewrites: ${summary.totals.rejected_rewrites}
 - Guided products across runs: ${summary.totals.coached_products}
 - Primary-focus products across runs: ${summary.totals.focused_products}
