@@ -1063,6 +1063,50 @@ function buildDashboardHtml(summary) {
   .ep-dot{width:3px;height:8px;border-radius:1px;background:var(--border)}
   .ep-dot.filled{background:currentColor;opacity:.7}
   .engine-pill.ep-active .ep-dot.filled{background:var(--green);opacity:1}
+
+  /* ── Abort / Kill ── */
+  .launch-status-row{display:flex;align-items:center;gap:8px;min-height:20px}
+  .cmd-kill{background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.4);color:var(--red);border-radius:5px;padding:3px 10px;font-family:var(--mono);font-size:.66rem;cursor:pointer;transition:all .15s}
+  .cmd-kill:hover{background:rgba(239,68,68,0.25)}
+
+  /* ── Finding card expansion ── */
+  .finding-header{cursor:pointer;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+  .finding-expand{font-size:.55rem;color:var(--text-dim);transition:transform .15s;flex-shrink:0}
+  .finding-expand.open{transform:rotate(90deg)}
+  .finding-score{font-family:var(--mono);font-size:.58rem;color:var(--text-dim);margin-left:auto;padding:1px 4px;background:var(--surface2);border-radius:3px;white-space:nowrap}
+  .finding-expanded{display:none;margin-top:6px;font-size:.7rem;color:var(--text);border-top:1px solid var(--border);padding-top:6px}
+  .finding-expanded pre{white-space:pre-wrap;word-break:break-word;font-family:var(--mono);font-size:.64rem;color:var(--text-dim);margin:4px 0}
+  .finding-ev{font-family:var(--mono);font-size:.6rem;padding:3px 6px;border-radius:3px;margin:2px 0;display:block}
+  .finding-ev.good{background:rgba(52,211,153,0.1);color:var(--green)}
+  .finding-ev.bad{background:rgba(239,68,68,0.1);color:var(--red)}
+  .queue-btn{background:rgba(96,165,250,0.1);border:1px solid rgba(96,165,250,0.3);color:var(--blue);border-radius:5px;padding:4px 10px;font-family:var(--mono);font-size:.66rem;cursor:pointer;transition:all .15s}
+  .queue-btn:hover{background:rgba(96,165,250,0.2)}
+  .queue-btn:disabled{opacity:.4;cursor:wait}
+
+  /* ── Conflict map ── */
+  .conflict-map{margin-top:8px;padding:8px;background:rgba(245,158,11,0.07);border:1px solid rgba(245,158,11,0.2);border-radius:6px;display:none}
+  .conflict-map.visible{display:block}
+  .conflict-map-title{font-family:var(--mono);font-size:.64rem;color:var(--amber);margin-bottom:6px;font-weight:600}
+  .conflict-row{font-family:var(--mono);font-size:.62rem;color:var(--text-dim);margin:3px 0;display:flex;gap:6px;align-items:baseline}
+  .conflict-file{color:var(--text);flex-shrink:0}
+  .conflict-tracks{color:var(--amber)}
+  .conflict-note{color:var(--text-dim);font-size:.58rem}
+  .preflight-actions{display:flex;gap:6px;margin-top:8px}
+  .preflight-confirm{background:rgba(52,211,153,0.15);border:1px solid var(--green);color:var(--green);border-radius:5px;padding:4px 12px;font-family:var(--mono);font-size:.66rem;cursor:pointer}
+  .preflight-cancel{background:transparent;border:1px solid var(--border);color:var(--text-dim);border-radius:5px;padding:4px 12px;font-family:var(--mono);font-size:.66rem;cursor:pointer}
+
+  /* ── Queue mini panel ── */
+  .queue-mini{margin-top:6px}
+  .queue-mini-row{display:flex;align-items:baseline;gap:6px;padding:4px 0;border-bottom:1px solid var(--border);font-size:.68rem}
+  .queue-mini-row:last-child{border-bottom:none}
+  .qm-track{font-family:var(--mono);font-size:.62rem;color:var(--cyan);min-width:56px}
+  .qm-goal{color:var(--text-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px}
+  .qm-pri{font-family:var(--mono);font-size:.58rem;padding:1px 4px;border-radius:3px;margin-left:auto;flex-shrink:0}
+  .qm-pri.critical{background:rgba(239,68,68,0.15);color:var(--red)}
+  .qm-pri.high{background:rgba(245,158,11,0.15);color:var(--amber)}
+  .qm-pri.normal,.qm-pri.low,.qm-pri.background{background:var(--surface2);color:var(--text-dim)}
+  .qm-processing{color:var(--amber)}
+  .qm-empty{color:var(--text-dim);font-size:.68rem;font-style:italic;padding:4px 0}
 </style>
 </head>
 <body>
@@ -1103,7 +1147,7 @@ function buildDashboardHtml(summary) {
       </div>
     </div>
     ${engineStripHtml}
-    <div id="lp-status" class="launch-status"></div>
+    <div class="launch-status-row"><div id="lp-status" class="launch-status"></div><button id="lp-abort" class="cmd-kill" style="display:none" onclick="killMission()">&#x23F9; ABORT</button></div>
     <div id="lp-log-area" class="launch-log-area" style="display:none">
       <pre id="lp-log" class="launch-log"></pre>
     </div>
@@ -1123,7 +1167,7 @@ function buildDashboardHtml(summary) {
       </div>
     </div>
     ${engineStripHtml}
-    <div id="lp-status" class="launch-status"></div>
+    <div class="launch-status-row"><div id="lp-status" class="launch-status"></div><button id="lp-abort" class="cmd-kill" style="display:none" onclick="killMission()">&#x23F9; ABORT</button></div>
     <div id="lp-log-area" class="launch-log-area" style="display:none">
       <pre id="lp-log" class="launch-log"></pre>
     </div>
@@ -1160,9 +1204,15 @@ function buildDashboardHtml(summary) {
           </div>
           <div class="fix-all-progress" id="fix-all-progress">
             <div class="fa-stats" id="fix-all-stats"></div>
+            <div class="conflict-map" id="fix-all-conflicts"></div>
             <div class="fa-pipeline" id="fix-all-pipeline"></div>
           </div>
         </div>` : ""}
+        <!-- Queue mini panel -->
+        <div class="panel" style="margin-top:6px">
+          <div class="panel-title">Queue <span id="queue-counts" style="font-weight:400;color:var(--text-dim)"></span></div>
+          <div class="queue-mini" id="queue-container"><p class="qm-empty">Loading…</p></div>
+        </div>
       </div>
     </div>
   </div>
@@ -1173,13 +1223,15 @@ function buildDashboardHtml(summary) {
 
 <script>
 if(location.protocol==='file:'){fetch('http://localhost:7799/api/health',{signal:AbortSignal.timeout(2000)}).then(r=>{if(r.ok)location.replace('http://localhost:7799/')}).catch(()=>{})}
-const BASE=(location.protocol==='file:'||location.origin==='null')?'http://localhost:7799':location.origin;let serverOnline=false;let activePollToken=null;
+const BASE=(location.protocol==='file:'||location.origin==='null')?'http://localhost:7799':location.origin;let serverOnline=false;let activePollToken=null;let pollLogAttempts=0;
 
 function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML}
 function postHeaders(){return {'Content-Type':'application/json','X-CSRF-Token':window.__CSRF_TOKEN||''}}
 function timeAgo(iso){if(!iso)return'';const ms=Date.now()-new Date(iso).getTime();if(ms<0)return'now';const m=Math.floor(ms/60000);if(m<1)return'now';if(m<60)return m+'m';const h=Math.floor(m/60);if(h<24)return h+'h';const d=Math.floor(h/24);return d+'d'}
 function refreshTimestamps(){document.querySelectorAll('.tl-time[data-ts]').forEach(el=>{const a=timeAgo(el.dataset.ts);if(a)el.textContent=a})}
+function extractFileRefs(f){const txt=(f.detail||'')+' '+(f.title||'');return (txt.match(/(?:functions|api|src|middleware|services)\/[\w/.\\-]+\\.(?:js|ts|json)/gi)||[])}
 
+// ── Mission controls ──
 function selectTarget(area,icon,name){document.getElementById('lp-area').value=area;const ci=document.getElementById('cmd-icon');if(ci)ci.textContent=icon||'';const cl=document.getElementById('cmd-area-label');if(cl)cl.textContent=name||area;document.querySelectorAll('.target-card').forEach(c=>c.classList.toggle('selected',c.dataset.area===area));document.querySelectorAll('.cmd-dropdown-item').forEach(d=>d.classList.toggle('dd-active',d.dataset.area===area))}
 function toggleDropdown(e){e.stopPropagation();const dd=document.getElementById('cmd-dropdown');if(dd)dd.classList.toggle('open')}
 function closeDropdown(){const dd=document.getElementById('cmd-dropdown');if(dd)dd.classList.remove('open')}
@@ -1187,17 +1239,23 @@ document.addEventListener('click',closeDropdown);
 function setLaunchMode(mode){document.getElementById('lp-mode').value=mode;document.querySelectorAll('.cmd-mode-btn').forEach(c=>c.classList.toggle('active',c.dataset.mode===mode))}
 function fillMission(area,mode,goal){const card=document.querySelector('.target-card[data-area="'+area+'"]');if(card)selectTarget(area,card.dataset.icon,card.dataset.name);setLaunchMode(mode||'audit');const gi=document.getElementById('lp-goal');if(gi){gi.value=goal||'';gi.focus()}const lp=document.getElementById('launchpad');if(lp)lp.scrollIntoView({behavior:'smooth'})}
 
-// Engine select/confirm pattern
+// ── Engine select/confirm ──
 let selectedEngine=null;
 function selectEngine(pill){const id=pill.dataset.model;if(selectedEngine===id){cancelEngineSelect();return}selectedEngine=id;document.querySelectorAll('.engine-pill').forEach(p=>p.classList.remove('ep-selected'));pill.classList.add('ep-selected');const bar=document.getElementById('engine-confirm');const lbl=document.getElementById('ec-label');const btn=document.getElementById('ec-activate');const installed=pill.dataset.installed==='true';lbl.textContent=id;if(installed){btn.textContent='Activate';btn.className='engine-confirm-btn ec-activate'}else{btn.textContent='Pull';btn.className='engine-confirm-btn ec-pull'}bar.classList.add('visible')}
 function cancelEngineSelect(){selectedEngine=null;document.querySelectorAll('.engine-pill').forEach(p=>p.classList.remove('ep-selected'));document.getElementById('engine-confirm').classList.remove('visible')}
 function confirmEngine(){if(!selectedEngine)return;const pill=document.querySelector('.engine-pill[data-model="'+selectedEngine+'"]');if(!pill)return;const installed=pill.dataset.installed==='true';if(installed){switchModel(selectedEngine);cancelEngineSelect()}else{pullModel(selectedEngine,pill);cancelEngineSelect()}}
 
-async function checkServer(){const wasOnline=serverOnline;try{const c=new AbortController();const t=setTimeout(()=>c.abort(),2000);const r=await fetch(BASE+'/api/health',{signal:c.signal,mode:'cors'});clearTimeout(t);if(r.ok){const d=await r.json();serverOnline=true;const dot=document.getElementById('server-dot'),lbl=document.getElementById('server-label');if(dot&&d.busy){dot.className='server-dot online';dot.style.background='var(--amber)';dot.style.boxShadow='0 0 6px var(--amber)';lbl.textContent='busy: '+d.activeMission.area;lbl.style.color='var(--amber)'}else if(dot){dot.className='server-dot online';dot.style.background='';dot.style.boxShadow='';lbl.textContent='online';lbl.style.color=''}if(!wasOnline&&serverOnline)refreshModels()}}catch{serverOnline=false}const d=document.getElementById('server-dot'),l=document.getElementById('server-label');if(!serverOnline&&d){d.className='server-dot offline';d.style.background='';d.style.boxShadow='';l.textContent='offline';l.style.color=''}const b=document.getElementById('lp-launch');if(b)b.disabled=!serverOnline;const fab=document.getElementById('fix-all-btn');if(fab&&!fab.dataset.running)fab.disabled=!serverOnline}
+// ── Server health ──
+async function checkServer(){const wasOnline=serverOnline;try{const c=new AbortController();const t=setTimeout(()=>c.abort(),2000);const r=await fetch(BASE+'/api/health',{signal:c.signal,mode:'cors'});clearTimeout(t);if(r.ok){const d=await r.json();serverOnline=true;const dot=document.getElementById('server-dot'),lbl=document.getElementById('server-label');if(dot&&d.busy){dot.className='server-dot online';dot.style.background='var(--amber)';dot.style.boxShadow='0 0 6px var(--amber)';lbl.textContent='busy: '+d.activeMission.area;lbl.style.color='var(--amber)';const ab=document.getElementById('lp-abort');if(ab)ab.style.display=''}else if(dot){dot.className='server-dot online';dot.style.background='';dot.style.boxShadow='';lbl.textContent='online';lbl.style.color='';const ab=document.getElementById('lp-abort');if(ab&&!activePollToken)ab.style.display='none'}if(!wasOnline&&serverOnline){refreshModels();loadQueue()}}}catch{serverOnline=false}const d=document.getElementById('server-dot'),l=document.getElementById('server-label');if(!serverOnline&&d){d.className='server-dot offline';d.style.background='';d.style.boxShadow='';l.textContent='offline';l.style.color=''}const b=document.getElementById('lp-launch');if(b)b.disabled=!serverOnline;const fab=document.getElementById('fix-all-btn');if(fab&&!fab.dataset.running)fab.disabled=!serverOnline}
 
-async function launchMission(){if(!serverOnline)return;const a=document.getElementById('lp-area').value,g=document.getElementById('lp-goal').value.trim(),m=document.getElementById('lp-mode').value,s=document.getElementById('lp-status');if(!g){s.textContent='Write a goal first';s.style.color='var(--red)';return}const b=document.getElementById('lp-launch');b.disabled=true;s.textContent='Launching...';s.style.color='var(--amber)';try{const r=await fetch(BASE+'/api/launch',{method:'POST',headers:postHeaders(),body:JSON.stringify({area:a,goal:g,mode:m,goalMode:m==='dry-run'?'edit':m})});const d=await r.json();if(r.status===409){s.textContent=d.error||'Already running';s.style.color='var(--amber)';b.disabled=false;return}if(d.ok){s.textContent='Running (PID '+d.pid+')';s.style.color='var(--green)';activePollToken=d.logFile;document.getElementById('lp-log-area').style.display='block';pollLog()}else{s.textContent=d.error||'Failed';s.style.color='var(--red)';b.disabled=false}}catch(e){s.textContent=e.message;s.style.color='var(--red)';b.disabled=false}}
+// ── Kill running mission ──
+async function killMission(){if(!confirm('Abort the running mission?'))return;try{const r=await fetch(BASE+'/api/kill',{method:'POST',headers:postHeaders()});const d=await r.json();const s=document.getElementById('lp-status');if(d.ok){if(s){s.textContent='\u26a0 Aborted';s.style.color='var(--amber)'}document.getElementById('lp-abort').style.display='none';const b=document.getElementById('lp-launch');if(b)b.disabled=false;activePollToken=null}else{if(s){s.textContent=d.error||'Nothing to kill';s.style.color='var(--text-dim)'}}}catch(e){console.error('kill error:',e.message)}}
 
-async function pollLog(){if(!activePollToken)return;try{const r=await fetch(BASE+'/api/log/'+activePollToken);if(r.ok){const t=await r.text();const el=document.getElementById('lp-log');el.textContent=t;el.scrollTop=el.scrollHeight;if(t.includes('[exit ')){document.getElementById('lp-status').textContent='Complete';document.getElementById('lp-status').style.color='var(--green)';document.getElementById('lp-launch').disabled=false;activePollToken=null;return}}}catch{}setTimeout(pollLog,1500)}
+// ── Launch mission ──
+async function launchMission(){if(!serverOnline)return;const a=document.getElementById('lp-area').value,g=document.getElementById('lp-goal').value.trim(),m=document.getElementById('lp-mode').value,s=document.getElementById('lp-status');if(!g){s.textContent='Write a goal first';s.style.color='var(--red)';return}const b=document.getElementById('lp-launch');b.disabled=true;s.textContent='Launching...';s.style.color='var(--amber)';try{const r=await fetch(BASE+'/api/launch',{method:'POST',headers:postHeaders(),body:JSON.stringify({area:a,goal:g,mode:m,goalMode:m==='dry-run'?'edit':m})});const d=await r.json();if(r.status===409){s.textContent=d.error||'Already running';s.style.color='var(--amber)';b.disabled=false;return}if(d.ok){s.textContent='Running (PID '+d.pid+')';s.style.color='var(--green)';activePollToken=d.logFile;document.getElementById('lp-log-area').style.display='block';const ab=document.getElementById('lp-abort');if(ab)ab.style.display='';pollLogAttempts=0;pollLog()}else{s.textContent=d.error||'Failed';s.style.color='var(--red)';b.disabled=false}}catch(e){s.textContent=e.message;s.style.color='var(--red)';b.disabled=false}}
+
+// ── Log polling (max 120 attempts = ~3 min) ──
+async function pollLog(){if(!activePollToken)return;pollLogAttempts++;if(pollLogAttempts>120){const s=document.getElementById('lp-status');if(s){s.textContent='\u26a0 Timed out after 3 min — check logs manually';s.style.color='var(--amber)'}document.getElementById('lp-launch').disabled=false;const ab=document.getElementById('lp-abort');if(ab)ab.style.display='none';activePollToken=null;return}try{const r=await fetch(BASE+'/api/log/'+activePollToken);if(r.ok){const t=await r.text();const el=document.getElementById('lp-log');el.textContent=t;el.scrollTop=el.scrollHeight;if(t.includes('[exit ')){document.getElementById('lp-status').textContent='\u2713 Complete';document.getElementById('lp-status').style.color='var(--green)';document.getElementById('lp-launch').disabled=false;const ab=document.getElementById('lp-abort');if(ab)ab.style.display='none';activePollToken=null;loadFindings();loadQueue();return}}}catch{}setTimeout(pollLog,1500)}
 
 async function switchModel(id){if(!serverOnline)return;try{const r=await fetch(BASE+'/api/model',{method:'POST',headers:postHeaders(),body:JSON.stringify({model:id})});const d=await r.json();if(d.ok)await refreshModels()}catch(e){alert('Error: '+e.message)}}
 
@@ -1207,43 +1265,125 @@ async function pollPull(id,btn,lbl,origText){let tries=0;const poll=async()=>{tr
 
 async function refreshModels(){if(!serverOnline)return;try{const r=await fetch(BASE+'/api/models');const d=await r.json();if(d.ok&&d.models){d.models.forEach(m=>{const p=document.querySelector('.engine-pill[data-model="'+m.id+'"]');if(!p)return;const s=p.querySelector('.ep-status');if(s)s.className='ep-status '+(m.installed?'installed':'not-installed');p.dataset.installed=String(!!m.installed);if(m.active){document.querySelectorAll('.engine-pill').forEach(x=>x.classList.remove('ep-active'));p.classList.add('ep-active')}})}}catch{}}
 
+// ── Queue panel ──
+async function loadQueue(){if(!serverOnline)return;try{const r=await fetch(BASE+'/api/queue');const d=await r.json();if(!d.ok)return;const counts=d.counts||{};const qc=document.getElementById('queue-counts');if(qc)qc.textContent=counts.pending+' pending \u00b7 '+(counts.processing||0)+' running \u00b7 '+counts.done+' done';const el=document.getElementById('queue-container');if(!el)return;const items=[...(d.processing||[]).map(x=>({...x,_state:'processing'})),...(d.pending||[])];if(!items.length){el.innerHTML='<p class="qm-empty">Queue empty.</p>';return}el.innerHTML=items.slice(0,8).map(q=>{const pri=q.priorityLabel||'normal';const state=q._state==='processing';return'<div class="queue-mini-row"><span class="qm-track'+(state?' qm-processing':'')+'">'+esc(q.track||'?')+'</span><span class="qm-goal">'+esc((q.goal||'').slice(0,60))+'</span><span class="qm-pri '+esc(pri)+'">'+esc(pri)+'</span></div>'}).join('')+(items.length>8?'<p class="qm-empty">…and '+(items.length-8)+' more</p>':'')}catch{}}
+
+// ── Findings ──
 window._findingsData=[];
-async function loadFindings(){if(!serverOnline)return;const container=document.getElementById('findings-container');const btn=document.getElementById('findings-refresh-btn');if(btn){btn.disabled=true;btn.textContent='\\u21bb ...'}container.innerHTML='<p class="empty">Loading...</p>';try{const r=await fetch(BASE+'/api/findings');const d=await r.json();if(!d.ok){container.innerHTML='<p class="empty">Error: '+(d.error||'?')+'</p>';return}const findings=d.findings||[];window._findingsData=findings;if(!findings.length){container.innerHTML='<p class="empty">No open findings.</p>';return}
-// Deduplicate for display
+async function loadFindings(){if(!serverOnline)return;const container=document.getElementById('findings-container');const btn=document.getElementById('findings-refresh-btn');if(btn){btn.disabled=true;btn.textContent='\u21bb ...'}container.innerHTML='<p class="empty">Loading...</p>';try{const r=await fetch(BASE+'/api/findings');const d=await r.json();if(!d.ok){container.innerHTML='<p class="empty">Error: '+(d.error||'?')+'</p>';return}const findings=d.findings||[];window._findingsData=findings;if(!findings.length){container.innerHTML='<p class="empty">No open findings.</p>';return}
 const groups=[];const seen=new Map();
 findings.forEach(f=>{const k=f.title;if(seen.has(k)){const g=groups[seen.get(k)];g.count++;if(!g.tracks.includes(f.track))g.tracks.push(f.track)}else{seen.set(k,groups.length);groups.push({...f,count:1,tracks:[f.track],idx:seen.get(k)})}});
-container.innerHTML=groups.map((f,i)=>{const sev='sev-'+(f.severity||'info');const countBadge=f.count>1?'<span class="finding-count">'+f.count+'\\u00d7</span>':'';const trackBadges=f.tracks.map(t=>'<code>'+esc(t)+'</code>').join(' ');return '<div class="finding-card'+(f.severity==='critical'||f.severity==='high'?' finding-vuln':'')+'" id="finding-'+i+'"><div class="finding-header"><span class="sev '+esc(sev)+'">'+esc(f.severity||'info')+'</span><span class="finding-title">'+esc(f.title)+'</span>'+countBadge+'<span id="finding-status-'+i+'" class="finding-status"></span></div><div class="finding-detail">'+esc((f.detail||'').slice(0,200))+'</div><div class="finding-meta">'+trackBadges+' <button class="implement-btn" onclick="implementFinding('+i+',this)">\\u26a1 Fix</button> <button class="suppress-btn" onclick="suppressFinding('+i+',this)">\\u2715</button></div></div>'}).join('')}catch(e){container.innerHTML='<p class="empty">'+esc(e.message)+'</p>'}finally{if(btn){btn.disabled=false;btn.textContent='\\u21bb live'}}}
+container.innerHTML=groups.map((f,i)=>{
+  const sev='sev-'+(f.severity||'info');
+  const countBadge=f.count>1?'<span class="finding-count">'+f.count+'\u00d7</span>':'';
+  const trackBadges=f.tracks.map(t=>'<code>'+esc(t)+'</code>').join(' ');
+  const score=f.priority_score?'<span class="finding-score">'+f.priority_score+'</span>':'';
+  const verif=f.verification?'<span class="finding-score" style="'+(f.verification==='verified'?'color:var(--green)':f.verification==='hallucination'?'color:var(--red)':'')+'">'+esc(f.verification)+'</span>':'';
+  const evidence=(f.verification_evidence||[]).map(e=>'<span class="finding-ev '+(e.startsWith('file NOT')||e.startsWith('identifier NOT')?'bad':'good')+'">'+esc(e)+'</span>').join('');
+  const fullDetail=f.detail||'';
+  const shortDetail=fullDetail.length>200?fullDetail.slice(0,200)+'\u2026':fullDetail;
+  return '<div class="finding-card'+(f.severity==='critical'||f.severity==='high'?' finding-vuln':'')+'" id="finding-'+i+'">'
+    +'<div class="finding-header" onclick="toggleFindingDetail('+i+')">'
+    +'<span class="finding-expand" id="finding-expand-'+i+'">\u25b8</span>'
+    +'<span class="sev '+esc(sev)+'">'+esc(f.severity||'info')+'</span>'
+    +'<span class="finding-title">'+esc(f.title)+'</span>'
+    +countBadge+score+verif
+    +'<span id="finding-status-'+i+'" class="finding-status"></span>'
+    +'</div>'
+    +'<div class="finding-detail" id="finding-short-'+i+'">'+esc(shortDetail)+'</div>'
+    +'<div class="finding-expanded" id="finding-expanded-'+i+'">'
+    +(fullDetail.length>200?'<pre>'+esc(fullDetail)+'</pre>':'')
+    +(evidence?'<div style="margin-top:4px">'+evidence+'</div>':'')
+    +'</div>'
+    +'<div class="finding-meta">'+trackBadges
+    +' <button class="implement-btn" onclick="event.stopPropagation();implementFinding('+i+',this)">\u26a1 Fix Now</button>'
+    +' <button class="queue-btn" onclick="event.stopPropagation();queueFinding('+i+',this)">\ud83d\udccb Queue</button>'
+    +' <button class="suppress-btn" onclick="event.stopPropagation();suppressFinding('+i+',this)">\u2715</button>'
+    +'</div>'
+    +'</div>'
+}).join('')}catch(e){container.innerHTML='<p class="empty">'+esc(e.message)+'</p>'}finally{if(btn){btn.disabled=false;btn.textContent='\u21bb live'}}}
 
-async function implementFinding(idx,btn){if(!serverOnline)return;const findings=window._findingsData;if(!findings[idx])return;const f=findings[idx];btn.disabled=true;btn.textContent='\\u26a1 ...';const status=document.getElementById('finding-status-'+idx);if(status){status.textContent='launching...';status.className='finding-status implementing'}try{const r=await fetch(BASE+'/api/implement',{method:'POST',headers:postHeaders(),body:JSON.stringify({track:f.track,title:f.title,detail:f.detail,severity:f.severity,line_refs:f.line_refs||[],file_paths:f.file_paths||[]})});const d=await r.json();if(d.ok){if(status){status.textContent='\\u26a1 running (PID '+d.pid+')';status.className='finding-status implementing'}btn.textContent='\\u26a1';pollImplement(idx,btn,d.pid)}else{if(d.error&&d.error.includes('already running')){if(status){status.textContent=d.error;status.className='finding-status implementing'}btn.textContent='\\u231b';btn.disabled=false}else{if(status){status.textContent=d.error||'failed';status.className='finding-status error'}btn.textContent='retry';btn.disabled=false}}}catch(e){if(status){status.textContent=e.message;status.className='finding-status error'}btn.textContent='retry';btn.disabled=false}}
-async function pollImplement(idx,btn,pid){const status=document.getElementById('finding-status-'+idx);try{const r=await fetch(BASE+'/api/health');if(!r.ok)throw new Error('offline');const d=await r.json();if(d.busy){const elapsed=d.activeMission.elapsed||'';if(status){status.textContent='\\u26a1 running'+(elapsed?' ('+elapsed+'s)':'')+' PID '+pid;status.className='finding-status implementing'}setTimeout(()=>pollImplement(idx,btn,pid),4000);return}if(status){status.textContent='\\u2713 complete';status.className='finding-status done'}btn.textContent='\\u2713';btn.disabled=true}catch(e){setTimeout(()=>pollImplement(idx,btn,pid),5000)}}
+function toggleFindingDetail(i){const exp=document.getElementById('finding-expanded-'+i);const arr=document.getElementById('finding-expand-'+i);if(!exp)return;const open=exp.style.display==='block';exp.style.display=open?'none':'block';if(arr)arr.classList.toggle('open',!open)}
 
-async function suppressFinding(idx,btn){const f=window._findingsData[idx];if(!f)return;if(!confirm('Suppress "'+f.title+'"?\\n\\nThis will add it to suppressions.json so it is hidden on future sweeps.'))return;btn.disabled=true;btn.textContent='\\u23f3';try{const r=await fetch(BASE+'/api/suppress',{method:'POST',headers:postHeaders(),body:JSON.stringify({fingerprint:f.fingerprint,title:f.title,severity:f.severity,track:f.track,reason:'Suppressed via dashboard'})});const d=await r.json();if(d.ok){btn.textContent='\\u2713';const card=document.getElementById('finding-'+idx);if(card){card.style.opacity='0.3';card.title='Suppressed and saved to suppressions.json'}}else{btn.textContent='\\u26a0';btn.disabled=false;console.error('suppress failed:',d.error)}}catch(e){btn.textContent='\\u26a0';btn.disabled=false;console.error('suppress error:',e.message)}}
+// ── Implement finding (max 60 polls = ~4 min) ──
+async function implementFinding(idx,btn){if(!serverOnline)return;const findings=window._findingsData;if(!findings[idx])return;const f=findings[idx];btn.disabled=true;btn.textContent='\u26a1 ...';const status=document.getElementById('finding-status-'+idx);if(status){status.textContent='launching...';status.className='finding-status implementing'}try{const r=await fetch(BASE+'/api/implement',{method:'POST',headers:postHeaders(),body:JSON.stringify({track:f.track,title:f.title,detail:f.detail,severity:f.severity,line_refs:f.line_refs||[],file_paths:f.file_paths||[]})});const d=await r.json();if(d.ok){if(status){status.textContent='\u26a1 running (PID '+d.pid+')';status.className='finding-status implementing'}btn.textContent='\u26a1';pollImplement(idx,btn,d.pid,0)}else{if(d.error&&d.error.includes('already running')){if(status){status.textContent=d.error;status.className='finding-status implementing'}btn.textContent='\u231b';btn.disabled=false}else{if(status){status.textContent=d.error||'failed';status.className='finding-status error'}btn.textContent='retry';btn.disabled=false}}}catch(e){if(status){status.textContent=e.message;status.className='finding-status error'}btn.textContent='retry';btn.disabled=false}}
 
-// ── Fix All ──
-async function fixAll(){if(!serverOnline)return;const btn=document.getElementById('fix-all-btn');const info=document.getElementById('fix-all-info');const progress=document.getElementById('fix-all-progress');const pipeline=document.getElementById('fix-all-pipeline');const statsEl=document.getElementById('fix-all-stats');if(!btn)return;
-if(!confirm('Run Fix All pipeline?\\n\\nThis will:\\n1. Triage all findings (filter false positives & hallucinations)\\n2. Verify against actual code\\n3. Fix verified issues by severity\\n\\nContinue?'))return;
+async function pollImplement(idx,btn,pid,attempts){attempts=(attempts||0)+1;if(attempts>60){const status=document.getElementById('finding-status-'+idx);if(status){status.textContent='\u26a0 Timed out';status.className='finding-status error'}btn.textContent='retry';btn.disabled=false;return}const status=document.getElementById('finding-status-'+idx);try{const r=await fetch(BASE+'/api/health');if(!r.ok)throw new Error('offline');const d=await r.json();if(d.busy){const elapsed=d.activeMission.elapsed||'';if(status){status.textContent='\u26a1 running'+(elapsed?' ('+elapsed+'s)':'')+' PID '+pid;status.className='finding-status implementing'}setTimeout(()=>pollImplement(idx,btn,pid,attempts),4000);return}if(status){status.textContent='\u2713 complete';status.className='finding-status done'}btn.textContent='\u2713';btn.disabled=true;loadQueue()}catch(e){setTimeout(()=>pollImplement(idx,btn,pid,attempts),5000)}}
+
+// ── Queue single finding ──
+async function queueFinding(idx,btn){if(!serverOnline)return;const f=window._findingsData[idx];if(!f)return;btn.disabled=true;btn.textContent='\u23f3';try{const r=await fetch(BASE+'/api/queue',{method:'POST',headers:postHeaders(),body:JSON.stringify({track:f.track,goal:'Fix: '+f.title+'. '+(f.detail||'').slice(0,300),goalMode:'edit',priority:f.severity==='critical'?'critical':f.severity==='high'?'high':'normal',source:'dashboard',metadata:{fingerprint:f.fingerprint,severity:f.severity}})});const d=await r.json();if(d.ok){btn.textContent='\u2713';loadQueue()}else{btn.textContent='\u26a0';btn.disabled=false}}catch(e){btn.textContent='\u26a0';btn.disabled=false}}
+
+// ── Suppress finding ──
+async function suppressFinding(idx,btn){const f=window._findingsData[idx];if(!f)return;if(!confirm('Suppress "'+f.title+'"?\n\nThis will add it to suppressions.json so it is hidden on future sweeps.'))return;btn.disabled=true;btn.textContent='\u23f3';try{const r=await fetch(BASE+'/api/suppress',{method:'POST',headers:postHeaders(),body:JSON.stringify({fingerprint:f.fingerprint,title:f.title,severity:f.severity,track:f.track,reason:'Suppressed via dashboard'})});const d=await r.json();if(d.ok){btn.textContent='\u2713';const card=document.getElementById('finding-'+idx);if(card){card.style.opacity='0.3';card.title='Suppressed and saved to suppressions.json'}}else{btn.textContent='\u26a0';btn.disabled=false}}catch(e){btn.textContent='\u26a0';btn.disabled=false}}
+
+// ── Fix All with pre-flight conflict map ──
+async function fixAll(){if(!serverOnline)return;const btn=document.getElementById('fix-all-btn');const info=document.getElementById('fix-all-info');const progress=document.getElementById('fix-all-progress');const pipeline=document.getElementById('fix-all-pipeline');const statsEl=document.getElementById('fix-all-stats');const conflictEl=document.getElementById('fix-all-conflicts');if(!btn)return;
+
+// Pre-flight: compute cross-track file conflicts from live findings
+btn.disabled=true;info.textContent='Checking for conflicts...';info.style.color='var(--amber)';
+let conflictHtml='';
+try{
+  const rf=await fetch(BASE+'/api/findings');const df=await rf.json();
+  if(df.ok&&df.findings){
+    const byTrack={};
+    for(const f of df.findings){
+      const refs=extractFileRefs(f);
+      if(!byTrack[f.track])byTrack[f.track]={files:{}};
+      refs.forEach(r=>{byTrack[f.track].files[r]=(byTrack[f.track].files[r]||0)+1});
+    }
+    const fileToTracks={};
+    for(const[track,{files}]of Object.entries(byTrack)){
+      for(const file of Object.keys(files)){
+        if(!fileToTracks[file])fileToTracks[file]=[];
+        fileToTracks[file].push(track);
+      }
+    }
+    const conflicts=Object.entries(fileToTracks).filter(([,ts])=>ts.length>1);
+    if(conflicts.length){
+      conflictHtml='<div class="conflict-map-title">\u26a0 '+conflicts.length+' cross-track file conflict'+(conflicts.length>1?'s':'')+' \u2014 will auto-merge into shared track</div>'
+        +conflicts.map(([file,tracks])=>'<div class="conflict-row"><span class="conflict-file">'+esc(file.split('/').pop())+'</span><span class="conflict-tracks">\u2192 '+esc(tracks.join(' + '))+'</span><span class="conflict-note">(merged)</span></div>').join('');
+    }
+  }
+}catch{}
+
+if(conflictHtml){
+  conflictEl.innerHTML=conflictHtml;conflictEl.classList.add('visible');
+  info.textContent='Conflicts detected \u2014 review above then confirm';info.style.color='var(--amber)';
+  // Inline confirm/cancel
+  const actions=document.createElement('div');actions.className='preflight-actions';
+  const ok=document.createElement('button');ok.className='preflight-confirm';ok.textContent='\u2713 Proceed with merge';
+  const no=document.createElement('button');no.className='preflight-cancel';no.textContent='\u2715 Cancel';
+  actions.append(ok,no);conflictEl.appendChild(actions);
+  await new Promise(res=>{ok.onclick=()=>res(true);no.onclick=()=>res(false)}).then(proceed=>{
+    if(!proceed){conflictEl.classList.remove('visible');info.textContent='Cancelled';info.style.color='var(--text-dim)';btn.disabled=false;return}
+    conflictEl.removeChild(actions);runFixAll(btn,info,progress,pipeline,statsEl,conflictEl);
+  });
+  return;
+}
+conflictEl.classList.remove('visible');
+runFixAll(btn,info,progress,pipeline,statsEl,conflictEl);}
+
+async function runFixAll(btn,info,progress,pipeline,statsEl,conflictEl){
 btn.disabled=true;info.textContent='Starting pipeline...';info.style.color='var(--amber)';
 try{const r=await fetch(BASE+'/api/fix-all',{method:'POST',headers:postHeaders()});const d=await r.json();if(r.status===409){info.textContent=d.error||'Already running';info.style.color='var(--amber)';btn.disabled=false;return}
 if(!d.ok){info.textContent=d.message||d.error||'Nothing to fix';info.style.color='var(--text-dim)';btn.disabled=false;return}
-// Show pipeline stats
 const p=d.pipeline;statsEl.innerHTML='<span class="fa-stat"><span class="fa-stat-val dim">'+p.total_raw+'</span> raw</span><span class="fa-stat"><span class="fa-stat-val dim">'+p.unique+'</span> unique</span><span class="fa-stat"><span class="fa-stat-val good">'+p.verified+'</span> verified</span><span class="fa-stat"><span class="fa-stat-val bad">'+p.hallucinations+'</span> hallucinated</span><span class="fa-stat"><span class="fa-stat-val warn">'+p.suppressed+'</span> suppressed</span><span class="fa-stat"><span class="fa-stat-val good">'+p.fixable+'</span> fixable</span>';
-// Show step cards
 pipeline.innerHTML=d.plan.map((s,i)=>'<div class="fa-step" id="fa-step-'+i+'"><span class="fa-step-dot pending" id="fa-dot-'+i+'"></span><span class="fa-step-track">'+esc(s.track)+'</span><span class="fa-step-info">'+s.findingCount+' finding'+(s.findingCount>1?'s':'')+' ('+esc(s.severity)+')</span><span class="fa-step-result" id="fa-result-'+i+'"></span></div>').join('');
 progress.classList.add('active');
 info.textContent='Running... PID '+d.pid;info.style.color='var(--green)';
-// Poll progress
-pollFixAll(d.fixAllId,d.plan.length)}catch(e){info.textContent=e.message;info.style.color='var(--red)';btn.disabled=false}}
+pollFixAll(d.fixAllId,d.plan.length,0)}catch(e){info.textContent=e.message;info.style.color='var(--red)';btn.disabled=false}}
 
-async function pollFixAll(id,total){try{const r=await fetch(BASE+'/api/fix-all/status');const d=await r.json();if(!d.ok)return;const prog=d.progress||{};const results=prog.results||[];
-// Update dots
-for(let i=0;i<total;i++){const dot=document.getElementById('fa-dot-'+i);const res=document.getElementById('fa-result-'+i);if(!dot)continue;if(i<results.length){dot.className='fa-step-dot '+(results[i].success?'done':'failed');if(res)res.textContent=results[i].success?'\\u2713':'\\u2717';if(res)res.style.color=results[i].success?'var(--green)':'var(--red)'}else if(prog.current&&i===results.length){dot.className='fa-step-dot running'}else{dot.className='fa-step-dot pending'}}
-const info=document.getElementById('fix-all-info');if(d.status==='complete'){const ok=results.filter(r=>r.success).length;const fail=results.filter(r=>!r.success).length;if(info){info.textContent='Complete: '+ok+' succeeded, '+fail+' failed';info.style.color=fail?'var(--amber)':'var(--green)'}document.getElementById('fix-all-btn').disabled=false;return}
+// ── Fix All polling (max 120 polls = ~6 min) ──
+async function pollFixAll(id,total,attempts){attempts=(attempts||0)+1;if(attempts>120){const info=document.getElementById('fix-all-info');if(info){info.textContent='\u26a0 Timed out — check logs manually';info.style.color='var(--amber)'}document.getElementById('fix-all-btn').disabled=false;return}
+try{const r=await fetch(BASE+'/api/fix-all/status');const d=await r.json();if(!d.ok)return;const prog=d.progress||{};const results=prog.results||[];
+for(let i=0;i<total;i++){const dot=document.getElementById('fa-dot-'+i);const res=document.getElementById('fa-result-'+i);if(!dot)continue;if(i<results.length){dot.className='fa-step-dot '+(results[i].success?'done':'failed');if(res)res.textContent=results[i].success?'\u2713':'\u2717';if(res)res.style.color=results[i].success?'var(--green)':'var(--red)'}else if(prog.current&&i===results.length){dot.className='fa-step-dot running'}else{dot.className='fa-step-dot pending'}}
+const info=document.getElementById('fix-all-info');if(d.status==='complete'){const ok=results.filter(r=>r.success).length;const fail=results.filter(r=>!r.success).length;if(info){info.textContent='Complete: '+ok+' succeeded, '+fail+' failed';info.style.color=fail?'var(--amber)':'var(--green)'}document.getElementById('fix-all-btn').disabled=false;loadFindings();loadQueue();return}
 if(info){info.textContent='Fixing '+(prog.current||'...')+' ('+(prog.completed||0)+'/'+total+')';info.style.color='var(--amber)'}}catch{}
-setTimeout(()=>pollFixAll(id,total),3000)}
+setTimeout(()=>pollFixAll(id,total,attempts),3000)}
 
 function toggleDetail(id){const r=document.getElementById(id);if(!r)return;r.style.display=r.style.display==='none'?'block':'none'}
 
-// Wire events
+// ── Wire events ──
 document.querySelectorAll('.target-card').forEach(c=>c.addEventListener('click',()=>selectTarget(c.dataset.area,c.dataset.icon,c.dataset.name)));
 document.querySelectorAll('.cmd-mode-btn').forEach(b=>b.addEventListener('click',()=>setLaunchMode(b.dataset.mode)));
 document.querySelectorAll('.qo-card').forEach(c=>c.addEventListener('click',()=>fillMission(c.dataset.area,c.dataset.mode,c.dataset.goal)));
@@ -1253,9 +1393,10 @@ document.querySelectorAll('.cmd-dropdown-item').forEach(d=>d.addEventListener('c
 selectTarget('${esc(selectedModule.area)}','${selectedModule.icon}','${esc(selectedModule.name)}');setLaunchMode('${esc(defaultLaunchMode)}');
 refreshTimestamps();setInterval(refreshTimestamps,60000);
 checkServer();setInterval(checkServer,12000);
+setInterval(loadQueue,15000);
 async function checkSibling(){try{const r=await fetch('http://localhost:4400/api/health',{signal:AbortSignal.timeout(2000),mode:'cors'});const d=document.getElementById('frontend-dot');if(d)d.className='nav-dot '+(r.ok?'online':'offline')}catch{const d=document.getElementById('frontend-dot');if(d)d.className='nav-dot offline'}}
 checkSibling();setInterval(checkSibling,15000);
-setTimeout(async()=>{if(serverOnline){refreshModels();loadFindings()}},2000);
+setTimeout(async()=>{if(serverOnline){refreshModels();loadFindings();loadQueue()}},2000);
 </script>
 </body>
 </html>`;
