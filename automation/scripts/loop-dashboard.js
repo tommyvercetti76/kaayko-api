@@ -648,46 +648,63 @@ function buildDashboardHtml(summary) {
     </div>`;
   }).join("");
 
-  // ── Model rows ──
-  const modelRows = (roster.length ? roster : recommended.map((m) => ({ ...m, installed: false, active: summary.runtime.model === m.id, size: m.ram, source: "recommended" }))).map((m) => {
-    const installBadge = m.installed
-      ? `<span class="status-badge s-approved">installed</span>`
-      : `<span class="status-badge s-agent-failed">not installed</span>`;
-    const actionBtn = m.installed
-      ? (m.active ? `<button class="model-btn active">active</button>` : `<button class="model-btn" onclick="switchModel('${esc(m.id)}')">use</button>`)
-      : `<button class="model-btn pull-btn" onclick="pullModel('${esc(m.id)}',this)">pull</button>`;
-    return `<tr class="${m.active ? "active-model" : ""}">
-      <td>${m.active ? "\u25b6" : "\u00a0"}</td>
-      <td><code>${esc(m.id)}</code></td>
-      <td>${esc(m.note)}</td>
-      <td>${esc(m.size || "")}</td>
-      <td>${installBadge}</td>
-      <td>${actionBtn}</td>
-    </tr>`;
-  }).join("");
-
-  // ── Launch module selector (compact) ──
-  const moduleOptions = modules.map((m) => {
+  // ── Target cards (module selection + health combined) ──
+  const targetCards = moduleHealth.map((m) => {
     const selected = m.area === selectedModule.area;
-    return `<button class="mod-chip${selected ? " selected" : ""}" type="button" data-area="${esc(m.area)}" aria-pressed="${selected ? "true" : "false"}">${m.icon} ${esc(m.name)}</button>`;
-  }).join("");
-
-  const modeButtons = launchModes.map((mode) => {
-    const selected = mode.id === defaultLaunchMode;
-    return `<button class="mode-chip${selected ? " selected" : ""}" type="button" data-mode="${esc(mode.id)}" aria-pressed="${selected ? "true" : "false"}">${esc(mode.label)}</button>`;
-  }).join("");
-
-  const presetButtons = missionPresets.map((preset) => {
-    return `<button class="preset-btn" type="button" data-goal="${esc(preset.goal)}" data-mode="${esc(preset.mode)}">${esc(preset.label)}</button>`;
-  }).join("");
-
-  // ── Action items HTML ──
-  const actionsHtml = actions.slice(0, 4).map((a) => {
-    return `<div class="action-item" data-area="${esc(a.area || "")}" data-action="${esc(a.action || "")}">
-      <span class="action-icon">${a.icon}</span>
-      <span class="action-text">${a.text}</span>
-      <button class="action-go" onclick="quickLaunch('${esc(a.area || "")}','${esc(a.action || "audit")}')">Go \u2192</button>
+    let statusColor = "var(--green)"; let statusText = "\u2713"; let barPct = 100;
+    if (m.runs === 0) { statusColor = "var(--text-dim)"; statusText = "\u2014"; barPct = 0; }
+    else if (m.vulns > 0) { statusColor = "var(--red)"; statusText = `${m.vulns} vln`; barPct = Math.max(10, 100 - m.vulns * 15); }
+    else if (m.sugs > 0) { statusColor = "var(--amber)"; statusText = `${m.sugs} sug`; barPct = Math.max(20, 100 - m.sugs * 5); }
+    return `<div class="target-card${selected ? " selected" : ""}" data-area="${esc(m.area)}" data-icon="${m.icon}" data-name="${esc(m.name)}">
+      <span class="tc-icon">${m.icon}</span>
+      <span class="tc-name">${esc(m.name)}</span>
+      <span class="tc-status" style="color:${statusColor}">${statusText}</span>
+      <div class="tc-bar"><div class="tc-bar-fill" style="width:${barPct}%;background:${statusColor}"></div></div>
+      <span class="tc-meta">${m.runs ? `${m.runs} run${m.runs !== 1 ? "s" : ""}` : "never"}</span>
     </div>`;
+  }).join("");
+
+  // ── Engine pills (model selector strip) ──
+  const modelData = roster.length ? roster : recommended.map((m) => ({ ...m, installed: false, active: summary.runtime.model === m.id, size: m.ram }));
+  const powerLevel = (id) => { if (id.includes("32b")) return 5; if (id.includes("16b") || id.includes("14b")) return 4; return 3; };
+  const shortName = (id) => id.replace("qwen2.5-coder:","qwen:").replace("deepseek-coder-v2:","ds-v2:").replace("llama3.1:","llama:");
+  const enginePills = modelData.map((m) => {
+    const lvl = powerLevel(m.id);
+    const dots = Array.from({length:5},(_,i)=>`<span class="ep-dot${i<lvl?" filled":""}"></span>`).join("");
+    const isInstalled = m.installed !== false;
+    return `<button class="engine-pill${m.active?" ep-active":""}" data-model="${esc(m.id)}" data-installed="${isInstalled}" title="${esc((m.note||"")+" \u00b7 "+(m.size||m.ram||""))}">
+      <span class="ep-status ${isInstalled?"installed":"not-installed"}"></span>
+      <span class="ep-label">${esc(shortName(m.id))}</span>
+      <span class="ep-dots">${dots}</span>
+    </button>`;
+  }).join("");
+
+  // ── Quick missions (contextual, data-driven) ──
+  const quickMissions = [];
+  actions.slice(0,4).forEach((a) => {
+    const pClass = a.priority<=1?"qo-urgent":(a.priority<=2?"qo-warn":"qo-info");
+    const goalText = (a.text||"").replace(/<[^>]*>/g,"").slice(0,80);
+    quickMissions.push(`<div class="qo-card ${pClass}" data-area="${esc(a.area||"")}" data-mode="${esc(a.action||"audit")}" data-goal="${esc(goalText)}">
+      <span class="qo-icon">${a.icon}</span>
+      <div class="qo-title">${a.text}</div>
+      <div class="qo-sub">${esc(a.area||"")} \u00b7 ${esc(a.action||"audit")}</div>
+    </div>`);
+  });
+  if (quickMissions.length < 4) {
+    missionPresets.slice(0, 4 - quickMissions.length).forEach((p) => {
+      quickMissions.push(`<div class="qo-card qo-info" data-area="${esc(selectedModule.area)}" data-mode="${esc(p.mode)}" data-goal="${esc(p.goal)}">
+        <span class="qo-icon">${p.mode==="audit"?"\ud83d\udd0d":(p.mode==="edit"?"\u270f\ufe0f":"\ud83d\udc41")}</span>
+        <div class="qo-title">${esc(p.label)}</div>
+        <div class="qo-sub">${esc(p.mode)}</div>
+      </div>`);
+    });
+  }
+  const quickMissionsHtml = quickMissions.join("");
+
+  // ── Command bar mode buttons ──
+  const cmdModeButtons = launchModes.map((mode) => {
+    const selected = mode.id === defaultLaunchMode;
+    return `<button class="cmd-mode-btn${selected?" active":""}" type="button" data-mode="${esc(mode.id)}">${esc(mode.label)}</button>`;
   }).join("");
 
   // ── Assemble time label ──
@@ -874,6 +891,79 @@ function buildDashboardHtml(summary) {
   .finding-status.error{background:rgba(239,68,68,0.15);color:var(--red)}
   .footer{text-align:center;padding:10px;color:var(--text-dim);font-family:var(--mono);font-size:.56rem;border-top:1px solid var(--border);margin-top:12px}
   @media(max-width:960px){.score-bar{flex-wrap:wrap}.sb-cell{min-width:25%}}
+
+  /* ── Mission Control ── */
+  .mission-ctrl{background:var(--surface);border:1px solid rgba(34,211,238,0.12);border-radius:10px;padding:14px;margin-bottom:10px;position:relative;overflow:hidden}
+  .mission-ctrl::before{content:'';position:absolute;inset:-1px;border-radius:11px;background:linear-gradient(135deg,rgba(34,211,238,0.08),transparent 60%);pointer-events:none;z-index:0}
+  .mission-ctrl>*{position:relative;z-index:1}
+  .mission-ctrl .panel-title{margin-bottom:10px}
+
+  /* ── Command Bar ── */
+  .cmd-bar{display:flex;align-items:center;background:var(--bg);border:1.5px solid var(--border);border-radius:8px;padding:2px;margin-bottom:12px;transition:border-color .2s,box-shadow .2s}
+  .cmd-bar:focus-within{border-color:var(--cyan);box-shadow:0 0 16px rgba(34,211,238,0.08)}
+  .cmd-tag{display:flex;align-items:center;gap:5px;background:rgba(34,211,238,0.1);border:1px solid rgba(34,211,238,0.2);border-radius:6px;padding:6px 10px;margin:2px;font-family:var(--mono);font-size:.72rem;font-weight:600;color:var(--cyan);cursor:pointer;white-space:nowrap;transition:all .15s;user-select:none}
+  .cmd-tag:hover{background:rgba(34,211,238,0.18)}
+  .cmd-tag .cmd-icon{font-size:.85rem}
+  .cmd-sep{color:var(--border);font-size:.8rem;margin:0 2px;user-select:none}
+  .cmd-input{flex:1;background:transparent;border:none;padding:8px 10px;color:var(--text-bright);font-family:var(--mono);font-size:.78rem;outline:none;min-width:0}
+  .cmd-input::placeholder{color:var(--text-dim);font-style:italic}
+  .cmd-mode{display:flex;align-items:center;border-left:1px solid var(--border);margin:4px 0;padding-left:2px;flex-shrink:0}
+  .cmd-mode-btn{appearance:none;background:transparent;border:none;font-family:var(--mono);font-size:.62rem;padding:6px 8px;cursor:pointer;color:var(--text-dim);transition:all .15s;border-radius:4px;text-transform:uppercase;letter-spacing:.04em}
+  .cmd-mode-btn:hover{color:var(--text-bright)}
+  .cmd-mode-btn.active{color:var(--cyan);background:rgba(34,211,238,0.08);font-weight:600}
+  .cmd-launch{background:var(--cyan);color:var(--bg);border:none;border-radius:6px;padding:8px 18px;font-family:var(--mono);font-size:.72rem;font-weight:700;cursor:pointer;margin:2px;transition:all .15s;letter-spacing:.05em;flex-shrink:0}
+  .cmd-launch:hover{opacity:.85;box-shadow:0 0 16px rgba(34,211,238,0.25)}
+  .cmd-launch:disabled{opacity:.25;cursor:not-allowed;box-shadow:none}
+
+  /* ── MC two-column layout ── */
+  .mc-cols{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
+  @media(max-width:700px){.mc-cols{grid-template-columns:1fr}}
+  .section-label{font-family:var(--mono);font-size:.56rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px;display:flex;align-items:center;gap:8px}
+  .section-label::after{content:'';flex:1;height:1px;background:var(--border)}
+
+  /* ── Target Grid ── */
+  .target-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(85px,1fr));gap:5px}
+  .target-card{background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:8px 6px;cursor:pointer;transition:all .2s;text-align:center;position:relative}
+  .target-card:hover{border-color:var(--border-hi);transform:translateY(-1px)}
+  .target-card.selected{border-color:var(--cyan);background:rgba(34,211,238,0.06);box-shadow:0 0 14px rgba(34,211,238,0.1)}
+  .target-card.selected::after{content:'';position:absolute;bottom:-1px;left:20%;right:20%;height:2px;background:var(--cyan);border-radius:1px}
+  .tc-icon{font-size:1.1rem;display:block;margin-bottom:2px}
+  .tc-name{font-family:var(--mono);font-size:.62rem;font-weight:700;color:var(--text-bright);display:block;margin-bottom:2px}
+  .tc-status{font-family:var(--mono);font-size:.54rem;font-weight:600;display:block;margin-bottom:3px}
+  .tc-bar{height:2px;background:var(--bg);border-radius:1px;overflow:hidden;margin-bottom:2px}
+  .tc-bar-fill{height:100%;border-radius:1px;transition:width .3s}
+  .tc-meta{font-family:var(--mono);font-size:.48rem;color:var(--text-dim);display:block}
+
+  /* ── Quick Ops ── */
+  .quickops{display:grid;gap:5px}
+  .qo-card{background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:8px 10px 8px 12px;cursor:pointer;transition:all .2s;position:relative;overflow:hidden}
+  .qo-card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;border-radius:7px 0 0 7px}
+  .qo-card.qo-urgent::before{background:var(--red)}
+  .qo-card.qo-warn::before{background:var(--amber)}
+  .qo-card.qo-info::before{background:var(--cyan)}
+  .qo-card:hover{border-color:var(--border-hi);transform:translateY(-1px);box-shadow:0 2px 8px rgba(0,0,0,0.2)}
+  .qo-icon{font-size:.8rem;margin-right:6px;float:left}
+  .qo-title{font-size:.66rem;font-weight:500;color:var(--text-bright);line-height:1.3;margin-bottom:2px}
+  .qo-title b{color:var(--text-bright)}
+  .qo-sub{font-family:var(--mono);font-size:.52rem;color:var(--text-dim);clear:both}
+
+  /* ── Engine Strip ── */
+  .engine-strip{display:flex;align-items:center;gap:5px;flex-wrap:wrap;padding-top:10px;border-top:1px solid var(--border)}
+  .engine-label{font-family:var(--mono);font-size:.54rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em;margin-right:4px;flex-shrink:0}
+  .engine-pill{appearance:none;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:4px 8px;font-family:var(--mono);font-size:.58rem;color:var(--text);cursor:pointer;transition:all .15s;display:inline-flex;align-items:center;gap:4px;position:relative}
+  .engine-pill:hover{border-color:var(--border-hi);color:var(--text-bright);background:var(--surface2)}
+  .engine-pill.ep-active{border-color:var(--green);background:rgba(52,211,153,0.08);color:var(--green);font-weight:600}
+  .engine-pill.ep-active .ep-label::before{content:'\u25b8 ';font-size:.5rem}
+  .ep-status{width:5px;height:5px;border-radius:50%;flex-shrink:0}
+  .ep-status.installed{background:var(--green)}
+  .ep-status.not-installed{background:var(--text-dim);opacity:.5}
+  .ep-status.pulling{background:var(--amber);animation:pulse 1s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+  .ep-label{white-space:nowrap}
+  .ep-dots{display:flex;gap:1px;margin-left:2px}
+  .ep-dot{width:3px;height:8px;border-radius:1px;background:var(--border)}
+  .ep-dot.filled{background:currentColor;opacity:.7}
+  .engine-pill.ep-active .ep-dot.filled{background:var(--green);opacity:1}
 </style>
 </head>
 <body>
@@ -899,44 +989,89 @@ function buildDashboardHtml(summary) {
   </div>
 
   ${actions.length ? `
-  <!-- Recommended Actions -->
-  <div class="panel" style="margin-bottom:8px">
-    <div class="panel-title">Recommended Actions</div>
-    <div class="action-list">${actionsHtml}</div>
-  </div>` : ""}
+  <!-- Mission Control -->
+  <div class="mission-ctrl" id="launchpad">
+    <div class="panel-title">Mission Control</div>
+
+    <!-- Command Bar -->
+    <div class="cmd-bar" id="cmd-bar">
+      <div class="cmd-tag" id="cmd-tag" onclick="cycleTarget()" title="Click to cycle modules">
+        <span class="cmd-icon" id="cmd-icon">${selectedModule.icon}</span>
+        <span id="cmd-area-label">${esc(selectedModule.name)}</span>
+      </div>
+      <span class="cmd-sep">\u25b8</span>
+      <input class="cmd-input" id="lp-goal" type="text" placeholder="Describe what the agent should do\u2026" autocomplete="off">
+      <input id="lp-area" type="hidden" value="${esc(selectedModule.area)}">
+      <input id="lp-mode" type="hidden" value="${defaultLaunchMode}">
+      <div class="cmd-mode">${cmdModeButtons}</div>
+      <button class="cmd-launch" id="lp-launch" onclick="launchMission()" disabled>LAUNCH</button>
+    </div>
+
+    <div class="mc-cols">
+      <div>
+        <div class="section-label">Target</div>
+        <div class="target-grid">${targetCards}</div>
+      </div>
+      <div>
+        <div class="section-label">Quick Missions</div>
+        <div class="quickops">${quickMissionsHtml}</div>
+      </div>
+    </div>
+
+    <!-- Engine Strip -->
+    <div class="engine-strip">
+      <span class="engine-label">Engine</span>
+      ${enginePills}
+    </div>
+
+    <div id="lp-status" class="launch-status"></div>
+    <div id="lp-log-area" class="launch-log-area" style="display:none">
+      <pre id="lp-log" class="launch-log"></pre>
+    </div>
+  </div>` : `
+  <!-- Mission Control (no actions yet) -->
+  <div class="mission-ctrl" id="launchpad">
+    <div class="panel-title">Mission Control</div>
+    <div class="cmd-bar" id="cmd-bar">
+      <div class="cmd-tag" id="cmd-tag" onclick="cycleTarget()" title="Click to cycle modules">
+        <span class="cmd-icon" id="cmd-icon">${selectedModule.icon}</span>
+        <span id="cmd-area-label">${esc(selectedModule.name)}</span>
+      </div>
+      <span class="cmd-sep">\u25b8</span>
+      <input class="cmd-input" id="lp-goal" type="text" placeholder="Describe what the agent should do\u2026" autocomplete="off">
+      <input id="lp-area" type="hidden" value="${esc(selectedModule.area)}">
+      <input id="lp-mode" type="hidden" value="${defaultLaunchMode}">
+      <div class="cmd-mode">${cmdModeButtons}</div>
+      <button class="cmd-launch" id="lp-launch" onclick="launchMission()" disabled>LAUNCH</button>
+    </div>
+    <div class="mc-cols">
+      <div>
+        <div class="section-label">Target</div>
+        <div class="target-grid">${targetCards}</div>
+      </div>
+      <div>
+        <div class="section-label">Quick Missions</div>
+        <div class="quickops">${quickMissionsHtml}</div>
+      </div>
+    </div>
+    <div class="engine-strip">
+      <span class="engine-label">Engine</span>
+      ${enginePills}
+    </div>
+    <div id="lp-status" class="launch-status"></div>
+    <div id="lp-log-area" class="launch-log-area" style="display:none">
+      <pre id="lp-log" class="launch-log"></pre>
+    </div>
+  </div>`}
 
   <div class="grid-main">
     <!-- Left column -->
     <div class="stack">
 
-      <!-- Module Health -->
-      <div class="panel">
-        <div class="panel-title">Module Health</div>
-        <div class="health-grid">${healthCards}</div>
-      </div>
-
       <!-- Activity Timeline -->
       <div class="panel">
         <div class="panel-title">Activity${summary.recent_runs.length ? ` <span style="font-weight:400;color:var(--text-dim)">${summary.recent_runs.length} runs</span>` : ""}</div>
-        ${timelineHtml ? `<div class="timeline">${timelineHtml}</div>` : `<p class="empty">No missions yet. Launch one below.</p>`}
-      </div>
-
-      <!-- Launch Pad -->
-      <div class="launch-bar" id="launchpad">
-        <div class="panel-title">Launch Mission</div>
-        <div class="mod-chips">${moduleOptions}</div>
-        <input id="lp-area" type="hidden" value="${esc(selectedModule.area)}">
-        <div class="launch-input-row">
-          <input id="lp-goal" type="text" placeholder="What should the agent do?"/>
-          <button id="lp-launch" onclick="launchMission()" disabled>LAUNCH</button>
-        </div>
-        <div class="mode-chips">${modeButtons}</div>
-        <input id="lp-mode" type="hidden" value="${defaultLaunchMode}">
-        <div class="preset-row">${presetButtons}</div>
-        <div id="lp-status" class="launch-status"></div>
-        <div id="lp-log-area" class="launch-log-area" style="display:none">
-          <pre id="lp-log" class="launch-log"></pre>
-        </div>
+        ${timelineHtml ? `<div class="timeline">${timelineHtml}</div>` : `<p class="empty">No missions yet. Launch one above.</p>`}
       </div>
     </div>
 
@@ -951,11 +1086,6 @@ function buildDashboardHtml(summary) {
         <div id="findings-container"></div>
         </div>
       </div>
-
-      <!-- Models (collapsed) -->
-      <details class="panel"><summary><span class="panel-title">Models <button class="model-btn" onclick="event.stopPropagation();refreshModels()" style="font-size:.62rem;padding:2px 6px;margin-left:8px" id="model-refresh-btn">\u21bb</button></span></summary>
-        <div id="model-roster-container"><table id="model-table"><thead><tr><th></th><th>Model</th><th>Best For</th><th>Size</th><th>Status</th><th></th></tr></thead><tbody>${modelRows}</tbody></table></div>
-      </details>
     </div>
   </div>
 
@@ -972,9 +1102,10 @@ function postHeaders(){return {'Content-Type':'application/json','X-CSRF-Token':
 function timeAgo(iso){if(!iso)return'';const ms=Date.now()-new Date(iso).getTime();if(ms<0)return'now';const m=Math.floor(ms/60000);if(m<1)return'now';if(m<60)return m+'m';const h=Math.floor(m/60);if(h<24)return h+'h';const d=Math.floor(h/24);return d+'d'}
 function refreshTimestamps(){document.querySelectorAll('.tl-time[data-ts]').forEach(el=>{const a=timeAgo(el.dataset.ts);if(a)el.textContent=a})}
 
-function syncSelectedModule(area){document.getElementById('lp-area').value=area;document.querySelectorAll('.mod-chip').forEach(c=>{c.classList.toggle('selected',c.dataset.area===area);c.setAttribute('aria-pressed',c.dataset.area===area?'true':'false')})}
-function setLaunchMode(mode){document.getElementById('lp-mode').value=mode;document.querySelectorAll('.mode-chip').forEach(c=>{c.classList.toggle('selected',c.dataset.mode===mode);c.setAttribute('aria-pressed',c.dataset.mode===mode?'true':'false')})}
-function quickLaunch(area,action){syncSelectedModule(area);const lp=document.getElementById('launchpad');if(lp)lp.scrollIntoView({behavior:'smooth'});const gi=document.getElementById('lp-goal');if(gi)gi.focus();if(action==='edit')setLaunchMode('edit');else setLaunchMode('audit')}
+function selectTarget(area,icon,name){document.getElementById('lp-area').value=area;const ci=document.getElementById('cmd-icon');if(ci)ci.textContent=icon||'';const cl=document.getElementById('cmd-area-label');if(cl)cl.textContent=name||area;document.querySelectorAll('.target-card').forEach(c=>c.classList.toggle('selected',c.dataset.area===area))}
+function cycleTarget(){const cards=[...document.querySelectorAll('.target-card')];const cur=cards.findIndex(c=>c.classList.contains('selected'));const next=cards[(cur+1)%cards.length];if(next)selectTarget(next.dataset.area,next.dataset.icon,next.dataset.name)}
+function setLaunchMode(mode){document.getElementById('lp-mode').value=mode;document.querySelectorAll('.cmd-mode-btn').forEach(c=>c.classList.toggle('active',c.dataset.mode===mode))}
+function fillMission(area,mode,goal){const card=document.querySelector('.target-card[data-area="'+area+'"]');if(card)selectTarget(area,card.dataset.icon,card.dataset.name);setLaunchMode(mode||'audit');const gi=document.getElementById('lp-goal');if(gi){gi.value=goal||'';gi.focus()}const lp=document.getElementById('launchpad');if(lp)lp.scrollIntoView({behavior:'smooth'})}
 
 async function checkServer(){try{const c=new AbortController();const t=setTimeout(()=>c.abort(),2000);const r=await fetch(BASE+'/api/health',{signal:c.signal,mode:'cors'});clearTimeout(t);if(r.ok){const d=await r.json();serverOnline=true;const dot=document.getElementById('server-dot'),lbl=document.getElementById('server-label');if(dot&&d.busy){dot.className='server-dot online';dot.style.background='var(--amber)';dot.style.boxShadow='0 0 6px var(--amber)';lbl.textContent='busy: '+d.activeMission.area;lbl.style.color='var(--amber)'}else if(dot){dot.className='server-dot online';dot.style.background='';dot.style.boxShadow='';lbl.textContent='online';lbl.style.color=''}}}catch{serverOnline=false}const d=document.getElementById('server-dot'),l=document.getElementById('server-label');if(!serverOnline&&d){d.className='server-dot offline';d.style.background='';d.style.boxShadow='';l.textContent='offline';l.style.color=''}const b=document.getElementById('lp-launch');if(b)b.disabled=!serverOnline}
 
@@ -984,11 +1115,11 @@ async function pollLog(){if(!activePollToken)return;try{const r=await fetch(BASE
 
 async function switchModel(id){if(!serverOnline)return;try{const r=await fetch(BASE+'/api/model',{method:'POST',headers:postHeaders(),body:JSON.stringify({model:id})});const d=await r.json();if(d.ok)await refreshModels()}catch(e){alert('Error: '+e.message)}}
 
-async function pullModel(id,btn){if(!serverOnline)return;btn.disabled=true;btn.textContent='pulling...';try{const r=await fetch(BASE+'/api/pull',{method:'POST',headers:postHeaders(),body:JSON.stringify({model:id})});const d=await r.json();if(d.ok){btn.textContent='started...';pollPull(id,btn)}else{btn.textContent=d.error||'failed';setTimeout(()=>{btn.textContent='pull';btn.disabled=false},3000)}}catch{btn.textContent='error';setTimeout(()=>{btn.textContent='pull';btn.disabled=false},3000)}}
+async function pullModel(id,btn){if(!serverOnline)return;btn.disabled=true;const lbl=btn.querySelector('.ep-label')||btn;const origText=lbl.textContent;lbl.textContent='pulling\u2026';const st=btn.querySelector('.ep-status');if(st)st.className='ep-status pulling';try{const r=await fetch(BASE+'/api/pull',{method:'POST',headers:postHeaders(),body:JSON.stringify({model:id})});const d=await r.json();if(d.ok){lbl.textContent='started\u2026';pollPull(id,btn,lbl,origText)}else{lbl.textContent=d.error||'failed';if(st)st.className='ep-status not-installed';setTimeout(()=>{lbl.textContent=origText;btn.disabled=false},3000)}}catch{lbl.textContent='error';if(st)st.className='ep-status not-installed';setTimeout(()=>{lbl.textContent=origText;btn.disabled=false},3000)}}
 
-async function pollPull(id,btn){let tries=0;const poll=async()=>{tries++;try{const r=await fetch(BASE+'/api/models');const d=await r.json();if(d.ok){const m=d.models.find(x=>x.id===id);if(m&&m.installed){btn.textContent='\\u2713';setTimeout(()=>refreshModels(),500);return}}}catch{}if(tries<60)setTimeout(poll,5000);else{btn.textContent='timeout';setTimeout(()=>{btn.textContent='pull';btn.disabled=false},3000)}};setTimeout(poll,3000)}
+async function pollPull(id,btn,lbl,origText){let tries=0;const poll=async()=>{tries++;try{const r=await fetch(BASE+'/api/models');const d=await r.json();if(d.ok){const m=d.models.find(x=>x.id===id);if(m&&m.installed){lbl.textContent=origText;const st=btn.querySelector('.ep-status');if(st)st.className='ep-status installed';btn.dataset.installed='true';btn.disabled=false;setTimeout(()=>refreshModels(),500);return}}}catch{}if(tries<60)setTimeout(poll,5000);else{lbl.textContent=origText;const st=btn.querySelector('.ep-status');if(st)st.className='ep-status not-installed';btn.disabled=false}};setTimeout(poll,3000)}
 
-async function refreshModels(){if(!serverOnline)return;const btn=document.getElementById('model-refresh-btn');if(btn){btn.disabled=true;btn.textContent='\\u21bb'}try{const r=await fetch(BASE+'/api/models');const d=await r.json();if(d.ok&&d.html){const tbl=document.getElementById('model-table');if(tbl){const tbody=tbl.querySelector('tbody');if(tbody)tbody.innerHTML=d.html}}}catch{}finally{if(btn){btn.disabled=false;btn.textContent='\\u21bb'}}}
+async function refreshModels(){if(!serverOnline)return;try{const r=await fetch(BASE+'/api/models');const d=await r.json();if(d.ok&&d.models){d.models.forEach(m=>{const p=document.querySelector('.engine-pill[data-model="'+m.id+'"]');if(!p)return;const s=p.querySelector('.ep-status');if(s)s.className='ep-status '+(m.installed?'installed':'not-installed');p.dataset.installed=String(!!m.installed);if(m.active){document.querySelectorAll('.engine-pill').forEach(x=>x.classList.remove('ep-active'));p.classList.add('ep-active')}})}}catch{}}
 
 window._findingsData=[];
 async function loadFindings(){if(!serverOnline)return;const container=document.getElementById('findings-container');const btn=document.getElementById('findings-refresh-btn');if(btn){btn.disabled=true;btn.textContent='\\u21bb ...'}container.innerHTML='<p class="empty">Loading...</p>';try{const r=await fetch(BASE+'/api/findings');const d=await r.json();if(!d.ok){container.innerHTML='<p class="empty">Error: '+(d.error||'?')+'</p>';return}const findings=d.findings||[];window._findingsData=findings;if(!findings.length){container.innerHTML='<p class="empty">No open findings.</p>';return}
@@ -1004,12 +1135,12 @@ function suppressFinding(idx,btn){const f=window._findingsData[idx];if(!f)return
 function toggleDetail(id){const r=document.getElementById(id);if(!r)return;r.style.display=r.style.display==='none'?'block':'none'}
 
 // Wire events
-document.querySelectorAll('.mod-chip').forEach(c=>c.addEventListener('click',()=>syncSelectedModule(c.dataset.area)));
-document.querySelectorAll('.mode-chip').forEach(c=>c.addEventListener('click',()=>setLaunchMode(c.dataset.mode)));
-document.querySelectorAll('.preset-btn').forEach(b=>b.addEventListener('click',()=>{if(b.dataset.mode)setLaunchMode(b.dataset.mode);const gi=document.getElementById('lp-goal');if(gi){gi.value=b.dataset.goal||'';gi.focus()}}));
-document.querySelectorAll('.hc').forEach(c=>c.addEventListener('click',()=>{syncSelectedModule(c.dataset.area);document.getElementById('launchpad').scrollIntoView({behavior:'smooth'})}));
+document.querySelectorAll('.target-card').forEach(c=>c.addEventListener('click',()=>selectTarget(c.dataset.area,c.dataset.icon,c.dataset.name)));
+document.querySelectorAll('.cmd-mode-btn').forEach(b=>b.addEventListener('click',()=>setLaunchMode(b.dataset.mode)));
+document.querySelectorAll('.qo-card').forEach(c=>c.addEventListener('click',()=>fillMission(c.dataset.area,c.dataset.mode,c.dataset.goal)));
+document.querySelectorAll('.engine-pill').forEach(p=>p.addEventListener('click',()=>{const id=p.dataset.model;if(p.dataset.installed==='true')switchModel(id);else pullModel(id,p)}));
 
-syncSelectedModule('${esc(selectedModule.area)}');setLaunchMode('${esc(defaultLaunchMode)}');
+selectTarget('${esc(selectedModule.area)}','${selectedModule.icon}','${esc(selectedModule.name)}');setLaunchMode('${esc(defaultLaunchMode)}');
 refreshTimestamps();setInterval(refreshTimestamps,60000);
 checkServer();setInterval(checkServer,12000);
 async function checkSibling(){try{const r=await fetch('http://localhost:4400/api/health',{signal:AbortSignal.timeout(2000),mode:'cors'});const d=document.getElementById('frontend-dot');if(d)d.className='nav-dot '+(r.ok?'online':'offline')}catch{const d=document.getElementById('frontend-dot');if(d)d.className='nav-dot offline'}}
