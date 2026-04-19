@@ -303,7 +303,6 @@ router.get('/', createInputMiddleware('fastForecast'), async (req, res) => {
                 res.status(503).json({
                     success: false,
                     error: 'Forecast service unavailable',
-                    details: error.message,
                     suggestion: 'Try again in a few minutes'
                 });
                 return;
@@ -330,7 +329,6 @@ router.get('/', createInputMiddleware('fastForecast'), async (req, res) => {
         res.status(500).json({
             success: false,
             error: 'Internal server error',
-            details: error.message,
             responseTime: `${responseTime}ms`
         });
     }
@@ -355,8 +353,7 @@ router.get('/cache/stats', async (req, res) => {
         logger.error(`Cache stats error: ${error.message}`);
         res.status(500).json({
             success: false,
-            error: 'Internal server error',
-            details: error.message
+            error: 'Internal server error'
         });
     }
 });

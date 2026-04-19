@@ -83,7 +83,7 @@ async function generateComprehensiveForecast(location) {
     return {
       success: false,
       location,
-      error: error.message,
+      error: 'Forecast generation failed',
       timestamp: new Date().toISOString()
     };
   }
@@ -159,7 +159,7 @@ async function batchGenerateForecasts(locations, batchSize = 3) {
     console.error('❌ Batch generation failed:', error);
     return {
       success: false,
-      error: error.message,
+      error: 'Batch generation failed',
       duration_ms: Date.now() - startTime
     };
   }
@@ -357,7 +357,7 @@ router.get('/', createInputMiddleware('forecast'), async (req, res) => {
     console.error('❌ Forecast API error:', error);
     res.status(500).json({
       success: false,
-      error: error.message
+      error: 'Internal server error'
     });
   }
 });
@@ -381,7 +381,7 @@ router.post('/batch', async (req, res) => {
     console.error('❌ Batch forecast error:', error);
     res.status(500).json({
       success: false,
-      error: error.message
+      error: 'Internal server error'
     });
   }
 });

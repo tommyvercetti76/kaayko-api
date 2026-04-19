@@ -137,7 +137,7 @@ router.get('/', async (req, res) => {
 
   } catch (error) {
     logger.error('nearbyWater error:', error);
-    res.status(500).json({ success: false, error: 'Internal server error', message: error.message });
+    res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
