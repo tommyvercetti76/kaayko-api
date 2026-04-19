@@ -898,6 +898,35 @@ function buildDashboardHtml(summary) {
   .sev-medium,.sev-moderate{background:rgba(96,165,250,0.15);color:var(--blue)}
   .sev-low,.sev-minor,.sev-info{background:rgba(107,127,148,0.15);color:var(--text-dim)}
   code{font-family:var(--mono);font-size:.7rem;color:var(--cyan);background:rgba(34,211,238,0.08);padding:1px 5px;border-radius:3px}
+
+  /* ── Fix All ── */
+  .fix-all-wrap{margin-top:8px;border-top:1px solid var(--border);padding-top:8px}
+  .fix-all-bar{display:flex;align-items:center;gap:8px}
+  .fix-all-btn{appearance:none;background:linear-gradient(135deg,rgba(52,211,153,0.15),rgba(34,211,238,0.1));border:1px solid rgba(52,211,153,0.3);color:var(--green);border-radius:6px;padding:6px 14px;font-family:var(--mono);font-size:.66rem;font-weight:700;cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:6px;letter-spacing:.03em}
+  .fix-all-btn:hover{background:linear-gradient(135deg,rgba(52,211,153,0.25),rgba(34,211,238,0.18));box-shadow:0 0 12px rgba(52,211,153,0.15)}
+  .fix-all-btn:disabled{opacity:.35;cursor:not-allowed;box-shadow:none}
+  .fix-all-btn .fa-icon{font-size:.8rem}
+  .fix-all-info{font-family:var(--mono);font-size:.58rem;color:var(--text-dim);flex:1}
+  .fix-all-progress{margin-top:8px;display:none}
+  .fix-all-progress.active{display:block}
+  .fa-pipeline{display:grid;gap:4px;margin-bottom:8px}
+  .fa-step{display:flex;align-items:center;gap:8px;padding:5px 8px;background:var(--bg);border:1px solid var(--border);border-radius:5px;font-family:var(--mono);font-size:.62rem}
+  .fa-step-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+  .fa-step-dot.pending{background:var(--text-dim);opacity:.4}
+  .fa-step-dot.running{background:var(--amber);animation:pulse 1s infinite}
+  .fa-step-dot.done{background:var(--green)}
+  .fa-step-dot.failed{background:var(--red)}
+  .fa-step-track{color:var(--text-bright);font-weight:600;min-width:60px}
+  .fa-step-info{color:var(--text-dim);flex:1}
+  .fa-step-result{font-weight:600}
+  .fa-stats{font-family:var(--mono);font-size:.56rem;color:var(--text-dim);margin-top:4px;padding:6px 8px;background:var(--bg);border-radius:4px;display:flex;gap:12px;flex-wrap:wrap}
+  .fa-stat{display:flex;align-items:center;gap:4px}
+  .fa-stat-val{font-weight:700}
+  .fa-stat-val.good{color:var(--green)}
+  .fa-stat-val.warn{color:var(--amber)}
+  .fa-stat-val.bad{color:var(--red)}
+  .fa-stat-val.dim{color:var(--text-dim)}
+
   .applied-file{background:rgba(52,211,153,0.12);color:var(--green)}
   .empty{color:var(--text-dim);font-style:italic;text-align:center;padding:14px;font-size:.8rem}
   table{width:100%;border-collapse:collapse}
@@ -1107,6 +1136,19 @@ function buildDashboardHtml(summary) {
         ${findingsHtml || `<p class="empty">No open findings.</p>`}
         <div id="findings-container"></div>
         </div>
+        ${vulnFindings.length > 0 ? `
+        <div class="fix-all-wrap">
+          <div class="fix-all-bar">
+            <button class="fix-all-btn" id="fix-all-btn" onclick="fixAll()" disabled>
+              <span class="fa-icon">\u26a1</span> FIX ALL
+            </button>
+            <span class="fix-all-info" id="fix-all-info">Triage \u2192 verify \u2192 fix (${vulnFindings.length} vulns across ${scannedModules.filter(m=>m.vulns>0).length} modules)</span>
+          </div>
+          <div class="fix-all-progress" id="fix-all-progress">
+            <div class="fa-stats" id="fix-all-stats"></div>
+            <div class="fa-pipeline" id="fix-all-pipeline"></div>
+          </div>
+        </div>` : ""}
       </div>
     </div>
   </div>
@@ -1137,7 +1179,7 @@ function selectEngine(pill){const id=pill.dataset.model;if(selectedEngine===id){
 function cancelEngineSelect(){selectedEngine=null;document.querySelectorAll('.engine-pill').forEach(p=>p.classList.remove('ep-selected'));document.getElementById('engine-confirm').classList.remove('visible')}
 function confirmEngine(){if(!selectedEngine)return;const pill=document.querySelector('.engine-pill[data-model="'+selectedEngine+'"]');if(!pill)return;const installed=pill.dataset.installed==='true';if(installed){switchModel(selectedEngine);cancelEngineSelect()}else{pullModel(selectedEngine,pill);cancelEngineSelect()}}
 
-async function checkServer(){try{const c=new AbortController();const t=setTimeout(()=>c.abort(),2000);const r=await fetch(BASE+'/api/health',{signal:c.signal,mode:'cors'});clearTimeout(t);if(r.ok){const d=await r.json();serverOnline=true;const dot=document.getElementById('server-dot'),lbl=document.getElementById('server-label');if(dot&&d.busy){dot.className='server-dot online';dot.style.background='var(--amber)';dot.style.boxShadow='0 0 6px var(--amber)';lbl.textContent='busy: '+d.activeMission.area;lbl.style.color='var(--amber)'}else if(dot){dot.className='server-dot online';dot.style.background='';dot.style.boxShadow='';lbl.textContent='online';lbl.style.color=''}}}catch{serverOnline=false}const d=document.getElementById('server-dot'),l=document.getElementById('server-label');if(!serverOnline&&d){d.className='server-dot offline';d.style.background='';d.style.boxShadow='';l.textContent='offline';l.style.color=''}const b=document.getElementById('lp-launch');if(b)b.disabled=!serverOnline}
+async function checkServer(){try{const c=new AbortController();const t=setTimeout(()=>c.abort(),2000);const r=await fetch(BASE+'/api/health',{signal:c.signal,mode:'cors'});clearTimeout(t);if(r.ok){const d=await r.json();serverOnline=true;const dot=document.getElementById('server-dot'),lbl=document.getElementById('server-label');if(dot&&d.busy){dot.className='server-dot online';dot.style.background='var(--amber)';dot.style.boxShadow='0 0 6px var(--amber)';lbl.textContent='busy: '+d.activeMission.area;lbl.style.color='var(--amber)'}else if(dot){dot.className='server-dot online';dot.style.background='';dot.style.boxShadow='';lbl.textContent='online';lbl.style.color=''}}}catch{serverOnline=false}const d=document.getElementById('server-dot'),l=document.getElementById('server-label');if(!serverOnline&&d){d.className='server-dot offline';d.style.background='';d.style.boxShadow='';l.textContent='offline';l.style.color=''}const b=document.getElementById('lp-launch');if(b)b.disabled=!serverOnline;const fab=document.getElementById('fix-all-btn');if(fab&&!fab.dataset.running)fab.disabled=!serverOnline}
 
 async function launchMission(){if(!serverOnline)return;const a=document.getElementById('lp-area').value,g=document.getElementById('lp-goal').value.trim(),m=document.getElementById('lp-mode').value,s=document.getElementById('lp-status');if(!g){s.textContent='Write a goal first';s.style.color='var(--red)';return}const b=document.getElementById('lp-launch');b.disabled=true;s.textContent='Launching...';s.style.color='var(--amber)';try{const r=await fetch(BASE+'/api/launch',{method:'POST',headers:postHeaders(),body:JSON.stringify({area:a,goal:g,mode:m,goalMode:m==='dry-run'?'edit':m})});const d=await r.json();if(r.status===409){s.textContent=d.error||'Already running';s.style.color='var(--amber)';b.disabled=false;return}if(d.ok){s.textContent='Running (PID '+d.pid+')';s.style.color='var(--green)';activePollToken=d.logFile;document.getElementById('lp-log-area').style.display='block';pollLog()}else{s.textContent=d.error||'Failed';s.style.color='var(--red)';b.disabled=false}}catch(e){s.textContent=e.message;s.style.color='var(--red)';b.disabled=false}}
 
@@ -1161,6 +1203,28 @@ container.innerHTML=groups.map((f,i)=>{const sev='sev-'+(f.severity||'info');con
 async function implementFinding(idx,btn){if(!serverOnline)return;const findings=window._findingsData;if(!findings[idx])return;const f=findings[idx];btn.disabled=true;btn.textContent='\\u26a1 ...';const status=document.getElementById('finding-status-'+idx);if(status){status.textContent='running...';status.className='finding-status implementing'}try{const r=await fetch(BASE+'/api/implement',{method:'POST',headers:postHeaders(),body:JSON.stringify({track:f.track,title:f.title,detail:f.detail,severity:f.severity,line_refs:f.line_refs||[],file_paths:f.file_paths||[]})});const d=await r.json();if(d.ok){if(status){status.textContent='\\u2713 PID '+d.pid;status.className='finding-status done'}btn.textContent='\\u2713'}else{if(status){status.textContent=d.error||'failed';status.className='finding-status error'}btn.textContent='retry';btn.disabled=false}}catch(e){if(status){status.textContent=e.message;status.className='finding-status error'}btn.textContent='retry';btn.disabled=false}}
 
 function suppressFinding(idx,btn){const f=window._findingsData[idx];if(!f)return;if(!confirm('Suppress "'+f.title+'"?'))return;btn.disabled=true;btn.textContent='\\u2713';const card=document.getElementById('finding-'+idx);if(card){card.style.opacity='0.3'}}
+
+// ── Fix All ──
+async function fixAll(){if(!serverOnline)return;const btn=document.getElementById('fix-all-btn');const info=document.getElementById('fix-all-info');const progress=document.getElementById('fix-all-progress');const pipeline=document.getElementById('fix-all-pipeline');const statsEl=document.getElementById('fix-all-stats');if(!btn)return;
+if(!confirm('Run Fix All pipeline?\\n\\nThis will:\\n1. Triage all findings (filter false positives & hallucinations)\\n2. Verify against actual code\\n3. Fix verified issues by severity\\n\\nContinue?'))return;
+btn.disabled=true;info.textContent='Starting pipeline...';info.style.color='var(--amber)';
+try{const r=await fetch(BASE+'/api/fix-all',{method:'POST',headers:postHeaders()});const d=await r.json();if(r.status===409){info.textContent=d.error||'Already running';info.style.color='var(--amber)';btn.disabled=false;return}
+if(!d.ok){info.textContent=d.message||d.error||'Nothing to fix';info.style.color='var(--text-dim)';btn.disabled=false;return}
+// Show pipeline stats
+const p=d.pipeline;statsEl.innerHTML='<span class="fa-stat"><span class="fa-stat-val dim">'+p.total_raw+'</span> raw</span><span class="fa-stat"><span class="fa-stat-val dim">'+p.unique+'</span> unique</span><span class="fa-stat"><span class="fa-stat-val good">'+p.verified+'</span> verified</span><span class="fa-stat"><span class="fa-stat-val bad">'+p.hallucinations+'</span> hallucinated</span><span class="fa-stat"><span class="fa-stat-val warn">'+p.suppressed+'</span> suppressed</span><span class="fa-stat"><span class="fa-stat-val good">'+p.fixable+'</span> fixable</span>';
+// Show step cards
+pipeline.innerHTML=d.plan.map((s,i)=>'<div class="fa-step" id="fa-step-'+i+'"><span class="fa-step-dot pending" id="fa-dot-'+i+'"></span><span class="fa-step-track">'+esc(s.track)+'</span><span class="fa-step-info">'+s.findingCount+' finding'+(s.findingCount>1?'s':'')+' ('+esc(s.severity)+')</span><span class="fa-step-result" id="fa-result-'+i+'"></span></div>').join('');
+progress.classList.add('active');
+info.textContent='Running... PID '+d.pid;info.style.color='var(--green)';
+// Poll progress
+pollFixAll(d.fixAllId,d.plan.length)}catch(e){info.textContent=e.message;info.style.color='var(--red)';btn.disabled=false}}
+
+async function pollFixAll(id,total){try{const r=await fetch(BASE+'/api/fix-all/status');const d=await r.json();if(!d.ok)return;const prog=d.progress||{};const results=prog.results||[];
+// Update dots
+for(let i=0;i<total;i++){const dot=document.getElementById('fa-dot-'+i);const res=document.getElementById('fa-result-'+i);if(!dot)continue;if(i<results.length){dot.className='fa-step-dot '+(results[i].success?'done':'failed');if(res)res.textContent=results[i].success?'\\u2713':'\\u2717';if(res)res.style.color=results[i].success?'var(--green)':'var(--red)'}else if(prog.current&&i===results.length){dot.className='fa-step-dot running'}else{dot.className='fa-step-dot pending'}}
+const info=document.getElementById('fix-all-info');if(d.status==='complete'){const ok=results.filter(r=>r.success).length;const fail=results.filter(r=>!r.success).length;if(info){info.textContent='Complete: '+ok+' succeeded, '+fail+' failed';info.style.color=fail?'var(--amber)':'var(--green)'}document.getElementById('fix-all-btn').disabled=false;return}
+if(info){info.textContent='Fixing '+(prog.current||'...')+' ('+(prog.completed||0)+'/'+total+')';info.style.color='var(--amber)'}}catch{}
+setTimeout(()=>pollFixAll(id,total),3000)}
 
 function toggleDetail(id){const r=document.getElementById(id);if(!r)return;r.style.display=r.style.display==='none'?'block':'none'}
 

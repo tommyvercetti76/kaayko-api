@@ -80,7 +80,7 @@ async function main() {
       case "dashboard": dashboard.generateDashboard(config, args); break;
       case "export": exportDatasets(config, args); break;
       case "enqueue": enqueueTask(config, args); break;
-      case "worker": runWorker(config, runtimeConfig, args); break;
+      case "worker": await runWorker(config, runtimeConfig, args); break;
       case "scout": handleScoutCommand(config, runtimeConfig, args); break;
       case "diff": handleDiffCommand(config, args); break;
       case "approve": handleApproveCommand(config, args); break;
@@ -395,7 +395,9 @@ function runDoctor(config, runtimeConfig) {
 
   // Ollama
   const ollamaCheck = h.whichBinary("ollama");
+  const ollamaBinaryHealth = ollamaCheck ? h.probeOllamaBinary(ollamaCheck, 3000) : { ok: false, detail: "not found" };
   checks.push(h.makeCheck("Ollama binary", !!ollamaCheck, ollamaCheck || "not found (optional if using HTTP)"));
+  checks.push(h.makeCheck("Ollama binary healthy", ollamaBinaryHealth.ok, ollamaBinaryHealth.detail));
 
   // curl
   const curlCheck = h.whichBinary("curl");
@@ -405,12 +407,39 @@ function runDoctor(config, runtimeConfig) {
   if (runtime.base_url) {
     try {
       const tags = h.fetchOllamaTags(runtime, 3000);
-      checks.push(h.makeCheck("Ollama daemon reachable", true, `${tags.length} models available at ${runtime.base_url}`));
+      checks.push(h.makeCheck("Ollama runtime available", true, `${tags.length} models available at ${runtime.base_url}`));
     } catch (error) {
-      checks.push(h.makeCheck("Ollama daemon reachable", false, error.message));
+      const detail = h.summarizeOllamaFailure(error.message);
+      if (runtime.allow_cli_fallback === true && ollamaBinaryHealth.ok) {
+        checks.push(
+          h.makeCheck(
+            "Ollama runtime available",
+            true,
+            `HTTP unavailable (${detail}); CLI fallback verified via ${ollamaBinaryHealth.detail}`
+          )
+        );
+      } else {
+        checks.push(
+          h.makeCheck(
+            "Ollama runtime available",
+            false,
+            `${detail}${runtime.allow_cli_fallback === true ? `; CLI fallback unhealthy (${ollamaBinaryHealth.detail})` : ""}`
+          )
+        );
+      }
     }
+  } else if (runtime.allow_cli_fallback === true && ollamaBinaryHealth.ok) {
+    checks.push(h.makeCheck("Ollama runtime available", true, `No base_url configured; CLI fallback verified via ${ollamaBinaryHealth.detail}`));
   } else {
-    checks.push(h.makeCheck("Ollama daemon reachable", false, "No base_url configured in runtime.json"));
+    checks.push(
+      h.makeCheck(
+        "Ollama runtime available",
+        false,
+        runtime.allow_cli_fallback === true
+          ? `No base_url configured and CLI fallback unhealthy (${ollamaBinaryHealth.detail})`
+          : "No base_url configured in runtime.json"
+      )
+    );
   }
 
   // Active model
@@ -486,7 +515,7 @@ async function runAgent(config, runtimeConfig, args) {
       REPO_ROOT: h.REPO_ROOT
     };
 
-    agentRunner.executeLocalModelAgent(
+    const agentResult = agentRunner.executeLocalModelAgent(
       config, runtimeConfig, runDir, created.manifest,
       { track, area, goal, apply: applyMode, interactive, "goal-mode": goalMode },
       agentHelpers
@@ -495,8 +524,12 @@ async function runAgent(config, runtimeConfig, args) {
     h.updateRunManifest(runDir, (manifest) => {
       manifest.agent = {
         ...h.sanitizeAgentState(manifest.agent || {}),
-        model: runtimeConfig.local_model_runtime?.model || "heuristic",
-        provider: runtimeConfig.local_model_runtime?.provider || "ollama",
+        model: agentResult?.runtime?.model || manifest.agent?.model || runtimeConfig.local_model_runtime?.model || "heuristic",
+        provider: agentResult?.runtime?.provider || manifest.agent?.provider || runtimeConfig.local_model_runtime?.provider || "ollama",
+        inventory_strategy: agentResult?.runtime?.inventory_strategy || manifest.agent?.inventory_strategy,
+        analysis_strategy: agentResult?.runtime?.analysis_strategy || manifest.agent?.analysis_strategy,
+        fallback_reason: agentResult?.runtime?.fallback_reason || manifest.agent?.fallback_reason || null,
+        warnings: agentResult?.runtime?.warnings || manifest.agent?.warnings || [],
         goal_mode: goalMode
       };
       manifest.source = "agent";
@@ -563,7 +596,7 @@ async function pipelineRun(config, runtimeConfig, args) {
       };
 
       const goal = args.goal || title;
-      agentRunner.executeLocalModelAgent(
+      const agentResult = agentRunner.executeLocalModelAgent(
         config, runtimeConfig, runDir, created.manifest,
         { track, area, goal, apply: args.apply || "safe", "goal-mode": args["goal-mode"] || "edit" },
         agentHelpers
@@ -572,8 +605,12 @@ async function pipelineRun(config, runtimeConfig, args) {
       h.updateRunManifest(runDir, (manifest) => {
         manifest.agent = {
           ...h.sanitizeAgentState(manifest.agent || {}),
-          model: runtimeConfig.local_model_runtime?.model || "heuristic",
-          provider: runtimeConfig.local_model_runtime?.provider || "ollama",
+          model: agentResult?.runtime?.model || manifest.agent?.model || runtimeConfig.local_model_runtime?.model || "heuristic",
+          provider: agentResult?.runtime?.provider || manifest.agent?.provider || runtimeConfig.local_model_runtime?.provider || "ollama",
+          inventory_strategy: agentResult?.runtime?.inventory_strategy || manifest.agent?.inventory_strategy,
+          analysis_strategy: agentResult?.runtime?.analysis_strategy || manifest.agent?.analysis_strategy,
+          fallback_reason: agentResult?.runtime?.fallback_reason || manifest.agent?.fallback_reason || null,
+          warnings: agentResult?.runtime?.warnings || manifest.agent?.warnings || [],
           goal_mode: args["goal-mode"] || "edit"
         };
         manifest.source = "agent";
@@ -911,6 +948,66 @@ function enqueueTask(config, args) {
   console.log(`Queue: ${h.queueStatusCounts().pending} pending`);
 }
 
+function normalizeWorkerTask(task, taskPath) {
+  const track = task.track;
+  if (!track) {
+    throw new Error("Queued task is missing track.");
+  }
+
+  const fallbackLabel = path.basename(taskPath, path.extname(taskPath));
+  const fallbackGoal = task.goal || task.title || task.idea || task.task_id || task.id || fallbackLabel;
+  const area = task.area || track;
+  const label = task.task_id || task.id || fallbackLabel;
+
+  if (task.id || task.goalMode || task.priorityLabel || task.source) {
+    return {
+      strategy: "agent",
+      label,
+      args: {
+        _positional: [],
+        area,
+        goal: fallbackGoal,
+        apply: "safe",
+        "goal-mode": task.goalMode || "audit"
+      }
+    };
+  }
+
+  const idea = task.idea || h.slugify(fallbackGoal);
+  return {
+    strategy: "pipeline",
+    label,
+    args: {
+      _positional: [],
+      track,
+      idea,
+      goal: task.goal || fallbackGoal,
+      area,
+      title: task.title || fallbackGoal,
+      apply: "safe"
+    }
+  };
+}
+
+function moveWorkerTask(task, taskPath, fromState, toState, updates = {}) {
+  if (task.id) {
+    return pipelineQueue.moveItem(task.id, fromState, toState, updates);
+  }
+
+  const fileName = path.basename(taskPath);
+  const fromPath = path.join(h.QUEUE_DIRS[fromState], fileName);
+  const toPath = path.join(h.QUEUE_DIRS[toState], fileName);
+  const sourcePath = fs.existsSync(fromPath) ? fromPath : taskPath;
+  const nextTask = { ...task, ...updates, status: toState };
+
+  h.writeJson(toPath, nextTask);
+  if (fs.existsSync(sourcePath) && sourcePath !== toPath) {
+    fs.unlinkSync(sourcePath);
+  }
+
+  return nextTask;
+}
+
 async function runWorker(config, runtimeConfig, args) {
   const limit = Number(args.limit || 10);
   const tasks = h.listJsonFiles(h.QUEUE_DIRS.pending).slice(0, limit);
@@ -924,28 +1021,20 @@ async function runWorker(config, runtimeConfig, args) {
 
   for (const taskPath of tasks) {
     const task = h.loadJson(taskPath);
-    const processingPath = path.join(h.QUEUE_DIRS.processing, path.basename(taskPath));
-    fs.renameSync(taskPath, processingPath);
+    const workerTask = normalizeWorkerTask(task, taskPath);
+    moveWorkerTask(task, taskPath, "pending", "processing", { startedAt: new Date().toISOString() });
 
     try {
-      console.log(`\n\u25b6 ${task.task_id}`);
-      await pipelineRun(config, runtimeConfig, {
-        _positional: [],
-        track: task.track,
-        idea: task.idea,
-        goal: task.goal,
-        area: task.area,
-        title: task.title,
-        apply: "safe"
-      });
-      const donePath = path.join(h.QUEUE_DIRS.done, path.basename(taskPath));
-      fs.renameSync(processingPath, donePath);
+      console.log(`\n\u25b6 ${workerTask.label}`);
+      if (workerTask.strategy === "agent") {
+        await runAgent(config, runtimeConfig, workerTask.args);
+      } else {
+        await pipelineRun(config, runtimeConfig, workerTask.args);
+      }
+      moveWorkerTask(task, taskPath, "processing", "done", { completedAt: new Date().toISOString() });
     } catch (error) {
       console.error(`  Task failed: ${error.message}`);
-      const failedPath = path.join(h.QUEUE_DIRS.failed, path.basename(taskPath));
-      const failedTask = { ...task, error: error.message, failed_at: new Date().toISOString() };
-      h.writeJson(failedPath, failedTask);
-      if (fs.existsSync(processingPath)) fs.unlinkSync(processingPath);
+      moveWorkerTask(task, taskPath, "processing", "failed", { error: error.message, failedAt: new Date().toISOString() });
     }
   }
 
@@ -1732,6 +1821,9 @@ function handleScoutCommand(config, runtimeConfig, args) {
   } else {
     console.log(`  Target: ${result.track} (${result.staleness || "?"}d stale)`);
     console.log(`  Enqueued: ${result.enqueued} goals`);
+    if (result.deduped) {
+      console.log(`  Deduped: ${result.deduped} goal${result.deduped === 1 ? "" : "s"}`);
+    }
     for (const g of result.goals) {
       console.log(`    → [${g.priority}] ${g.goalMode}: ${g.goal.slice(0, 80)}...`);
     }
@@ -2060,6 +2152,215 @@ function handleServeCommand(config, runtimeConfig, args) {
       return;
     }
 
+    // ── Fix All: pipeline that triages, verifies, and fixes findings sequentially ──
+    if (pathname === "/api/fix-all" && req.method === "POST") {
+      try {
+        // Concurrency guard
+        if (activeMission) {
+          const elapsed = Math.round((Date.now() - activeMission.startedAt) / 1000);
+          res.writeHead(409);
+          res.end(JSON.stringify({
+            ok: false,
+            error: `Mission already running: ${activeMission.area} (${elapsed}s)`,
+            activeMission: { area: activeMission.area, pid: activeMission.pid, elapsed }
+          }));
+          return;
+        }
+
+        // 1. Run finding intelligence pipeline
+        const manifests = h.listRunManifests();
+        const result = findingIntelligence.processFindings(manifests, h.REPO_ROOT);
+        const findings = result.findings || [];
+
+        // 2. Filter to actionable, verified findings only (skip hallucinations, suppressed, unverified)
+        const fixable = findings.filter((f) =>
+          f.verification !== "hallucination" &&
+          f.verification !== "suppressed" &&
+          f.priority_score > 0 &&
+          (f.severity === "critical" || f.severity === "high" || f.severity === "medium" || f.severity === "major" || f.severity === "blocking")
+        );
+
+        if (!fixable.length) {
+          res.writeHead(200);
+          res.end(JSON.stringify({
+            ok: true,
+            message: "No actionable findings to fix",
+            stats: result.stats,
+            pipeline: { total: findings.length, filtered: 0, skipped_reasons: { hallucination: result.stats.hallucinations, suppressed: result.stats.suppressed, low_severity: findings.length - fixable.length } }
+          }));
+          return;
+        }
+
+        // 3. Group by track for sequential processing
+        const byTrack = {};
+        for (const f of fixable) {
+          const t = f.track || "shared";
+          if (!byTrack[t]) byTrack[t] = [];
+          byTrack[t].push(f);
+        }
+
+        // 4. Build plan
+        const plan = [];
+        for (const [track, trackFindings] of Object.entries(byTrack)) {
+          // Combine findings for this track into a single goal
+          const findingDescriptions = trackFindings.slice(0, 5).map((f, i) =>
+            `${i + 1}. [${f.severity}] ${f.title}${f.detail ? ": " + f.detail.slice(0, 150) : ""}`
+          ).join("\\n");
+          const goal = `Fix the following ${trackFindings.length} issue${trackFindings.length > 1 ? "s" : ""} (verified by code analysis, sorted by priority):\\n${findingDescriptions}`;
+
+          plan.push({ track, goal, findingCount: trackFindings.length, severity: trackFindings[0].severity });
+        }
+
+        // Sort plan: critical/high severity tracks first
+        const sevPrio = { critical: 0, blocking: 0, high: 1, major: 1, medium: 2 };
+        plan.sort((a, b) => (sevPrio[a.severity] ?? 3) - (sevPrio[b.severity] ?? 3));
+
+        // 5. Execute sequentially via queue file (so dashboard can track progress)
+        const fixAllId = `fixall-${Date.now()}`;
+        const logFile = `${fixAllId}.log`;
+        const logPath = path.join(h.AUTOMATION_ROOT, "logs", logFile);
+        h.ensureDir(path.dirname(logPath));
+
+        const stateFile = path.join(h.AUTOMATION_ROOT, "logs", `${fixAllId}.state.json`);
+        const state = {
+          id: fixAllId,
+          status: "running",
+          startedAt: new Date().toISOString(),
+          plan,
+          stats: result.stats,
+          progress: { completed: 0, total: plan.length, current: null, results: [] }
+        };
+        fs.writeFileSync(stateFile, JSON.stringify(state, null, 2));
+
+        // Launch async runner
+        const runnerCode = `
+          const fs = require("fs");
+          const path = require("path");
+          const { spawnSync } = require("child_process");
+          const plan = ${JSON.stringify(plan)};
+          const stateFile = ${JSON.stringify(stateFile)};
+          const logFile = ${JSON.stringify(logPath)};
+          const scriptPath = ${JSON.stringify(path.join(h.SCRIPT_DIR, "portfolio-loop.js"))};
+          const repoRoot = ${JSON.stringify(h.REPO_ROOT)};
+
+          function updateState(update) {
+            try {
+              const s = JSON.parse(fs.readFileSync(stateFile, "utf8"));
+              Object.assign(s, update);
+              fs.writeFileSync(stateFile, JSON.stringify(s, null, 2));
+            } catch {}
+          }
+
+          function log(msg) {
+            const ts = new Date().toISOString().slice(11, 19);
+            const line = "[" + ts + "] " + msg + "\\n";
+            fs.appendFileSync(logFile, line);
+          }
+
+          (async () => {
+            log("=== FIX ALL PIPELINE ===");
+            log("Plan: " + plan.length + " track(s) to fix");
+            log("");
+
+            const results = [];
+            for (let i = 0; i < plan.length; i++) {
+              const step = plan[i];
+              log("--- Step " + (i + 1) + "/" + plan.length + ": " + step.track + " (" + step.findingCount + " findings) ---");
+              updateState({
+                progress: { completed: i, total: plan.length, current: step.track, results }
+              });
+
+              const r = spawnSync(
+                "node",
+                [scriptPath, "agent", "--area", step.track, "--goal", step.goal, "--apply", "safe", "--goal-mode", "edit"],
+                { cwd: repoRoot, env: process.env, encoding: "utf8", timeout: 300000, stdio: ["ignore", "pipe", "pipe"] }
+              );
+
+              const exitCode = r.status;
+              const output = (r.stdout || "").slice(-500);
+              log("Exit code: " + exitCode);
+              if (output) log("Output tail: " + output.split("\\n").slice(-5).join("\\n"));
+              log("");
+
+              results.push({ track: step.track, findingCount: step.findingCount, exitCode, success: exitCode === 0 });
+            }
+
+            const succeeded = results.filter(r => r.success).length;
+            const failed = results.filter(r => !r.success).length;
+            log("=== COMPLETE: " + succeeded + " succeeded, " + failed + " failed ===");
+
+            updateState({
+              status: "complete",
+              completedAt: new Date().toISOString(),
+              progress: { completed: plan.length, total: plan.length, current: null, results }
+            });
+          })();
+        `;
+
+        const child = spawn("node", ["-e", runnerCode], {
+          cwd: h.REPO_ROOT, env: process.env, stdio: ["ignore", "pipe", "pipe"], detached: true
+        });
+
+        activeMission = { area: "fix-all", goal: `Fixing ${fixable.length} findings across ${plan.length} track(s)`, pid: child.pid, startedAt: Date.now() };
+
+        const logStream = fs.createWriteStream(logPath, { flags: "a" });
+        child.stdout.pipe(logStream);
+        child.stderr.pipe(logStream);
+        child.on("exit", (code) => {
+          logStream.write(`\n[exit ${code}]\n`);
+          logStream.end();
+          if (activeMission && activeMission.pid === child.pid) {
+            activeMission = null;
+          }
+        });
+        child.unref();
+
+        res.writeHead(200);
+        res.end(JSON.stringify({
+          ok: true,
+          fixAllId,
+          pid: child.pid,
+          logFile,
+          stateFile: path.basename(stateFile),
+          plan,
+          stats: result.stats,
+          pipeline: {
+            total_raw: result.stats.total_raw,
+            unique: result.stats.unique,
+            verified: result.stats.verified,
+            hallucinations: result.stats.hallucinations,
+            suppressed: result.stats.suppressed,
+            fixable: fixable.length,
+            tracks: plan.length
+          }
+        }));
+      } catch (error) {
+        res.writeHead(500);
+        res.end(JSON.stringify({ ok: false, error: error.message }));
+      }
+      return;
+    }
+
+    // ── Fix All: progress check ──
+    if (pathname === "/api/fix-all/status" && req.method === "GET") {
+      try {
+        const logsDir = path.join(h.AUTOMATION_ROOT, "logs");
+        const stateFiles = fs.readdirSync(logsDir).filter((f) => f.startsWith("fixall-") && f.endsWith(".state.json")).sort().reverse();
+        if (!stateFiles.length) {
+          res.writeHead(200);
+          res.end(JSON.stringify({ ok: true, running: false, message: "No fix-all runs yet" }));
+          return;
+        }
+        const latestState = JSON.parse(fs.readFileSync(path.join(logsDir, stateFiles[0]), "utf8"));
+        res.writeHead(200);
+        res.end(JSON.stringify({ ok: true, ...latestState }));
+      } catch (error) {
+        res.writeHead(500);
+        res.end(JSON.stringify({ ok: false, error: error.message }));
+      }
+      return;
+    }
+
     if (pathname === "/api/pr" && req.method === "POST") {
       let body = "";
       req.on("data", (chunk) => { body += chunk; });
@@ -2281,7 +2582,13 @@ function handleServeCommand(config, runtimeConfig, args) {
 
 // ── Main ────────────────────────────────────────────────────────
 
-main().catch((error) => {
-  console.error(`Fatal: ${error.message}`);
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch((error) => {
+    console.error(`Fatal: ${error.message}`);
+    process.exit(1);
+  });
+} else {
+  module.exports = {
+    normalizeWorkerTask
+  };
+}
