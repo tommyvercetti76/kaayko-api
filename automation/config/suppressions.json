@@ -29,7 +29,7 @@
     {
       "title": "error.message leaked to client in weather routes",
       "resolved_at": "2026-04-19",
-      "commit": null,
+      "commit": "bffe249",
       "files_fixed": [
         "functions/api/weather/nearbyWater.js",
         "functions/api/weather/fastForecast.js",
