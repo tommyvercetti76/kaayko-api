@@ -1,0 +1,41 @@
+{
+  "_doc": "Suppressions for findings verified as false positives or intentional design decisions. Fingerprints come from finding-intelligence.js fingerprintFinding(). Patterns use regex matching against finding titles.",
+  "fingerprints": [
+    {
+      "fingerprint": "ace451f15f8e",
+      "title": "Write route lacks obvious auth guard: POST /verify",
+      "reason": "POST /auth/verify is intentionally public — it validates Firebase ID tokens for debugging",
+      "suppressed_at": "2026-04-19",
+      "by": "rohan"
+    },
+    {
+      "fingerprint": "2aed5678b1f8",
+      "title": "Potential raw error leakage in redirectHandler.js",
+      "reason": "redirectHandler.js catch block sends generic HTML error page, not raw error.message",
+      "suppressed_at": "2026-04-19",
+      "by": "rohan"
+    }
+  ],
+  "title_patterns": [
+    {
+      "pattern": "Inspected route surface has no adjacent automated tests",
+      "scope": "kortex",
+      "reason": "kortex-api.test.js covers smartlinks routes comprehensively",
+      "suppressed_at": "2026-04-19",
+      "by": "rohan"
+    }
+  ],
+  "resolved": [
+    {
+      "title": "error.message leaked to client in weather routes",
+      "resolved_at": "2026-04-19",
+      "commit": null,
+      "files_fixed": [
+        "functions/api/weather/nearbyWater.js",
+        "functions/api/weather/fastForecast.js",
+        "functions/api/weather/forecast.js"
+      ],
+      "by": "rohan"
+    }
+  ]
+}

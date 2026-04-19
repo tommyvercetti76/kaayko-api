@@ -20,6 +20,54 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 
+// ── Suppressions ────────────────────────────────────────────────
+
+const SUPPRESSIONS_PATH = path.join(__dirname, "..", "config", "suppressions.json");
+
+/**
+ * Load suppressions database (fingerprints + title patterns).
+ * Returns { fingerprints: Map<string, object>, patterns: Array<{regex, scope, reason}> }
+ */
+function loadSuppressions() {
+  try {
+    const raw = JSON.parse(fs.readFileSync(SUPPRESSIONS_PATH, "utf8"));
+    const fpMap = new Map();
+    for (const entry of raw.fingerprints || []) {
+      fpMap.set(entry.fingerprint, entry);
+    }
+    const patterns = (raw.title_patterns || []).map((p) => ({
+      regex: new RegExp(p.pattern, "i"),
+      scope: p.scope || null,
+      reason: p.reason
+    }));
+    return { fingerprints: fpMap, patterns };
+  } catch {
+    return { fingerprints: new Map(), patterns: [] };
+  }
+}
+
+/**
+ * Check if a finding is suppressed.
+ * @returns {{ suppressed: boolean, reason?: string }}
+ */
+function isSuppressed(finding, fingerprint, suppressions) {
+  // Check exact fingerprint match
+  if (suppressions.fingerprints.has(fingerprint)) {
+    return { suppressed: true, reason: suppressions.fingerprints.get(fingerprint).reason };
+  }
+  // Check title pattern match
+  const title = finding.title || "";
+  const track = (finding.track || "").toLowerCase();
+  for (const p of suppressions.patterns) {
+    if (p.regex.test(title)) {
+      if (!p.scope || p.scope.toLowerCase() === track) {
+        return { suppressed: true, reason: p.reason };
+      }
+    }
+  }
+  return { suppressed: false };
+}
+
 // ── Constants ───────────────────────────────────────────────────
 
 const SEVERITY_WEIGHTS = {
@@ -161,8 +209,16 @@ function deduplicateFindings(allFindings) {
  * @returns {Array} scored and sorted findings (highest priority first)
  */
 function scoreFindings(findings, repoRoot) {
+  const suppressions = loadSuppressions();
+
   return findings
     .map((finding) => {
+      const fp = finding.fingerprint || fingerprintFinding(finding);
+      const suppression = isSuppressed(finding, fp, suppressions);
+      if (suppression.suppressed) {
+        return { ...finding, verification: "suppressed", suppression_reason: suppression.reason, priority_score: 0 };
+      }
+
       const sevWeight = SEVERITY_WEIGHTS[finding.severity] || SEVERITY_WEIGHTS.medium;
       const verification = verifyFinding(finding, repoRoot);
       const confWeight = VERIFICATION_CONFIDENCE[verification.confidence] || 0.4;
@@ -178,7 +234,7 @@ function scoreFindings(findings, repoRoot) {
         actionable: hasActionableDetail(finding)
       };
     })
-    .filter((f) => f.verification !== "hallucination") // Drop hallucinations
+    .filter((f) => f.verification !== "hallucination" && f.verification !== "suppressed")
     .sort((a, b) => b.priority_score - a.priority_score);
 }
 
@@ -234,11 +290,18 @@ function processFindings(manifests, repoRoot) {
   const scored = scoreFindings(unique, repoRoot);
 
   // 4. Stats
+  const suppressions = loadSuppressions();
+  const suppressedCount = unique.filter((f) => {
+    const fp = fingerprintFinding(f);
+    return isSuppressed(f, fp, suppressions).suppressed;
+  }).length;
+
   const stats = {
     total_raw: allRaw.length,
     unique: unique.length,
     verified: scored.filter((f) => f.verification === "verified").length,
-    hallucinations: unique.length - scored.length, // dropped by scoreFindings
+    hallucinations: unique.length - scored.length - suppressedCount,
+    suppressed: suppressedCount,
     actionable: scored.filter((f) => f.actionable).length,
     by_severity: {
       critical: scored.filter((f) => f.severity === "critical").length,
@@ -297,6 +360,8 @@ module.exports = {
   processFindings,
   computeStaleness,
   hasActionableDetail,
+  loadSuppressions,
+  isSuppressed,
   SEVERITY_WEIGHTS,
   VERIFICATION_CONFIDENCE
 };
