@@ -24,6 +24,9 @@ const fs = require("fs");
 const SCRIPT_DIR = __dirname;
 const AUTOMATION_ROOT = path.resolve(SCRIPT_DIR, "..");
 
+// Category keywords for suppression detection (maps goal index → keyword)
+const GOAL_CATEGORY_KEYWORDS = ["security", "code quality", "api contract"];
+
 // ── Scout Configuration ─────────────────────────────────────────
 
 const SCOUT_DEFAULTS = {
@@ -38,6 +41,47 @@ const SCOUT_DEFAULTS = {
     "API contract: verify request/response schemas match documentation, check for undocumented endpoints"
   ]
 };
+
+// ── Suppression Analysis ────────────────────────────────────────
+
+/**
+ * Determine which audit categories have been consistently suppressed for a track
+ * in the last 30 days. A category is considered "suppressed" if ≥3 of its findings
+ * were suppressed (fingerprint-matched) within that window.
+ *
+ * @param {string} track
+ * @param {object} helpers - loop-helpers module
+ * @returns {Set<string>} category keywords that should be skipped
+ */
+function computeSuppressedCategories(track, helpers) {
+  const suppressionsPath = path.join(AUTOMATION_ROOT, "config", "suppressions.json");
+  const suppressed = new Set();
+
+  try {
+    const raw = JSON.parse(fs.readFileSync(suppressionsPath, "utf8"));
+    const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+
+    // Count recent suppressions per category keyword for this track
+    const counts = {};
+    for (const entry of raw.fingerprints || []) {
+      if (entry.track && entry.track !== track) continue;
+      if (entry.created_at && new Date(entry.created_at).getTime() < cutoff) continue;
+
+      const title = (entry.title || entry.reason || "").toLowerCase();
+      for (const keyword of GOAL_CATEGORY_KEYWORDS) {
+        if (title.includes(keyword)) {
+          counts[keyword] = (counts[keyword] || 0) + 1;
+        }
+      }
+    }
+
+    for (const [keyword, count] of Object.entries(counts)) {
+      if (count >= 3) suppressed.add(keyword);
+    }
+  } catch { /* no suppressions file yet */ }
+
+  return suppressed;
+}
 
 // ── Core: Single Sweep ──────────────────────────────────────────
 
@@ -87,29 +131,60 @@ function sweep(options, helpers, findingIntel, pipelineQueue) {
     targetTrack = stalest.track;
   }
 
-  // Build goals
-  const goals = [];
-
-  // Always add a security audit
-  goals.push({
-    track: targetTrack,
-    goal: SCOUT_DEFAULTS.auditGoals[0],
-    goalMode: "audit",
-    priority: "normal",
-    source: "scout"
-  });
-
-  // Add code quality audit if track is very stale (>7 days)
+  // Build goals — skip categories suppressed ≥3 times in the last 30 days for this track
   const manifests = helpers.listRunManifests();
   const staleness = findingIntel.computeStaleness(manifests, allTracks);
   const trackStaleness = staleness.find((s) => s.track === targetTrack);
-  if (trackStaleness && trackStaleness.daysSinceAudit > 7) {
+  const suppressedCategories = computeSuppressedCategories(targetTrack, helpers);
+
+  const goals = [];
+
+  // Security audit (unless security is consistently suppressed for this track)
+  if (!suppressedCategories.has("security")) {
+    goals.push({
+      track: targetTrack,
+      goal: SCOUT_DEFAULTS.auditGoals[0],
+      goalMode: "audit",
+      priority: "normal",
+      source: "scout"
+    });
+  } else {
+    console.log(`  [scout] Skipping security audit for ${targetTrack} (suppressed ≥3× in last 30d) — trying code quality`);
+  }
+
+  // Code quality audit if track is very stale (>7 days) or security was skipped
+  const qualitySkipped = suppressedCategories.has("code quality");
+  if ((trackStaleness && trackStaleness.daysSinceAudit > 7 && !qualitySkipped) ||
+      (suppressedCategories.has("security") && !qualitySkipped)) {
     goals.push({
       track: targetTrack,
       goal: SCOUT_DEFAULTS.auditGoals[1],
       goalMode: "audit",
       priority: "low",
       source: "scout"
+    });
+  }
+
+  // API contract audit if both security and quality are suppressed
+  if (suppressedCategories.has("security") && suppressedCategories.has("code quality") &&
+      !suppressedCategories.has("api contract")) {
+    goals.push({
+      track: targetTrack,
+      goal: SCOUT_DEFAULTS.auditGoals[2],
+      goalMode: "audit",
+      priority: "low",
+      source: "scout"
+    });
+  }
+
+  // Ensure at least one goal is enqueued
+  if (goals.length === 0) {
+    goals.push({
+      track: targetTrack,
+      goal: SCOUT_DEFAULTS.auditGoals[0],
+      goalMode: "audit",
+      priority: "background",
+      source: "scout-fallback"
     });
   }
 

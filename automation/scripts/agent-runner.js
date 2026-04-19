@@ -212,7 +212,7 @@ function executeLocalModelAgent(config, runtimeConfig, runDir, manifest, args, h
 
   process.stdout.write("  [3/6] Loading selected files...");
   const selectedFilesList = agentFiles.chooseAgentSelectedFiles(inventory, inventoryResponse, goalMode);
-  const selectedFilePayload = selectedFilesList.map((candidate) =>
+  let selectedFilePayload = selectedFilesList.map((candidate) =>
     agentFiles.loadAgentFilePayload(candidate, {
       goalMode,
       maxChars: runtime.analysis_max_file_chars || null,
@@ -220,12 +220,42 @@ function executeLocalModelAgent(config, runtimeConfig, runDir, manifest, args, h
     })
   );
 
+  // Context budget guard: estimate total tokens (chars / 4) and drop lowest-priority
+  // files if the payload would overflow the model's context window.
+  const modelContextChars = (runtime.context_window_tokens || 32768) * 4;
+  const budgetChars = Math.floor(modelContextChars * 0.75); // reserve 25% for prompt overhead
+  let totalChars = selectedFilePayload.reduce((sum, f) => sum + (f.content || "").length, 0);
+  const droppedFiles = [];
+
+  if (totalChars > budgetChars) {
+    // Sort by file size descending so we drop the largest first
+    const sorted = [...selectedFilePayload].sort((a, b) =>
+      (b.content || "").length - (a.content || "").length
+    );
+    const kept = new Set(selectedFilePayload.map((f) => f.path));
+    for (const file of sorted) {
+      if (totalChars <= budgetChars) break;
+      totalChars -= (file.content || "").length;
+      kept.delete(file.path);
+      droppedFiles.push({ path: file.path, chars: (file.content || "").length });
+    }
+    selectedFilePayload = selectedFilePayload.filter((f) => kept.has(f.path));
+  }
+
+  if (droppedFiles.length > 0) {
+    console.log(`\n    ⚠ Context budget (${(budgetChars / 1000).toFixed(0)}K chars): dropped ${droppedFiles.length} file(s):`);
+    for (const d of droppedFiles) {
+      console.log(`      - ${d.path} (${(d.chars / 1000).toFixed(1)}K chars)`);
+    }
+  }
+
   const analysisCoachingBundle = buildAgentCoachingBundle(manifest.track, args.area, args.goal, {
     filePaths: selectedFilePayload.map((item) => item.path)
   });
   writeJson(selectedPath, { selected_files: selectedFilePayload.map(agentFiles.serializeAgentFilePayload) });
   writeText(path.join(runDir, "notes", "agent-briefing.md"), buildAgentCoachingMarkdown(analysisCoachingBundle, args));
-  console.log(` ${selectedFilePayload.length} files loaded`);
+  console.log(` ${selectedFilePayload.length} files loaded (${droppedFiles.length > 0 ? `${droppedFiles.length} dropped for budget` : "all fit"})`);
+
 
   updateRunManifest(runDir, (m) => {
     m.status = "agent_analyzing";
@@ -233,7 +263,8 @@ function executeLocalModelAgent(config, runtimeConfig, runDir, manifest, args, h
       ...(m.agent || {}),
       stage: "analyzing",
       goal_mode: goalMode,
-      selected_files: selectedFilePayload.map((item) => item.path)
+      selected_files: selectedFilePayload.map((item) => item.path),
+      context_budget_dropped: droppedFiles.length > 0 ? droppedFiles.map((d) => d.path) : undefined
     };
     m.coaching = {
       ...(m.coaching || {}),

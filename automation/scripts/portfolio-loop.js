@@ -2017,6 +2017,51 @@ function handleServeCommand(config, runtimeConfig, args) {
       return;
     }
 
+    if (pathname === "/api/suppress" && req.method === "POST") {
+      let body = "";
+      req.on("data", (d) => { body += d; });
+      req.on("end", () => {
+        try {
+          const { fingerprint, title, severity, track, reason } = JSON.parse(body || "{}");
+          if (!fingerprint) {
+            res.writeHead(400);
+            res.end(JSON.stringify({ ok: false, error: "fingerprint required" }));
+            return;
+          }
+
+          const suppressionsPath = require("path").join(h.REPO_ROOT, "automation", "config", "suppressions.json");
+          let raw = {};
+          try { raw = JSON.parse(require("fs").readFileSync(suppressionsPath, "utf8")); } catch { /* new file */ }
+
+          raw.fingerprints = raw.fingerprints || [];
+          // Avoid duplicates
+          const existing = raw.fingerprints.findIndex((e) => e.fingerprint === fingerprint);
+          const entry = {
+            fingerprint,
+            title: title || "",
+            severity: severity || "unknown",
+            track: track || "unknown",
+            reason: reason || "Suppressed via dashboard",
+            created_at: new Date().toISOString()
+          };
+          if (existing >= 0) {
+            raw.fingerprints[existing] = entry;
+          } else {
+            raw.fingerprints.push(entry);
+          }
+
+          require("fs").writeFileSync(suppressionsPath, JSON.stringify(raw, null, 2));
+          console.log(`  [suppress] Added fingerprint ${fingerprint} (${title || "?"}) to suppressions.json`);
+          res.writeHead(200);
+          res.end(JSON.stringify({ ok: true, fingerprint }));
+        } catch (err) {
+          res.writeHead(500);
+          res.end(JSON.stringify({ ok: false, error: err.message }));
+        }
+      });
+      return;
+    }
+
     if (pathname === "/api/queue" && req.method === "GET") {
       try {
         const overview = pipelineQueue.getQueueOverview();
@@ -2197,6 +2242,51 @@ function handleServeCommand(config, runtimeConfig, args) {
           const t = f.track || "shared";
           if (!byTrack[t]) byTrack[t] = [];
           byTrack[t].push(f);
+        }
+
+        // 3b. Cross-track conflict detection: find files referenced by findings in >1 track.
+        // Findings that share a file path across tracks are merged into the "shared" track
+        // to prevent one track's edit from silently overwriting another track's edit.
+        const fileToTracks = {};
+        for (const [track, trackFindings] of Object.entries(byTrack)) {
+          for (const f of trackFindings) {
+            const refs = ((f.detail || "") + " " + (f.title || "")).match(
+              /(?:functions|api|src|middleware|services)\/[\w/./-]+\.(?:js|ts|json)/gi
+            ) || [];
+            for (const ref of refs) {
+              if (!fileToTracks[ref]) fileToTracks[ref] = new Set();
+              fileToTracks[ref].add(track);
+            }
+          }
+        }
+        const conflictFiles = Object.entries(fileToTracks)
+          .filter(([, tracks]) => tracks.size > 1)
+          .map(([file, tracks]) => ({ file, tracks: Array.from(tracks) }));
+
+        if (conflictFiles.length > 0) {
+          // Move conflicting findings to "shared" track so they are edited once
+          const conflictingTrackPairs = new Set(
+            conflictFiles.flatMap(({ tracks }) => tracks)
+          );
+          const sharedFindings = byTrack["shared"] || [];
+          for (const t of conflictingTrackPairs) {
+            if (t === "shared") continue;
+            // Move findings from conflicting tracks that reference shared files into shared
+            const trackFindings = byTrack[t] || [];
+            const conflictSet = new Set(conflictFiles.flatMap((c) => c.tracks.includes(t) ? [c.file] : []));
+            const toMove = trackFindings.filter((f) => {
+              const refs = ((f.detail || "") + " " + (f.title || "")).match(
+                /(?:functions|api|src|middleware|services)\/[\w/./-]+\.(?:js|ts|json)/gi
+              ) || [];
+              return refs.some((r) => conflictSet.has(r));
+            });
+            const toKeep = trackFindings.filter((f) => !toMove.includes(f));
+            sharedFindings.push(...toMove);
+            if (toKeep.length) byTrack[t] = toKeep;
+            else delete byTrack[t];
+          }
+          if (sharedFindings.length) byTrack["shared"] = sharedFindings;
+          console.log(`  [fix-all] Cross-track conflicts detected in ${conflictFiles.length} file(s) — merged into shared track: ${conflictFiles.map((c) => c.file).join(", ")}`);
         }
 
         // 4. Build plan
