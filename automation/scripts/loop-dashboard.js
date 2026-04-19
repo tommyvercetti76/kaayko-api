@@ -672,7 +672,7 @@ function buildDashboardHtml(summary) {
     const lvl = powerLevel(m.id);
     const dots = Array.from({length:5},(_,i)=>`<span class="ep-dot${i<lvl?" filled":""}"></span>`).join("");
     const isInstalled = m.installed !== false;
-    return `<button class="engine-pill${m.active?" ep-active":""}" data-model="${esc(m.id)}" data-installed="${isInstalled}" title="${esc((m.note||"")+" \u00b7 "+(m.size||m.ram||""))}">
+    return `<button class="engine-pill${m.active?" ep-active":""}" data-model="${esc(m.id)}" data-installed="${isInstalled}" data-note="${esc(m.note||"")}" data-size="${esc(m.size||m.ram||"")}" title="${esc((m.note||"")+" \u00b7 "+(m.size||m.ram||""))}">
       <span class="ep-status ${isInstalled?"installed":"not-installed"}"></span>
       <span class="ep-label">${esc(shortName(m.id))}</span>
       <span class="ep-dots">${dots}</span>
@@ -702,10 +702,45 @@ function buildDashboardHtml(summary) {
   const quickMissionsHtml = quickMissions.join("");
 
   // ── Command bar mode buttons ──
+  const modeIcons = { audit: "\ud83d\udd0d", edit: "\u270f\ufe0f", "dry-run": "\ud83d\udc41" };
   const cmdModeButtons = launchModes.map((mode) => {
     const selected = mode.id === defaultLaunchMode;
-    return `<button class="cmd-mode-btn${selected?" active":""}" type="button" data-mode="${esc(mode.id)}">${esc(mode.label)}</button>`;
+    return `<button class="cmd-mode-btn${selected?" active":""}" type="button" data-mode="${esc(mode.id)}"><span class="cmd-mode-icon">${modeIcons[mode.id]||""}</span>${esc(mode.label)}</button>`;
   }).join("");
+
+  // ── Module dropdown items ──
+  const dropdownItems = modules.map((m) => {
+    const mh = moduleHealth.find((x) => x.area === m.area) || {};
+    const statusDot = mh.vulns > 0 ? `<span class="dd-status" style="color:var(--red)">\u25cf</span>` : (mh.runs > 0 ? `<span class="dd-status" style="color:var(--green)">\u25cf</span>` : `<span class="dd-status" style="color:var(--text-dim)">\u25cb</span>`);
+    return `<div class="cmd-dropdown-item" data-area="${esc(m.area)}" data-icon="${m.icon}" data-name="${esc(m.name)}"><span class="dd-icon">${m.icon}</span>${esc(m.name)}${statusDot}</div>`;
+  }).join("");
+
+  // ── Engine strip with confirm bar ──
+  const engineStripHtml = `<div class="engine-strip">
+      <span class="engine-label">Engine</span>
+      ${enginePills}
+      <div class="engine-confirm" id="engine-confirm">
+        <span class="engine-confirm-label" id="ec-label"></span>
+        <button class="engine-confirm-btn ec-activate" id="ec-activate" onclick="confirmEngine()">Activate</button>
+        <button class="engine-confirm-btn ec-cancel" onclick="cancelEngineSelect()">\u2715</button>
+      </div>
+    </div>`;
+
+  // ── Assembled command bar HTML ──
+  const cmdBarHtml = `<div class="cmd-bar" id="cmd-bar">
+      <div class="cmd-tag" id="cmd-tag" onclick="toggleDropdown(event)">
+        <span class="cmd-icon" id="cmd-icon">${selectedModule.icon}</span>
+        <span id="cmd-area-label">${esc(selectedModule.name)}</span>
+        <span class="cmd-caret">\u25bc</span>
+        <div class="cmd-dropdown" id="cmd-dropdown">${dropdownItems}</div>
+      </div>
+      <span class="cmd-sep">\u25b8</span>
+      <input class="cmd-input" id="lp-goal" type="text" placeholder="Describe what the agent should do\u2026" autocomplete="off">
+      <input id="lp-area" type="hidden" value="${esc(selectedModule.area)}">
+      <input id="lp-mode" type="hidden" value="${defaultLaunchMode}">
+      <div class="cmd-mode">${cmdModeButtons}</div>
+      <button class="cmd-launch" id="lp-launch" onclick="launchMission()" disabled>LAUNCH</button>
+    </div>`;
 
   // ── Assemble time label ──
   let timeLabel = "";
@@ -901,16 +936,25 @@ function buildDashboardHtml(summary) {
   /* ── Command Bar ── */
   .cmd-bar{display:flex;align-items:center;background:var(--bg);border:1.5px solid var(--border);border-radius:8px;padding:2px;margin-bottom:12px;transition:border-color .2s,box-shadow .2s}
   .cmd-bar:focus-within{border-color:var(--cyan);box-shadow:0 0 16px rgba(34,211,238,0.08)}
-  .cmd-tag{display:flex;align-items:center;gap:5px;background:rgba(34,211,238,0.1);border:1px solid rgba(34,211,238,0.2);border-radius:6px;padding:6px 10px;margin:2px;font-family:var(--mono);font-size:.72rem;font-weight:600;color:var(--cyan);cursor:pointer;white-space:nowrap;transition:all .15s;user-select:none}
+  .cmd-tag{display:flex;align-items:center;gap:5px;background:rgba(34,211,238,0.1);border:1px solid rgba(34,211,238,0.2);border-radius:6px;padding:6px 10px;margin:2px;font-family:var(--mono);font-size:.72rem;font-weight:600;color:var(--cyan);cursor:pointer;white-space:nowrap;transition:all .15s;user-select:none;position:relative}
   .cmd-tag:hover{background:rgba(34,211,238,0.18)}
   .cmd-tag .cmd-icon{font-size:.85rem}
+  .cmd-tag .cmd-caret{font-size:.5rem;margin-left:2px;opacity:.6}
+  .cmd-dropdown{position:absolute;top:calc(100% + 4px);left:0;background:var(--surface);border:1px solid var(--border-hi);border-radius:7px;padding:4px;min-width:160px;z-index:100;box-shadow:0 8px 24px rgba(0,0,0,0.4);display:none}
+  .cmd-dropdown.open{display:block}
+  .cmd-dropdown-item{display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:5px;cursor:pointer;font-family:var(--mono);font-size:.68rem;color:var(--text);transition:all .1s}
+  .cmd-dropdown-item:hover{background:rgba(34,211,238,0.08);color:var(--text-bright)}
+  .cmd-dropdown-item.dd-active{color:var(--cyan);font-weight:600}
+  .cmd-dropdown-item .dd-icon{font-size:.9rem}
+  .cmd-dropdown-item .dd-status{font-size:.5rem;margin-left:auto}
   .cmd-sep{color:var(--border);font-size:.8rem;margin:0 2px;user-select:none}
   .cmd-input{flex:1;background:transparent;border:none;padding:8px 10px;color:var(--text-bright);font-family:var(--mono);font-size:.78rem;outline:none;min-width:0}
   .cmd-input::placeholder{color:var(--text-dim);font-style:italic}
   .cmd-mode{display:flex;align-items:center;border-left:1px solid var(--border);margin:4px 0;padding-left:2px;flex-shrink:0}
-  .cmd-mode-btn{appearance:none;background:transparent;border:none;font-family:var(--mono);font-size:.62rem;padding:6px 8px;cursor:pointer;color:var(--text-dim);transition:all .15s;border-radius:4px;text-transform:uppercase;letter-spacing:.04em}
+  .cmd-mode-btn{appearance:none;background:transparent;border:none;font-family:var(--mono);font-size:.62rem;padding:6px 8px;cursor:pointer;color:var(--text-dim);transition:all .15s;border-radius:4px;text-transform:uppercase;letter-spacing:.04em;display:flex;align-items:center;gap:3px}
   .cmd-mode-btn:hover{color:var(--text-bright)}
   .cmd-mode-btn.active{color:var(--cyan);background:rgba(34,211,238,0.08);font-weight:600}
+  .cmd-mode-icon{font-size:.7rem}
   .cmd-launch{background:var(--cyan);color:var(--bg);border:none;border-radius:6px;padding:8px 18px;font-family:var(--mono);font-size:.72rem;font-weight:700;cursor:pointer;margin:2px;transition:all .15s;letter-spacing:.05em;flex-shrink:0}
   .cmd-launch:hover{opacity:.85;box-shadow:0 0 16px rgba(34,211,238,0.25)}
   .cmd-launch:disabled{opacity:.25;cursor:not-allowed;box-shadow:none}
@@ -942,6 +986,7 @@ function buildDashboardHtml(summary) {
   .qo-card.qo-warn::before{background:var(--amber)}
   .qo-card.qo-info::before{background:var(--cyan)}
   .qo-card:hover{border-color:var(--border-hi);transform:translateY(-1px);box-shadow:0 2px 8px rgba(0,0,0,0.2)}
+  .qo-card:hover::after{content:'click to load \\2197';position:absolute;top:6px;right:8px;font-family:var(--mono);font-size:.48rem;color:var(--text-dim);letter-spacing:.03em;text-transform:uppercase}
   .qo-icon{font-size:.8rem;margin-right:6px;float:left}
   .qo-title{font-size:.66rem;font-weight:500;color:var(--text-bright);line-height:1.3;margin-bottom:2px}
   .qo-title b{color:var(--text-bright)}
@@ -954,6 +999,17 @@ function buildDashboardHtml(summary) {
   .engine-pill:hover{border-color:var(--border-hi);color:var(--text-bright);background:var(--surface2)}
   .engine-pill.ep-active{border-color:var(--green);background:rgba(52,211,153,0.08);color:var(--green);font-weight:600}
   .engine-pill.ep-active .ep-label::before{content:'\u25b8 ';font-size:.5rem}
+  .engine-pill.ep-selected{border-color:var(--cyan);background:rgba(34,211,238,0.08);color:var(--cyan);box-shadow:0 0 8px rgba(34,211,238,0.1)}
+  .engine-confirm{display:none;align-items:center;gap:6px;margin-left:auto;padding-left:10px;flex-shrink:0}
+  .engine-confirm.visible{display:flex}
+  .engine-confirm-label{font-family:var(--mono);font-size:.56rem;color:var(--text-dim)}
+  .engine-confirm-btn{appearance:none;font-family:var(--mono);font-size:.58rem;font-weight:600;border-radius:4px;padding:3px 10px;cursor:pointer;transition:all .15s;border:1px solid}
+  .engine-confirm-btn.ec-activate{background:rgba(52,211,153,0.12);border-color:var(--green);color:var(--green)}
+  .engine-confirm-btn.ec-activate:hover{background:rgba(52,211,153,0.25)}
+  .engine-confirm-btn.ec-pull{background:rgba(245,158,11,0.1);border-color:var(--amber);color:var(--amber)}
+  .engine-confirm-btn.ec-pull:hover{background:rgba(245,158,11,0.2)}
+  .engine-confirm-btn.ec-cancel{background:transparent;border-color:var(--border);color:var(--text-dim)}
+  .engine-confirm-btn.ec-cancel:hover{color:var(--text)}
   .ep-status{width:5px;height:5px;border-radius:50%;flex-shrink:0}
   .ep-status.installed{background:var(--green)}
   .ep-status.not-installed{background:var(--text-dim);opacity:.5}
@@ -992,21 +1048,7 @@ function buildDashboardHtml(summary) {
   <!-- Mission Control -->
   <div class="mission-ctrl" id="launchpad">
     <div class="panel-title">Mission Control</div>
-
-    <!-- Command Bar -->
-    <div class="cmd-bar" id="cmd-bar">
-      <div class="cmd-tag" id="cmd-tag" onclick="cycleTarget()" title="Click to cycle modules">
-        <span class="cmd-icon" id="cmd-icon">${selectedModule.icon}</span>
-        <span id="cmd-area-label">${esc(selectedModule.name)}</span>
-      </div>
-      <span class="cmd-sep">\u25b8</span>
-      <input class="cmd-input" id="lp-goal" type="text" placeholder="Describe what the agent should do\u2026" autocomplete="off">
-      <input id="lp-area" type="hidden" value="${esc(selectedModule.area)}">
-      <input id="lp-mode" type="hidden" value="${defaultLaunchMode}">
-      <div class="cmd-mode">${cmdModeButtons}</div>
-      <button class="cmd-launch" id="lp-launch" onclick="launchMission()" disabled>LAUNCH</button>
-    </div>
-
+    ${cmdBarHtml}
     <div class="mc-cols">
       <div>
         <div class="section-label">Target</div>
@@ -1017,13 +1059,7 @@ function buildDashboardHtml(summary) {
         <div class="quickops">${quickMissionsHtml}</div>
       </div>
     </div>
-
-    <!-- Engine Strip -->
-    <div class="engine-strip">
-      <span class="engine-label">Engine</span>
-      ${enginePills}
-    </div>
-
+    ${engineStripHtml}
     <div id="lp-status" class="launch-status"></div>
     <div id="lp-log-area" class="launch-log-area" style="display:none">
       <pre id="lp-log" class="launch-log"></pre>
@@ -1032,18 +1068,7 @@ function buildDashboardHtml(summary) {
   <!-- Mission Control (no actions yet) -->
   <div class="mission-ctrl" id="launchpad">
     <div class="panel-title">Mission Control</div>
-    <div class="cmd-bar" id="cmd-bar">
-      <div class="cmd-tag" id="cmd-tag" onclick="cycleTarget()" title="Click to cycle modules">
-        <span class="cmd-icon" id="cmd-icon">${selectedModule.icon}</span>
-        <span id="cmd-area-label">${esc(selectedModule.name)}</span>
-      </div>
-      <span class="cmd-sep">\u25b8</span>
-      <input class="cmd-input" id="lp-goal" type="text" placeholder="Describe what the agent should do\u2026" autocomplete="off">
-      <input id="lp-area" type="hidden" value="${esc(selectedModule.area)}">
-      <input id="lp-mode" type="hidden" value="${defaultLaunchMode}">
-      <div class="cmd-mode">${cmdModeButtons}</div>
-      <button class="cmd-launch" id="lp-launch" onclick="launchMission()" disabled>LAUNCH</button>
-    </div>
+    ${cmdBarHtml}
     <div class="mc-cols">
       <div>
         <div class="section-label">Target</div>
@@ -1054,10 +1079,7 @@ function buildDashboardHtml(summary) {
         <div class="quickops">${quickMissionsHtml}</div>
       </div>
     </div>
-    <div class="engine-strip">
-      <span class="engine-label">Engine</span>
-      ${enginePills}
-    </div>
+    ${engineStripHtml}
     <div id="lp-status" class="launch-status"></div>
     <div id="lp-log-area" class="launch-log-area" style="display:none">
       <pre id="lp-log" class="launch-log"></pre>
@@ -1102,10 +1124,18 @@ function postHeaders(){return {'Content-Type':'application/json','X-CSRF-Token':
 function timeAgo(iso){if(!iso)return'';const ms=Date.now()-new Date(iso).getTime();if(ms<0)return'now';const m=Math.floor(ms/60000);if(m<1)return'now';if(m<60)return m+'m';const h=Math.floor(m/60);if(h<24)return h+'h';const d=Math.floor(h/24);return d+'d'}
 function refreshTimestamps(){document.querySelectorAll('.tl-time[data-ts]').forEach(el=>{const a=timeAgo(el.dataset.ts);if(a)el.textContent=a})}
 
-function selectTarget(area,icon,name){document.getElementById('lp-area').value=area;const ci=document.getElementById('cmd-icon');if(ci)ci.textContent=icon||'';const cl=document.getElementById('cmd-area-label');if(cl)cl.textContent=name||area;document.querySelectorAll('.target-card').forEach(c=>c.classList.toggle('selected',c.dataset.area===area))}
-function cycleTarget(){const cards=[...document.querySelectorAll('.target-card')];const cur=cards.findIndex(c=>c.classList.contains('selected'));const next=cards[(cur+1)%cards.length];if(next)selectTarget(next.dataset.area,next.dataset.icon,next.dataset.name)}
+function selectTarget(area,icon,name){document.getElementById('lp-area').value=area;const ci=document.getElementById('cmd-icon');if(ci)ci.textContent=icon||'';const cl=document.getElementById('cmd-area-label');if(cl)cl.textContent=name||area;document.querySelectorAll('.target-card').forEach(c=>c.classList.toggle('selected',c.dataset.area===area));document.querySelectorAll('.cmd-dropdown-item').forEach(d=>d.classList.toggle('dd-active',d.dataset.area===area))}
+function toggleDropdown(e){e.stopPropagation();const dd=document.getElementById('cmd-dropdown');if(dd)dd.classList.toggle('open')}
+function closeDropdown(){const dd=document.getElementById('cmd-dropdown');if(dd)dd.classList.remove('open')}
+document.addEventListener('click',closeDropdown);
 function setLaunchMode(mode){document.getElementById('lp-mode').value=mode;document.querySelectorAll('.cmd-mode-btn').forEach(c=>c.classList.toggle('active',c.dataset.mode===mode))}
 function fillMission(area,mode,goal){const card=document.querySelector('.target-card[data-area="'+area+'"]');if(card)selectTarget(area,card.dataset.icon,card.dataset.name);setLaunchMode(mode||'audit');const gi=document.getElementById('lp-goal');if(gi){gi.value=goal||'';gi.focus()}const lp=document.getElementById('launchpad');if(lp)lp.scrollIntoView({behavior:'smooth'})}
+
+// Engine select/confirm pattern
+let selectedEngine=null;
+function selectEngine(pill){const id=pill.dataset.model;if(selectedEngine===id){cancelEngineSelect();return}selectedEngine=id;document.querySelectorAll('.engine-pill').forEach(p=>p.classList.remove('ep-selected'));pill.classList.add('ep-selected');const bar=document.getElementById('engine-confirm');const lbl=document.getElementById('ec-label');const btn=document.getElementById('ec-activate');const installed=pill.dataset.installed==='true';lbl.textContent=id;if(installed){btn.textContent='Activate';btn.className='engine-confirm-btn ec-activate'}else{btn.textContent='Pull';btn.className='engine-confirm-btn ec-pull'}bar.classList.add('visible')}
+function cancelEngineSelect(){selectedEngine=null;document.querySelectorAll('.engine-pill').forEach(p=>p.classList.remove('ep-selected'));document.getElementById('engine-confirm').classList.remove('visible')}
+function confirmEngine(){if(!selectedEngine)return;const pill=document.querySelector('.engine-pill[data-model="'+selectedEngine+'"]');if(!pill)return;const installed=pill.dataset.installed==='true';if(installed){switchModel(selectedEngine);cancelEngineSelect()}else{pullModel(selectedEngine,pill);cancelEngineSelect()}}
 
 async function checkServer(){try{const c=new AbortController();const t=setTimeout(()=>c.abort(),2000);const r=await fetch(BASE+'/api/health',{signal:c.signal,mode:'cors'});clearTimeout(t);if(r.ok){const d=await r.json();serverOnline=true;const dot=document.getElementById('server-dot'),lbl=document.getElementById('server-label');if(dot&&d.busy){dot.className='server-dot online';dot.style.background='var(--amber)';dot.style.boxShadow='0 0 6px var(--amber)';lbl.textContent='busy: '+d.activeMission.area;lbl.style.color='var(--amber)'}else if(dot){dot.className='server-dot online';dot.style.background='';dot.style.boxShadow='';lbl.textContent='online';lbl.style.color=''}}}catch{serverOnline=false}const d=document.getElementById('server-dot'),l=document.getElementById('server-label');if(!serverOnline&&d){d.className='server-dot offline';d.style.background='';d.style.boxShadow='';l.textContent='offline';l.style.color=''}const b=document.getElementById('lp-launch');if(b)b.disabled=!serverOnline}
 
@@ -1138,7 +1168,8 @@ function toggleDetail(id){const r=document.getElementById(id);if(!r)return;r.sty
 document.querySelectorAll('.target-card').forEach(c=>c.addEventListener('click',()=>selectTarget(c.dataset.area,c.dataset.icon,c.dataset.name)));
 document.querySelectorAll('.cmd-mode-btn').forEach(b=>b.addEventListener('click',()=>setLaunchMode(b.dataset.mode)));
 document.querySelectorAll('.qo-card').forEach(c=>c.addEventListener('click',()=>fillMission(c.dataset.area,c.dataset.mode,c.dataset.goal)));
-document.querySelectorAll('.engine-pill').forEach(p=>p.addEventListener('click',()=>{const id=p.dataset.model;if(p.dataset.installed==='true')switchModel(id);else pullModel(id,p)}));
+document.querySelectorAll('.engine-pill').forEach(p=>p.addEventListener('click',()=>selectEngine(p)));
+document.querySelectorAll('.cmd-dropdown-item').forEach(d=>d.addEventListener('click',(e)=>{e.stopPropagation();selectTarget(d.dataset.area,d.dataset.icon,d.dataset.name);closeDropdown()}));
 
 selectTarget('${esc(selectedModule.area)}','${selectedModule.icon}','${esc(selectedModule.name)}');setLaunchMode('${esc(defaultLaunchMode)}');
 refreshTimestamps();setInterval(refreshTimestamps,60000);
