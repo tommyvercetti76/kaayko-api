@@ -3,7 +3,7 @@
 const fs = require("fs");
 const path = require("path");
 const h = require("./loop-helpers");
-const { loadSuppressions, isSuppressed, fingerprintFinding } = require("./finding-intelligence");
+const { loadSuppressions, isSuppressed, fingerprintFinding, processFindings } = require("./finding-intelligence");
 
 // ── Dashboard Generation ────────────────────────────────────────
 
@@ -255,6 +255,16 @@ function generateDashboard(config, args = {}, silent = false) {
     open_findings: openFindings.sort((l, r) => h.severityRank(l.severity) - h.severityRank(r.severity)).slice(0, 25)
   };
 
+  // Run finding intelligence pipeline for verified findings (same as /api/findings)
+  try {
+    const fiResult = processFindings(manifests, h.REPO_ROOT);
+    summary.verified_findings = fiResult.findings;
+    summary.finding_stats = fiResult.stats;
+  } catch {
+    summary.verified_findings = [];
+    summary.finding_stats = null;
+  }
+
   const summaryPath = path.join(h.DASHBOARD_ROOT, "summary.json");
   const runsPath = path.join(h.DASHBOARD_ROOT, "runs.json");
   const markdownPath = path.join(h.DASHBOARD_ROOT, "latest.md");
@@ -475,9 +485,12 @@ function buildDashboardHtml(summary) {
     return "\u2b1c";
   };
 
-  // ── Deduplicate findings by title ──
-  const allFindings = summary.open_findings || [];
-  const vulnFindings = summary.vulnerability_findings || [];
+  // ── Use verified findings from intelligence pipeline (same as /api/findings + Fix All) ──
+  const verifiedFindings = summary.verified_findings || [];
+  const allFindings = verifiedFindings.length > 0 ? verifiedFindings : (summary.open_findings || []);
+  const vulnFindings = verifiedFindings.length > 0
+    ? verifiedFindings.filter((f) => f.severity === "critical" || f.severity === "high" || f.severity === "blocking" || f.severity === "major")
+    : (summary.vulnerability_findings || []);
   const findingGroups = [];
   const seenTitles = new Map();
   allFindings.forEach((f) => {
@@ -617,11 +630,12 @@ function buildDashboardHtml(summary) {
     const trackBadges = f.tracks.map((t) => `<code>${esc(t)}</code>`).join(" ");
     const refs = f.allRefs.slice(0, 3).map((r) => `<code class="line-ref">${esc(r.file)}:${r.start_line}</code>`).join(" ");
     const moreRefs = f.allRefs.length > 3 ? `<code class="line-ref">+${f.allRefs.length - 3}</code>` : "";
+    const verifiedBadge = f.verification === "verified" ? `<span class="sev sev-low" style="font-size:.5rem;padding:1px 4px">\u2713 verified</span>` : "";
     return `<div class="finding-card${isVuln ? " finding-vuln" : ""}" id="fg-${i}">
       <div class="finding-header">
         <span class="sev ${esc(sevClass)}">${esc(f.severity || "info")}</span>
         <span class="finding-title">${esc(f.title)}</span>
-        ${countBadge}
+        ${countBadge}${verifiedBadge}
       </div>
       ${f.detail ? `<div class="finding-detail">${esc(f.detail.length > 200 ? f.detail.slice(0, 200) + "\u2026" : f.detail)}</div>` : ""}
       ${refs ? `<div class="finding-refs">${refs}${moreRefs}</div>` : ""}
