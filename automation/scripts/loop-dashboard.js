@@ -3,6 +3,7 @@
 const fs = require("fs");
 const path = require("path");
 const h = require("./loop-helpers");
+const { loadSuppressions, isSuppressed, fingerprintFinding } = require("./finding-intelligence");
 
 // ── Dashboard Generation ────────────────────────────────────────
 
@@ -85,6 +86,8 @@ function generateDashboard(config, args = {}, silent = false) {
   const suggestionFindings = [];
   const vulnerabilityFindings = [];
   const modelStats = {};
+  const suppressions = loadSuppressions();
+  let totalSuppressed = 0;
   const coachingCoverage = Object.entries(coachingConfig.profiles || {}).reduce((acc, [id, profile]) => {
     acc[id] = {
       id, name: profile.name, purpose: profile.purpose,
@@ -174,6 +177,11 @@ function generateDashboard(config, args = {}, silent = false) {
         line_refs: Array.isArray(finding.line_refs) ? finding.line_refs : [],
         file_paths: Array.isArray(finding.file_paths) ? finding.file_paths : []
       };
+      const fp = fingerprintFinding(normalizedFinding);
+      if (isSuppressed(normalizedFinding, fp, suppressions).suppressed) {
+        totalSuppressed++;
+        return;
+      }
       openFindings.push(normalizedFinding);
       if (h.isVulnerabilityFinding(finding)) vulnerabilityFindings.push(normalizedFinding);
       else if (h.isSuggestionFinding(finding)) suggestionFindings.push(normalizedFinding);
@@ -200,6 +208,7 @@ function generateDashboard(config, args = {}, silent = false) {
       training_eligible: records.filter((r) => r.training_eligible).length,
       suggestions: totalSuggestions,
       vulnerabilities: totalVulnerabilities,
+      suppressed: totalSuppressed,
       rejected_rewrites: totalRejectedRewrites,
       coached_products: guidedProductsSet.size,
       focused_products: focusedProductsSet.size,
