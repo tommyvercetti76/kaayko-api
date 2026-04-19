@@ -4,6 +4,7 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const { spawnSync } = require("child_process");
+const ollamaClient = require("./ollama-client");
 const agentFilesModule = require("./agent-files");
 const agentVerifyModule = require("./agent-verify");
 
@@ -487,7 +488,13 @@ function validateReview(review) {
 function computeRunMetrics(manifest) {
   const diffSummary = (manifest.git_snapshots || []).reduce(
     (acc, snapshot) => {
-      const parsed = parseDiffStatSummary(snapshot.diff_stat);
+      const parsed = snapshot && snapshot.product_diff_summary
+        ? {
+            files_changed: Number(snapshot.product_diff_summary.files_changed || 0),
+            insertions: Number(snapshot.product_diff_summary.insertions || 0),
+            deletions: Number(snapshot.product_diff_summary.deletions || 0)
+          }
+        : parseDiffStatSummary(snapshot.diff_stat);
       acc.files_changed += parsed.files_changed;
       acc.insertions += parsed.insertions;
       acc.deletions += parsed.deletions;
@@ -517,6 +524,36 @@ function parseDiffStatSummary(diffStat) {
     insertions: extractFirstNumber(text, /(\d+)\s+insertions?\(\+\)/),
     deletions: extractFirstNumber(text, /(\d+)\s+deletions?\(-\)/)
   };
+}
+
+function parseNumStatSummary(numStatText, allowedPaths) {
+  const allowSet = allowedPaths ? new Set(allowedPaths) : null;
+  const totals = { files_changed: 0, insertions: 0, deletions: 0 };
+  const seenFiles = new Set();
+
+  String(numStatText || "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .forEach((line) => {
+      const parts = line.split("\t");
+      if (parts.length < 3) return;
+      const filePath = parts.slice(2).join("\t").trim();
+      if (!filePath) return;
+      if (allowSet && !allowSet.has(filePath)) return;
+
+      if (!seenFiles.has(filePath)) {
+        seenFiles.add(filePath);
+        totals.files_changed += 1;
+      }
+
+      const insertions = Number(parts[0]);
+      const deletions = Number(parts[1]);
+      totals.insertions += Number.isFinite(insertions) ? insertions : 0;
+      totals.deletions += Number.isFinite(deletions) ? deletions : 0;
+    });
+
+  return totals;
 }
 
 function deriveApiSurfaces(changedFiles) {
@@ -571,6 +608,8 @@ function captureGitSnapshot(repoKey, repoPath) {
   const head = runShell("git rev-parse HEAD", repoPath);
   const statusShort = runShell("git status --short", repoPath);
   const diffStat = runShell("git diff --stat", repoPath);
+  const diffNumStat = runShell("git diff --numstat", repoPath);
+  const stagedNumStat = runShell("git diff --cached --numstat", repoPath);
   const diffNameOnly = runShell("git diff --name-only", repoPath);
   const stagedNameOnly = runShell("git diff --cached --name-only", repoPath);
   const changedFiles = Array.from(
@@ -585,6 +624,10 @@ function captureGitSnapshot(repoKey, repoPath) {
   // Exclude automation infrastructure files from metrics
   const productChangedFiles = changedFiles.filter((f) => !f.startsWith("automation/"));
   const prefixedChangedFiles = productChangedFiles.map((filePath) => `${repoKey}:${filePath}`);
+  const productDiffSummary = parseNumStatSummary(
+    [diffNumStat.stdout, stagedNumStat.stdout].filter(Boolean).join("\n"),
+    productChangedFiles
+  );
 
   return {
     repo: repoKey,
@@ -595,6 +638,7 @@ function captureGitSnapshot(repoKey, repoPath) {
     diff_stat: diffStat.stdout.trim(),
     changed_files: prefixedChangedFiles,
     repo_relative_changed_files: productChangedFiles,
+    product_diff_summary: productDiffSummary,
     captured_at: new Date().toISOString()
   };
 }
@@ -721,6 +765,57 @@ function makeCheck(label, ok, detail) {
 
 // ── Ollama Interaction ──────────────────────────────────────────
 
+const ollamaBinaryProbeCache = new Map();
+
+function summarizeOllamaFailure(message) {
+  const normalized = String(message || "").replace(/\s+/g, " ").trim();
+  if (!normalized) return "unknown Ollama failure";
+  if (/Failed to connect to .*127\.0\.0\.1.*11434|connect to server|ECONNREFUSED/i.test(normalized)) {
+    return "daemon not reachable at the configured base_url";
+  }
+  if (/NSRangeException|SIGABRT|libmlx|metal allocator|mlx_random_key/i.test(normalized)) {
+    return "binary crashed during local MLX/Metal initialization";
+  }
+  if (/timed out|timeout/i.test(normalized)) {
+    return "request timed out";
+  }
+  return normalized.slice(0, 220);
+}
+
+function probeOllamaBinary(binaryPath, timeoutMs = 5000) {
+  if (!binaryPath) {
+    return { ok: false, detail: "binary not found" };
+  }
+
+  const cacheKey = `${binaryPath}:${timeoutMs}`;
+  if (ollamaBinaryProbeCache.has(cacheKey)) {
+    return ollamaBinaryProbeCache.get(cacheKey);
+  }
+
+  const result = spawnSync(binaryPath, ["--version"], {
+    cwd: REPO_ROOT,
+    encoding: "utf8",
+    env: process.env,
+    timeout: timeoutMs,
+    maxBuffer: 2 * 1024 * 1024
+  });
+
+  let probe;
+  if (result.error) {
+    probe = { ok: false, detail: summarizeOllamaFailure(result.error.message) };
+  } else if (result.status === 0) {
+    probe = { ok: true, detail: String(result.stdout || result.stderr || "healthy").trim() };
+  } else {
+    probe = {
+      ok: false,
+      detail: summarizeOllamaFailure(String(result.stderr || result.stdout || `exit ${result.status}`))
+    };
+  }
+
+  ollamaBinaryProbeCache.set(cacheKey, probe);
+  return probe;
+}
+
 function invokeOllamaPrompt(runtime, prompt, label) {
   const binary = whichBinary("ollama");
   const httpErrors = [];
@@ -732,7 +827,7 @@ function invokeOllamaPrompt(runtime, prompt, label) {
 
   if (runtime.base_url) {
     try { return invokeOllamaHttpPrompt(runtime, prompt, label); }
-    catch (error) { httpErrors.push(error.message); }
+    catch (error) { httpErrors.push(summarizeOllamaFailure(error.message)); }
   }
 
   if (runtime.base_url && !allowCliFallback) {
@@ -743,6 +838,12 @@ function invokeOllamaPrompt(runtime, prompt, label) {
     throw new Error(
       `Ollama is required for ${label}, but the HTTP endpoint failed (${httpErrors.join("; ") || "no endpoint configured"}) and the \`ollama\` binary was not found.`
     );
+  }
+
+  const binaryProbe = probeOllamaBinary(binary, 5000);
+  if (!binaryProbe.ok) {
+    const httpPrefix = httpErrors.length ? `HTTP failed (${httpErrors.join("; ")}); ` : "";
+    throw new Error(`Ollama ${label} unavailable: ${httpPrefix}CLI binary is unhealthy (${binaryProbe.detail}).`);
   }
 
   const env = { ...process.env };
@@ -759,7 +860,9 @@ function invokeOllamaPrompt(runtime, prompt, label) {
   });
 
   if (result.error) throw new Error(`Ollama ${label} failed: ${result.error.message}`);
-  if (result.status !== 0) throw new Error(`Ollama ${label} failed with exit code ${result.status}: ${String(result.stderr || result.stdout || "").trim()}`);
+  if (result.status !== 0) {
+    throw new Error(`Ollama ${label} failed with exit code ${result.status}: ${summarizeOllamaFailure(String(result.stderr || result.stdout || "").trim())}`);
+  }
 
   const output = String(result.stdout || "").trim();
   if (!output) throw new Error(`Ollama ${label} returned no output.`);
@@ -767,40 +870,10 @@ function invokeOllamaPrompt(runtime, prompt, label) {
 }
 
 function invokeOllamaHttpPrompt(runtime, prompt, label) {
-  const curl = whichBinary("curl");
-  if (!curl) throw new Error("curl is required for Ollama HTTP requests.");
-
-  const requestUrl = `${String(runtime.base_url || "http://127.0.0.1:11434").replace(/\/$/, "")}/api/generate`;
-  const payload = {
-    model: runtime.model,
-    prompt,
-    stream: false,
-    options: {
-      temperature: runtime.temperature ?? 0.1,
-      num_predict: runtime.max_tokens ?? 4096
-    }
-  };
-  const payloadPath = path.join(os.tmpdir(), `kaayko-api-ollama-${process.pid}-${Date.now()}.json`);
-  fs.writeFileSync(payloadPath, `${JSON.stringify(payload)}\n`);
-
   try {
-    const timeoutSec = Math.ceil(Number(runtime.timeout_ms || 300000) / 1000);
-    const result = spawnSync(
-      curl,
-      ["-sS", "-X", "POST", requestUrl, "-H", "Content-Type: application/json", "--max-time", String(timeoutSec), "--data-binary", `@${payloadPath}`],
-      { cwd: REPO_ROOT, encoding: "utf8", timeout: Number(runtime.timeout_ms || 300000) + 10000, maxBuffer: 24 * 1024 * 1024, env: process.env }
-    );
-    if (result.error) throw new Error(result.error.message);
-    if (result.status !== 0) throw new Error(String(result.stderr || result.stdout || "").trim() || `curl exit ${result.status}`);
-
-    const parsed = JSON.parse(String(result.stdout || "{}"));
-    const responseText = String(parsed.response || "").trim();
-    if (!responseText) throw new Error(`Ollama ${label} returned an empty HTTP response payload.`);
-    return responseText;
+    return ollamaClient.generateSync(runtime, prompt, label);
   } catch (error) {
-    throw new Error(`Ollama HTTP ${label} failed: ${error.message}`);
-  } finally {
-    if (fs.existsSync(payloadPath)) fs.unlinkSync(payloadPath);
+    throw new Error(`Ollama HTTP ${label} failed: ${summarizeOllamaFailure(error.message)}`);
   }
 }
 
@@ -1300,7 +1373,7 @@ module.exports = {
   // Validation
   validateInitArgs, validateReview,
   // Metrics
-  computeRunMetrics, parseDiffStatSummary, deriveApiSurfaces, deriveBackendRoutes,
+  computeRunMetrics, parseDiffStatSummary, parseNumStatSummary, deriveApiSurfaces, deriveBackendRoutes,
   isMeaningfulProductFile, debtLevelFromMetrics,
   severityRank, isVulnerabilityFinding, isSuggestionFinding,
   // Git
@@ -1311,6 +1384,7 @@ module.exports = {
   runShell, whichBinary, makeCheck,
   // Ollama
   invokeOllamaPrompt, invokeOllamaHttpPrompt, invokeOllamaStreamingPrompt, fetchOllamaTags,
+  summarizeOllamaFailure, probeOllamaBinary,
   parseAgentJsonResponse, extractCodeFence, extractJsonBlock,
   // Coaching
   loadAgentCoachingConfig, buildAgentCoachingBundle, resolveRunCoachingContext,

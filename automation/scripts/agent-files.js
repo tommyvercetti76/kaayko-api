@@ -13,10 +13,14 @@ const fs = require("fs");
 const path = require("path");
 
 /**
- * Detect whether a goal is an "audit" (read-only analysis) vs "edit" (propose changes).
+ * Detect whether a goal is an audit, scout, or edit mission.
  */
 function detectGoalMode(goal) {
   const lower = String(goal || "").toLowerCase();
+  const scoutPatterns = [
+    /\bscout\b/, /\bideat/i, /\bopportunit/i, /\bfeature\b.*\bidea/i,
+    /\bdeveloper experience\b/, /\breliability\b.*\bimprov/i, /\bmoderniz/i
+  ];
   const auditPatterns = [
     /\baudit\b/, /\breview\b/, /\banalyze\b/, /\banalysis\b/, /\binventory\b/,
     /\blist\b.*\b(endpoint|route|middleware)/, /\bfind\b.*\b(duplica|dead|unused)/,
@@ -24,6 +28,7 @@ function detectGoalMode(goal) {
     /\bscope\b/, /\bassess\b/, /\binspect\b/, /\bsecurity\b.*\b(review|audit|check)/,
     /\btenant\b.*\bisolation/, /\bauth\b.*\b(gap|check|audit)/
   ];
+  if (scoutPatterns.some((pattern) => pattern.test(lower))) return "scout";
   return auditPatterns.some((p) => p.test(lower)) ? "audit" : "edit";
 }
 
@@ -47,7 +52,9 @@ function detectGoalFileHints(goal) {
  * Compute max files to select based on goal mode.
  */
 function computeMaxFiles(goalMode) {
-  return goalMode === "audit" ? 18 : 4;
+  if (goalMode === "audit") return 18;
+  if (goalMode === "scout") return 12;
+  return 4;
 }
 
 /**
@@ -55,7 +62,7 @@ function computeMaxFiles(goalMode) {
  */
 function computeMaxCharsForFile(candidate, goalMode, runtimeOverride) {
   if (runtimeOverride) return Number(runtimeOverride);
-  const base = goalMode === "audit" ? 25000 : 8000;
+  const base = goalMode === "audit" ? 25000 : goalMode === "scout" ? 16000 : 8000;
   // Config/JSON files are usually compact — send full
   if (candidate.path.endsWith(".json")) return Math.max(base, 8000);
   // Small files: send full

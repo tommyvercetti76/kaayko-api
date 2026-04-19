@@ -202,7 +202,7 @@ async function generate(runtime, prompt, label, overrides = {}) {
       maxRetries: overrides.maxRetries ?? 3,
       onRetry: (attempt, delayMs, error) => {
         const delaySec = (delayMs / 1000).toFixed(1);
-        process.stdout.write(`\n    ⟳ retry ${attempt} in ${delaySec}s (${error.message.slice(0, 80)})`);
+        process.stderr.write(`\n    ⟳ retry ${attempt} in ${delaySec}s (${error.message.slice(0, 80)})`);
       }
     }
   );

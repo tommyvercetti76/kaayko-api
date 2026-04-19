@@ -47,6 +47,51 @@ const PRIORITIES = {
   background: 5  // Automated periodic scans
 };
 
+function normalizeGoalText(goal) {
+  return String(goal || "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function makeQueueFingerprint(track, goal, goalMode = "audit") {
+  const normalized = [
+    String(track || "shared").toLowerCase().trim(),
+    normalizeGoalText(goal),
+    String(goalMode || "audit").toLowerCase().trim()
+  ].join("|");
+
+  return crypto.createHash("sha1").update(normalized).digest("hex").slice(0, 16);
+}
+
+function getItemFingerprint(item) {
+  if (!item) return "";
+  return item.fingerprint || makeQueueFingerprint(item.track, item.goal, item.goalMode);
+}
+
+function getItemTimestamp(item) {
+  return item?.completedAt || item?.failedAt || item?.startedAt || item?.createdAt || null;
+}
+
+function findDuplicateItem(items, params, options = {}) {
+  const fingerprint = params.fingerprint || makeQueueFingerprint(params.track, params.goal, params.goalMode);
+  const cooldownMs = Number(options.cooldownMs || 0);
+  const nowMs = Number(options.nowMs || Date.now());
+
+  return items.find((item) => {
+    if (getItemFingerprint(item) !== fingerprint) return false;
+    if (cooldownMs <= 0) return true;
+
+    const timestamp = getItemTimestamp(item);
+    if (!timestamp) return true;
+
+    const itemTime = new Date(timestamp).getTime();
+    if (!Number.isFinite(itemTime)) return true;
+
+    return nowMs - itemTime <= cooldownMs;
+  }) || null;
+}
+
 // ── Queue Storage ───────────────────────────────────────────────
 
 function ensureQueueDirs() {
@@ -71,12 +116,55 @@ function ensureQueueDirs() {
 function enqueue(params) {
   ensureQueueDirs();
 
+  const track = params.track || "shared";
+  const goal = params.goal;
+  const goalMode = params.goalMode || "audit";
+  const fingerprint = makeQueueFingerprint(track, goal, goalMode);
+  const allowDuplicate = params.allowDuplicate === true;
+  const cooldownHours = Math.max(0, Number(params.cooldownHours || 0));
+
+  if (!allowDuplicate) {
+    const activeDuplicate = findDuplicateItem(
+      [...listItems("pending"), ...listItems("processing")],
+      { track, goal, goalMode, fingerprint }
+    );
+
+    if (activeDuplicate) {
+      return {
+        ...activeDuplicate,
+        fingerprint: getItemFingerprint(activeDuplicate),
+        duplicate: true,
+        enqueued: false,
+        duplicateState: activeDuplicate.status || "pending"
+      };
+    }
+
+    if (cooldownHours > 0) {
+      const recentDuplicate = findDuplicateItem(
+        [...listItems("done"), ...listItems("failed")],
+        { track, goal, goalMode, fingerprint },
+        { cooldownMs: cooldownHours * 60 * 60 * 1000 }
+      );
+
+      if (recentDuplicate) {
+        return {
+          ...recentDuplicate,
+          fingerprint: getItemFingerprint(recentDuplicate),
+          duplicate: true,
+          enqueued: false,
+          duplicateState: recentDuplicate.status || "recent"
+        };
+      }
+    }
+  }
+
   const id = `q-${Date.now()}-${crypto.randomBytes(3).toString("hex")}`;
   const item = {
     id,
-    track: params.track || "shared",
-    goal: params.goal,
-    goalMode: params.goalMode || "audit",
+    fingerprint,
+    track,
+    goal,
+    goalMode,
     priority: PRIORITIES[params.priority] || PRIORITIES.normal,
     priorityLabel: params.priority || "normal",
     source: params.source || "manual",
@@ -87,7 +175,7 @@ function enqueue(params) {
 
   const filePath = path.join(QUEUE_DIRS.pending, `${id}.json`);
   fs.writeFileSync(filePath, JSON.stringify(item, null, 2));
-  return item;
+  return { ...item, duplicate: false, enqueued: true };
 }
 
 /**
@@ -410,6 +498,9 @@ module.exports = {
   moveItem,
   getQueueOverview,
   QueueProcessor,
+  makeQueueFingerprint,
+  findDuplicateItem,
+  normalizeGoalText,
   PRIORITIES,
   QUEUE_DIRS,
   ensureQueueDirs

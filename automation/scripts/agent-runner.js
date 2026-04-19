@@ -2,10 +2,10 @@
  * agent-runner.js — Orchestrates the complete agent lifecycle for kaayko-api.
  *
  * Phases:
- * 1. PLAN — collect candidate files, detect goal mode (audit vs edit)
+ * 1. PLAN — collect candidate files, detect goal mode (audit vs edit vs scout)
  * 2. SELECT — model picks files to inspect (dynamic limits based on mode)
  * 3. LOAD — read file contents with smart truncation
- * 4. ANALYZE — model produces findings (audit mode) or findings + edits (edit mode)
+ * 4. ANALYZE — model or heuristic fallback produces structured findings
  * 5. VERIFY — apply edits (if edit mode), run syntax/lint checks, generate verification report
  * 6. GATE — require user approval via diff → approve/reject before anything is committed
  */
@@ -15,6 +15,7 @@ const os = require("os");
 const agentFiles = require("./agent-files");
 const agentPrompts = require("./agent-prompts");
 const agentVerify = require("./agent-verify");
+const heuristicAgent = require("./heuristic-agent");
 
 // ── Progress Display Helpers ────────────────────────────────────
 
@@ -45,6 +46,22 @@ function formatBytes(bytes) {
   if (bytes < 1024) return `${bytes}B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
+}
+
+function compactRuntimeIssue(message) {
+  const normalized = String(message || "").replace(/\s+/g, " ").trim();
+  if (!normalized) return "unknown runtime issue";
+
+  const httpMatch = normalized.match(/HTTP failed \((.*?)\);/i);
+  const cliMatch = normalized.match(/CLI binary is unhealthy \((.*?)\)/i);
+  if (httpMatch || cliMatch) {
+    const parts = [];
+    if (httpMatch) parts.push(`HTTP unavailable (${httpMatch[1]})`);
+    if (cliMatch) parts.push(`CLI unavailable (${cliMatch[1]})`);
+    return parts.join("; ");
+  }
+
+  return normalized.slice(0, 220);
 }
 
 function missionBanner(manifest, args, runtime, goalMode) {
@@ -108,7 +125,9 @@ function executeLocalModelAgent(config, runtimeConfig, runDir, manifest, args, h
   const runtime = runtimeConfig.local_model_runtime || {};
 
   const explicitMode = args["goal-mode"];
-  const goalMode = (explicitMode === "audit" || explicitMode === "edit") ? explicitMode : agentFiles.detectGoalMode(args.goal);
+  const goalMode = (explicitMode === "audit" || explicitMode === "edit" || explicitMode === "scout")
+    ? explicitMode
+    : agentFiles.detectGoalMode(args.goal);
 
   // Artifact paths
   const inventoryPath = path.join(agentDir, "inventory.json");
@@ -127,6 +146,15 @@ function executeLocalModelAgent(config, runtimeConfig, runDir, manifest, args, h
 
   const coachingBundle = buildAgentCoachingBundle(manifest.track, args.area, args.goal);
   writeText(path.join(runDir, "notes", "agent-briefing.md"), buildAgentCoachingMarkdown(coachingBundle, args));
+
+  const runtimeMetadata = {
+    provider: runtime.provider || "ollama",
+    model: runtime.model || "heuristic",
+    inventory_strategy: "model",
+    analysis_strategy: "model",
+    fallback_reason: null,
+    warnings: []
+  };
 
   // ──────────────── PHASE 1: COLLECT CANDIDATES ────────────────
 
@@ -156,11 +184,28 @@ function executeLocalModelAgent(config, runtimeConfig, runDir, manifest, args, h
     buildAgentCoachingPromptSection
   });
   writeText(inventoryPromptPath, inventoryPrompt);
+  let inventoryRaw = "";
+  let inventoryResponse = null;
   const t2 = Date.now();
-  const inventoryRaw = invokeOllamaPrompt(runtime, inventoryPrompt, "inventory selection");
-  console.log(` done (${((Date.now() - t2) / 1000).toFixed(1)}s)`);
+  try {
+    inventoryRaw = invokeOllamaPrompt(runtime, inventoryPrompt, "inventory selection");
+    inventoryResponse = parseAgentJsonResponse(inventoryRaw, "inventory selection");
+    console.log(` done (${((Date.now() - t2) / 1000).toFixed(1)}s)`);
+  } catch (error) {
+    const issue = compactRuntimeIssue(error.message);
+    runtimeMetadata.inventory_strategy = "heuristic";
+    runtimeMetadata.fallback_reason = runtimeMetadata.fallback_reason || issue;
+    runtimeMetadata.warnings.push(`Inventory selection fallback: ${issue}`);
+    inventoryResponse = heuristicAgent.buildHeuristicInventoryResponse(inventory, goalMode);
+    inventoryRaw = JSON.stringify({
+      fallback: true,
+      strategy: "heuristic",
+      reason: issue,
+      response: inventoryResponse
+    }, null, 2);
+    console.log(` fallback (${issue.slice(0, 120)})`);
+  }
   writeText(inventoryRawPath, inventoryRaw);
-  const inventoryResponse = parseAgentJsonResponse(inventoryRaw, "inventory selection");
   writeJson(inventoryJsonPath, inventoryResponse);
 
   // ──────────────── PHASE 3: LOAD FILE CONTENTS ────────────────
@@ -213,12 +258,40 @@ function executeLocalModelAgent(config, runtimeConfig, runDir, manifest, args, h
     buildAgentCoachingPromptSection
   });
   writeText(analysisPromptPath, analysisPrompt);
+  let analysisRaw = "";
+  let normalizedAnalysis = null;
   const t4 = Date.now();
-  const analysisRaw = invokeOllamaPrompt(runtime, analysisPrompt, "agent analysis");
-  console.log(` done (${((Date.now() - t4) / 1000).toFixed(1)}s)`);
+  try {
+    analysisRaw = invokeOllamaPrompt(runtime, analysisPrompt, "agent analysis");
+    const analysisResponse = parseAgentJsonResponse(analysisRaw, "agent analysis");
+    const candidateAnalysis = normalizeAgentAnalysis(analysisResponse, selectedFilePayload, goalMode);
+    const quality = heuristicAgent.assessAnalysisQuality(candidateAnalysis, selectedFilePayload, goalMode);
+    if (!quality.ok) {
+      throw new Error(`Model output was low-signal: ${quality.reasons.join("; ")}`);
+    }
+    normalizedAnalysis = candidateAnalysis;
+    console.log(` done (${((Date.now() - t4) / 1000).toFixed(1)}s)`);
+  } catch (error) {
+    const issue = compactRuntimeIssue(error.message);
+    runtimeMetadata.analysis_strategy = "heuristic";
+    runtimeMetadata.provider = "heuristic";
+    runtimeMetadata.model = "rule-based-analysis";
+    runtimeMetadata.fallback_reason = runtimeMetadata.fallback_reason || issue;
+    runtimeMetadata.warnings.push(`Analysis fallback: ${issue}`);
+    normalizedAnalysis = normalizeAgentAnalysis(
+      heuristicAgent.buildHeuristicAnalysis(manifest, args, selectedFilePayload, goalMode, { reason: issue }),
+      selectedFilePayload,
+      goalMode
+    );
+    analysisRaw = JSON.stringify({
+      fallback: true,
+      strategy: "heuristic",
+      reason: issue,
+      response: normalizedAnalysis
+    }, null, 2);
+    console.log(` fallback (${issue.slice(0, 120)})`);
+  }
   writeText(analysisRawPath, analysisRaw);
-  const analysisResponse = parseAgentJsonResponse(analysisRaw, "agent analysis");
-  const normalizedAnalysis = normalizeAgentAnalysis(analysisResponse, selectedFilePayload, goalMode);
   writeJson(analysisJsonPath, normalizedAnalysis);
 
   // ──────────────── PHASE 5: VERIFY & APPLY (edit mode only) ────────────────
@@ -290,8 +363,15 @@ function executeLocalModelAgent(config, runtimeConfig, runDir, manifest, args, h
       ...(m.agent || {}),
       stage: "completed",
       goal_mode: goalMode,
+      provider: runtimeMetadata.provider,
+      model: runtimeMetadata.model,
+      inventory_strategy: runtimeMetadata.inventory_strategy,
+      analysis_strategy: runtimeMetadata.analysis_strategy,
+      fallback_reason: runtimeMetadata.fallback_reason,
+      warnings: runtimeMetadata.warnings,
       summary: normalizedAnalysis.summary,
       findings_count: normalizedAnalysis.findings.length,
+      opportunities_count: Array.isArray(normalizedAnalysis.opportunities) ? normalizedAnalysis.opportunities.length : 0,
       applied_files: appliedEdits.map((item) => item.path),
       applied_edits_detail: appliedEdits.map((item) => ({
         path: item.path,
@@ -324,6 +404,7 @@ function executeLocalModelAgent(config, runtimeConfig, runDir, manifest, args, h
     inventory_response: inventoryResponse,
     selected_files: selectedFilePayload,
     analysis: normalizedAnalysis,
+    runtime: runtimeMetadata,
     applied_edits: appliedEdits,
     rejected_edits: rejectedEdits,
     verification,
@@ -376,7 +457,8 @@ function normalizeAgentAnalysis(response, selectedFiles, goalMode) {
           line_refs: Array.isArray(finding.line_refs)
             ? finding.line_refs
                 .filter((ref) => ref && typeof ref.file === "string" && typeof ref.start_line === "number")
-                .map((ref) => ({ file: String(ref.file).trim(), start_line: ref.start_line, end_line: ref.end_line || ref.start_line }))
+                .map((ref) => ({ file: resolveEditPath(String(ref.file).trim()), start_line: ref.start_line, end_line: ref.end_line || ref.start_line }))
+                .filter((ref) => selectedPaths.has(ref.file))
             : []
         }))
         .filter((finding) => finding.title && finding.detail)
@@ -386,10 +468,28 @@ function normalizeAgentAnalysis(response, selectedFiles, goalMode) {
     summary: String(response.summary || "").trim(),
     insights: Array.isArray(response.insights) ? response.insights.map((item) => String(item).trim()).filter(Boolean) : [],
     findings,
-    followups: Array.isArray(response.followups) ? response.followups.map((item) => String(item).trim()).filter(Boolean) : []
+    followups: Array.isArray(response.followups) ? response.followups.map((item) => String(item).trim()).filter(Boolean) : [],
+    opportunities: [],
+    analysis_metadata: null
   };
 
-  if (goalMode === "audit") {
+  if (response.heuristic_metadata && typeof response.heuristic_metadata === "object") {
+    base.analysis_metadata = {
+      source: "heuristic",
+      generated_at: String(response.heuristic_metadata.generated_at || "").trim(),
+      reason: String(response.heuristic_metadata.reason || "").trim(),
+      run_id: String(response.heuristic_metadata.run_id || "").trim()
+    };
+  } else if (response.analysis_metadata && typeof response.analysis_metadata === "object") {
+    base.analysis_metadata = {
+      source: String(response.analysis_metadata.source || "model").trim(),
+      generated_at: String(response.analysis_metadata.generated_at || "").trim(),
+      reason: String(response.analysis_metadata.reason || "").trim(),
+      run_id: String(response.analysis_metadata.run_id || "").trim()
+    };
+  }
+
+  if (goalMode === "audit" || goalMode === "scout") {
     base.endpoint_inventory = Array.isArray(response.endpoint_inventory)
       ? response.endpoint_inventory.map((e) => ({
           method: String(e.method || "").trim(),
@@ -423,6 +523,22 @@ function normalizeAgentAnalysis(response, selectedFiles, goalMode) {
           exports: Array.isArray(d.exports) ? d.exports : [],
           used_by: Array.isArray(d.used_by) ? d.used_by : []
         }))
+      : [];
+    base.opportunities = goalMode === "scout" && Array.isArray(response.opportunities)
+      ? response.opportunities
+          .map((opportunity) => ({
+            title: String(opportunity.title || "").trim(),
+            impact: String(opportunity.impact || "medium").trim(),
+            effort: String(opportunity.effort || "medium").trim(),
+            rationale: String(opportunity.rationale || "").trim(),
+            file_paths: Array.isArray(opportunity.file_paths)
+              ? opportunity.file_paths.map(resolveEditPath).filter((item) => selectedPaths.has(item))
+              : [],
+            proposed_changes: Array.isArray(opportunity.proposed_changes)
+              ? opportunity.proposed_changes.map((item) => String(item || "").trim()).filter(Boolean)
+              : []
+          }))
+          .filter((opportunity) => opportunity.title && opportunity.rationale)
       : [];
     base.safe_edits = [];
   } else {

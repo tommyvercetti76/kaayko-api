@@ -30,6 +30,7 @@ const SCOUT_DEFAULTS = {
   intervalHours: 4,          // how often to sweep in continuous mode
   maxQueueDepth: 10,         // don't enqueue more if queue already has 10+ pending
   stalenessDaysThreshold: 3, // track is "stale" if not audited in 3+ days
+  duplicateCooldownHours: 24, // don't enqueue the same scout goal repeatedly within a day
   ideateEnabled: false,      // feature ideation off by default
   auditGoals: [
     "Security audit: check for unvalidated inputs, missing auth, injection risks, and exposed secrets",
@@ -117,7 +118,7 @@ function sweep(options, helpers, findingIntel, pipelineQueue) {
     goals.push({
       track: targetTrack,
       goal: `Feature ideation: Given the ${targetTrack} API track, identify 1-2 specific features that would improve reliability, security, or developer experience. Name the exact file, function, and proposed change.`,
-      goalMode: "audit",
+      goalMode: "scout",
       priority: "background",
       source: "scout-ideate"
     });
@@ -125,9 +126,23 @@ function sweep(options, helpers, findingIntel, pipelineQueue) {
 
   // Enqueue
   let enqueued = 0;
+  let deduped = 0;
+  const duplicateGoals = [];
   if (!options.dryRun) {
     for (const g of goals) {
-      pipelineQueue.enqueue(g);
+      const queued = pipelineQueue.enqueue({
+        ...g,
+        cooldownHours: options.cooldownHours || SCOUT_DEFAULTS.duplicateCooldownHours
+      });
+      if (queued.duplicate) {
+        deduped++;
+        duplicateGoals.push({
+          goal: g.goal,
+          state: queued.duplicateState || "existing",
+          itemId: queued.id || null
+        });
+        continue;
+      }
       enqueued++;
     }
   }
@@ -136,6 +151,8 @@ function sweep(options, helpers, findingIntel, pipelineQueue) {
     track: targetTrack,
     goals,
     enqueued,
+    deduped,
+    duplicateGoals,
     skipped: null,
     staleness: trackStaleness?.daysSinceAudit || null
   };
@@ -167,12 +184,12 @@ function startContinuous(options, helpers, findingIntel, pipelineQueue) {
     if (result.skipped) {
       console.log(`  [scout ${ts}] Skipped: ${result.skipped}`);
     } else {
-      console.log(`  [scout ${ts}] Swept ${result.track}: ${result.enqueued} goals enqueued`);
+      console.log(`  [scout ${ts}] Swept ${result.track}: ${result.enqueued} goals enqueued${result.deduped ? `, ${result.deduped} deduped` : ""}`);
     }
 
     // Log to file
     const logPath = path.join(AUTOMATION_ROOT, "logs", "scout.log");
-    const logLine = `${ts} | track=${result.track || "none"} | enqueued=${result.enqueued} | skipped=${result.skipped || "no"}\n`;
+    const logLine = `${ts} | track=${result.track || "none"} | enqueued=${result.enqueued} | deduped=${result.deduped || 0} | skipped=${result.skipped || "no"}\n`;
     try { fs.appendFileSync(logPath, logLine); } catch { /* ignore */ }
 
     timer = setTimeout(run, intervalMs);

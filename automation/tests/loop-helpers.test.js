@@ -51,6 +51,20 @@ describe("uniqueStrings", () => {
   });
 });
 
+describe("summarizeOllamaFailure", () => {
+  test("compresses connection failures", () => {
+    expect(
+      h.summarizeOllamaFailure("curl: (7) Failed to connect to 127.0.0.1 port 11434 after 0 ms")
+    ).toContain("daemon not reachable");
+  });
+
+  test("compresses MLX crash output", () => {
+    expect(
+      h.summarizeOllamaFailure("NSRangeException libmlx mlx_random_key SIGABRT")
+    ).toContain("MLX/Metal");
+  });
+});
+
 // ── Metrics ─────────────────────────────────────────────────────
 
 describe("isMeaningfulProductFile", () => {
@@ -131,6 +145,25 @@ describe("parseDiffStatSummary", () => {
   });
 });
 
+describe("parseNumStatSummary", () => {
+  test("filters churn to allowed product files", () => {
+    const stat = [
+      "12\t3\tfunctions/api/weather/index.js",
+      "4\t1\tautomation/scripts/loop.js",
+      "7\t0\tfunctions/middleware/auth.js"
+    ].join("\n");
+
+    const result = h.parseNumStatSummary(stat, [
+      "functions/api/weather/index.js",
+      "functions/middleware/auth.js"
+    ]);
+
+    expect(result.files_changed).toBe(2);
+    expect(result.insertions).toBe(19);
+    expect(result.deletions).toBe(3);
+  });
+});
+
 describe("computeRunMetrics", () => {
   test("computes from manifest with changed_files", () => {
     const manifest = {
@@ -147,6 +180,20 @@ describe("computeRunMetrics", () => {
     expect(metrics.changed_files_count).toBe(3);
     expect(metrics.meaningful_product_files_changed).toBe(3);
     expect(metrics.total_churn).toBe(25);
+  });
+  test("prefers product diff summary over repo-wide diff stat", () => {
+    const manifest = {
+      changed_files: [],
+      git_snapshots: [{
+        diff_stat: " 9 files changed, 607 insertions(+), 95 deletions(-)",
+        product_diff_summary: { files_changed: 0, insertions: 0, deletions: 0 }
+      }]
+    };
+    const metrics = h.computeRunMetrics(manifest);
+    expect(metrics.changed_files_count).toBe(0);
+    expect(metrics.insertions).toBe(0);
+    expect(metrics.deletions).toBe(0);
+    expect(metrics.total_churn).toBe(0);
   });
   test("handles empty manifest", () => {
     const metrics = h.computeRunMetrics({});

@@ -14,7 +14,7 @@ function buildAgentInventoryPrompt(manifest, args, inventory, coachingBundle, go
     .map((item) => `- ${item.path} | ${item.line_count} lines | ${item.size_bytes} bytes | score ${item.score}`)
     .join("\n");
 
-  const maxFilesRange = goalMode === "audit" ? "10 and 18" : "4 and 8";
+  const maxFilesRange = goalMode === "audit" ? "10 and 18" : goalMode === "scout" ? "8 and 12" : "4 and 8";
   const selectionGuidance = goalMode === "audit"
     ? [
         "- Select between " + maxFilesRange + " files.",
@@ -26,6 +26,15 @@ function buildAgentInventoryPrompt(manifest, args, inventory, coachingBundle, go
         "- Prefer broad coverage over narrow depth since this is an audit.",
         "- Use exact `repo:path` strings from the inventory."
       ]
+    : goalMode === "scout"
+      ? [
+          "- Select between " + maxFilesRange + " files.",
+          "- Prefer files that expose future leverage: busy route files, shared middleware, services, tests, and config.",
+          "- Include enough breadth to spot reliability, security, and DX opportunities across the track.",
+          "- Include at least one route file, one middleware or service file, and one supporting file when available.",
+          "- Bias toward modules where a concrete opportunity can be named with exact files and functions.",
+          "- Use exact `repo:path` strings from the inventory."
+        ]
     : [
         "- Select between " + maxFilesRange + " files.",
         "- Prefer source files over test files or generated files.",
@@ -46,6 +55,8 @@ function buildAgentInventoryPrompt(manifest, args, inventory, coachingBundle, go
     "",
     goalMode === "audit"
       ? "Choose the files most relevant to thoroughly auditing this goal. Cover routes, middleware, services, and config that relate to the goal."
+      : goalMode === "scout"
+        ? "Choose the files most relevant to scouting concrete improvement opportunities. Cover route surfaces, middleware, services, and at least one file that speaks to testing or developer workflow."
       : "Choose the files most relevant to achieving this goal. Use the coaching context above to prioritize files on critical API paths.",
     "Return JSON only with this shape:",
     '{"selected_files":["repo:path"],"reasoning":["short reason"]}',
@@ -172,11 +183,81 @@ function buildAuditAnalysisPrompt(manifest, args, selectedFiles, coachingBundle,
 }
 
 /**
+ * Build the analysis prompt for SCOUT mode (opportunity discovery).
+ */
+function buildScoutAnalysisPrompt(manifest, args, selectedFiles, coachingBundle, helpers) {
+  const { buildAgentCoachingPromptSection } = helpers;
+  const fileBlocks = buildFileBlocks(selectedFiles);
+
+  return [
+    "You are a senior backend scout reviewing Node.js Firebase Cloud Functions API files for high-leverage improvement opportunities.",
+    `Run ID: ${manifest.run_id}`,
+    `Track: ${manifest.track}`,
+    `Area: ${args.area}`,
+    `Goal: ${args.goal}`,
+    "",
+    buildAgentCoachingPromptSection(coachingBundle),
+    "",
+    "Scout for opportunities that are specific, evidence-based, and worth doing soon.",
+    "Focus on opportunities that improve at least one of these:",
+    "- Reliability and production safety",
+    "- Security and auth correctness",
+    "- API contract clarity",
+    "- Developer experience and future delivery speed",
+    "",
+    "Return JSON only using this exact shape:",
+    JSON.stringify({
+      summary: "1-2 paragraph summary of the most valuable opportunities",
+      opportunities: [
+        {
+          title: "specific opportunity",
+          impact: "high|medium|low",
+          effort: "small|medium|large",
+          rationale: "specific evidence tied to the provided files",
+          file_paths: ["repo:path"],
+          proposed_changes: ["concrete next step"]
+        }
+      ],
+      endpoint_inventory: [
+        { method: "GET|POST|PUT|DELETE", path: "/api/...", file: "repo:path", auth: "none|bearer|admin|kreator", middleware: ["list"], description: "what it does" }
+      ],
+      auth_audit: [
+        { file: "repo:path", pattern: "description of auth pattern used", gaps: ["auth or validation gaps"], risk_level: "high|medium|low" }
+      ],
+      duplicated_patterns: [
+        { pattern: "description", files: ["repo:path"], severity: "high|medium|low", recommendation: "what to centralize" }
+      ],
+      findings: [
+        { severity: "low|medium|high", title: "...", detail: "Detailed evidence with exact routes, functions, or middleware", category: "security|auth|reliability|contract|duplication|maintainability|developer-experience", file_paths: ["repo:path"] }
+      ],
+      dependency_map: [
+        { file: "repo:path", imports: ["repo:path"], exports: ["functionName"], used_by: ["repo:path"] }
+      ],
+      insights: ["..."],
+      followups: ["..."]
+    }, null, 2),
+    "",
+    "Rules:",
+    "- Every opportunity must cite the exact file paths from the provided set.",
+    "- Every opportunity must explain why it matters now, not in theory.",
+    "- Prefer 2-4 strong opportunities over a long weak list.",
+    "- `findings` must be evidence-based and specific. Vague advice is useless.",
+    "- Do not invent files, routes, or middleware names that are not present in the provided content.",
+    "- If a file is truncated, call that out and keep the conclusion appropriately scoped.",
+    "",
+    fileBlocks
+  ].join("\n");
+}
+
+/**
  * Build the right analysis prompt based on goal mode.
  */
 function buildAgentAnalysisPrompt(manifest, args, selectedFiles, coachingBundle, goalMode, helpers) {
   if (goalMode === "audit") {
     return buildAuditAnalysisPrompt(manifest, args, selectedFiles, coachingBundle, helpers);
+  }
+  if (goalMode === "scout") {
+    return buildScoutAnalysisPrompt(manifest, args, selectedFiles, coachingBundle, helpers);
   }
   return buildEditAnalysisPrompt(manifest, args, selectedFiles, coachingBundle, helpers);
 }
@@ -200,14 +281,43 @@ function buildFileBlocks(selectedFiles) {
     .join("\n\n");
 }
 
+function formatLineRefs(lineRefs) {
+  return (lineRefs || [])
+    .map((ref) => {
+      const start = Number(ref.start_line || 0);
+      const end = Number(ref.end_line || start);
+      if (!ref.file || !start) return "";
+      return `${ref.file}:${start}${end && end !== start ? `-${end}` : ""}`;
+    })
+    .filter(Boolean)
+    .join(", ");
+}
+
+function previewPatchText(text) {
+  const firstLine = String(text || "").trim().split("\n")[0] || "";
+  if (!firstLine) return "";
+  return firstLine.length > 110 ? `${firstLine.slice(0, 107)}...` : firstLine;
+}
+
 /**
  * Build the analysis markdown report.
  */
 function buildAgentAnalysisMarkdown(manifest, args, analysis, selectedFiles, appliedEdits, rejectedEdits, goalMode, helpers) {
   const { resolveRunCoachingContext } = helpers;
   const coaching = resolveRunCoachingContext(manifest);
+  const analysisSource = analysis.analysis_metadata && analysis.analysis_metadata.source === "heuristic"
+    ? `Heuristic fallback${analysis.analysis_metadata.reason ? ` (${analysis.analysis_metadata.reason})` : ""}`
+    : "Model response";
   const findings = analysis.findings.length
-    ? analysis.findings.map((finding) => `- [${finding.severity}] ${finding.title}: ${finding.detail}`).join("\n")
+    ? analysis.findings.map((finding) => {
+        const files = (finding.file_paths || []).join(", ");
+        const lineRefs = formatLineRefs(finding.line_refs);
+        const evidence = [];
+        if (finding.category) evidence.push(`category=${finding.category}`);
+        if (files) evidence.push(`files=${files}`);
+        if (lineRefs) evidence.push(`lines=${lineRefs}`);
+        return `- [${finding.severity}] ${finding.title}: ${finding.detail}${evidence.length ? ` Evidence: ${evidence.join(" | ")}` : ""}`;
+      }).join("\n")
     : "- No model findings were recorded.";
   const insights = analysis.insights.length ? analysis.insights.map((item) => `- ${item}`).join("\n") : "- None.";
   const followups = analysis.followups.length ? analysis.followups.map((item) => `- ${item}`).join("\n") : "- None.";
@@ -215,6 +325,12 @@ function buildAgentAnalysisMarkdown(manifest, args, analysis, selectedFiles, app
 
   let editSection = "";
   if (goalMode === "edit") {
+    const proposedEdits = (analysis.safe_edits || []).length
+      ? (analysis.safe_edits || []).map((edit) => {
+          const anchor = edit.kind === "patch" ? previewPatchText(edit.search) : previewPatchText(edit.content);
+          return `- ${edit.path}: ${edit.summary || "Proposed safe edit."} [${edit.kind}, confidence ${edit.confidence || 0}]${anchor ? ` anchor="${anchor}"` : ""}`;
+        }).join("\n")
+      : "- No safe edit proposals were generated from the inspected evidence.";
     const edits = appliedEdits.length
       ? appliedEdits.map((edit) => `- ${edit.path}: ${edit.summary || "Applied safe rewrite."} (confidence ${edit.confidence || 0})`).join("\n")
       : "- No safe rewrites were applied.";
@@ -222,6 +338,10 @@ function buildAgentAnalysisMarkdown(manifest, args, analysis, selectedFiles, app
       ? rejectedEdits.map((edit) => `- ${edit.path}: ${edit.reason}`).join("\n")
       : "- No edit proposals were rejected.";
     editSection = `
+## Proposed Safe Edits
+
+${proposedEdits}
+
 ## Applied Safe Edits
 
 ${edits}
@@ -233,7 +353,7 @@ ${rejected}
   }
 
   let auditSection = "";
-  if (goalMode === "audit") {
+  if (goalMode === "audit" || goalMode === "scout") {
     const endpoints = (analysis.endpoint_inventory || []).length
       ? (analysis.endpoint_inventory || []).map((e) => `- **${e.method} ${e.path}** (${e.file}): ${e.description} [auth: ${e.auth}]`).join("\n")
       : "- None inventoried.";
@@ -268,6 +388,22 @@ ${deps}
 `;
   }
 
+  let scoutSection = "";
+  if (goalMode === "scout") {
+    const opportunities = (analysis.opportunities || []).length
+      ? (analysis.opportunities || []).map((opportunity) => {
+          const files = (opportunity.file_paths || []).join(", ") || "None";
+          const changes = (opportunity.proposed_changes || []).join("; ") || "No concrete next step recorded.";
+          return `- **${opportunity.title}** [impact: ${opportunity.impact}, effort: ${opportunity.effort}] files=[${files}] ${opportunity.rationale} Next: ${changes}`;
+        }).join("\n")
+      : "- No scout opportunities were recorded.";
+    scoutSection = `
+## Scout Opportunities
+
+${opportunities}
+`;
+  }
+
   return `# Agent Analysis
 
 - Run ID: \`${manifest.run_id}\`
@@ -275,6 +411,7 @@ ${deps}
 - Area: \`${args.area}\`
 - Goal: ${args.goal}
 - Mode: ${goalMode}
+- Analysis source: ${analysisSource}
 - Guided products: ${coaching.guided_products.length ? coaching.guided_products.join(", ") : "None"}
 - Primary focus: ${coaching.focused_products.length ? coaching.focused_products.join(", ") : "None"}
 
@@ -289,7 +426,7 @@ ${inspected}
 ## Findings
 
 ${findings}
-${auditSection}${editSection}
+${auditSection}${scoutSection}${editSection}
 ## Insights
 
 ${insights}
@@ -305,6 +442,7 @@ module.exports = {
   buildAgentAnalysisPrompt,
   buildEditAnalysisPrompt,
   buildAuditAnalysisPrompt,
+  buildScoutAnalysisPrompt,
   buildAgentAnalysisMarkdown,
   buildFileBlocks
 };
