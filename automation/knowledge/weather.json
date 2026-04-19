@@ -1,0 +1,580 @@
+{
+  "area": "weather",
+  "track": "weather",
+  "generated_at": "2026-04-18T19:58:14.156Z",
+  "conventions": [
+    "Express.js routers mounted in functions/index.js",
+    "Middleware in functions/middleware/ — auth, CORS, rate limiting",
+    "Services in functions/services/ — shared business logic",
+    "Scheduled functions in functions/scheduled/",
+    "API routes follow RESTful patterns: router.get(), router.post()",
+    "Firebase Admin SDK for Firestore, Auth, Cloud Storage",
+    "Environment config via functions.config() or process.env",
+    "Error handling: try/catch with structured JSON error responses",
+    "module.exports for all public interfaces"
+  ],
+  "nodes": [
+    {
+      "path": "functions/middleware/apiKeyMiddleware.js",
+      "profile": "shared",
+      "lines": 325,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/middleware/authMiddleware.js",
+      "profile": "shared",
+      "lines": 316,
+      "exports": [],
+      "imports": [
+        "./middleware/authMiddleware"
+      ],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/middleware/kreatorAuthMiddleware.js",
+      "profile": "shared",
+      "lines": 313,
+      "exports": [],
+      "imports": [
+        "../services/kreatorService"
+      ],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/middleware/rateLimit.js",
+      "profile": "shared",
+      "lines": 14,
+      "exports": [],
+      "imports": [
+        "../api/weather/sharedWeatherUtils"
+      ],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/middleware/securityMiddleware.js",
+      "profile": "shared",
+      "lines": 232,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/api/core/docs.js",
+      "profile": "shared",
+      "lines": 144,
+      "exports": [],
+      "imports": [],
+      "has_router": true,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/index.js",
+      "profile": "shared",
+      "lines": 122,
+      "exports": [
+        "api",
+        "earlyMorningForecast",
+        "morningForecastUpdate",
+        "afternoonForecastUpdate",
+        "eveningForecastUpdate",
+        "emergencyForecastRefresh",
+        "forecastSchedulerHealth",
+        "warmPaddleScoreCache",
+        "aggregatePaddleFeedback"
+      ],
+      "imports": [
+        "./api/checkout/stripeWebhook",
+        "./api/products/images",
+        "./api/products/products",
+        "./api/weather/paddlingout",
+        "./api/core/docs",
+        "./api/weather/nearbyWater",
+        "./api/weather/paddleScore",
+        "./api/weather/fastForecast",
+        "./api/weather/forecast",
+        "./api/smartLinks/smartLinks",
+        "./api/kreators/kreatorRoutes",
+        "./api/ai/gptActions",
+        "./api/auth/authRoutes",
+        "./api/checkout/router",
+        "./api/billing/router",
+        "./middleware/authMiddleware",
+        "./api/admin/updateOrderStatus",
+        "./api/admin/getOrder",
+        "./api/kutz/kutzRouter",
+        "./api/cameras/camerasRoutes"
+      ],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/auth/authRoutes.js",
+      "profile": "shared",
+      "lines": 109,
+      "exports": [],
+      "imports": [
+        "../../middleware/authMiddleware"
+      ],
+      "has_router": true,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/utils/shared/cache.js",
+      "profile": "shared",
+      "lines": 120,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/api/weather/dataStandardization.js",
+      "profile": "weather",
+      "lines": 208,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/weather/fastForecast.js",
+      "profile": "weather",
+      "lines": 365,
+      "exports": [],
+      "imports": [
+        "../../cache/forecastCache",
+        "./unifiedWeatherService",
+        "./mlService",
+        "./dataStandardization",
+        "./paddlePenalties",
+        "./inputStandardization",
+        "./modelCalibration",
+        "./smartWarnings"
+      ],
+      "has_router": true,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/api/weather/forecast.js",
+      "profile": "weather",
+      "lines": 396,
+      "exports": [],
+      "imports": [
+        "../../middleware/rateLimit",
+        "./unifiedWeatherService",
+        "./mlService",
+        "./inputStandardization"
+      ],
+      "has_router": true,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/api/weather/inputStandardization.js",
+      "profile": "weather",
+      "lines": 286,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/api/weather/mlService.js",
+      "profile": "weather",
+      "lines": 169,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/weather/modelCalibration.js",
+      "profile": "weather",
+      "lines": 286,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/api/weather/nearbyWater.js",
+      "profile": "weather",
+      "lines": 145,
+      "exports": [],
+      "imports": [
+        "../../data/lakeIndex"
+      ],
+      "has_router": true,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/weather/paddlePenalties.js",
+      "profile": "weather",
+      "lines": 402,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/weather/paddleScore.js",
+      "profile": "weather",
+      "lines": 262,
+      "exports": [],
+      "imports": [
+        "./inputStandardization",
+        "./paddleScoreCompute",
+        "../../cache/paddleScoreCache",
+        "../../middleware/authMiddleware"
+      ],
+      "has_router": true,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/api/weather/paddleScoreCompute.js",
+      "profile": "weather",
+      "lines": 173,
+      "exports": [],
+      "imports": [
+        "./unifiedWeatherService",
+        "./mlService",
+        "./dataStandardization",
+        "./modelCalibration",
+        "./paddlePenalties",
+        "./smartWarnings"
+      ],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/weather/paddlingout.js",
+      "profile": "weather",
+      "lines": 158,
+      "exports": [],
+      "imports": [
+        "../../cache/paddleScoreCache"
+      ],
+      "has_router": true,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/api/weather/sharedWeatherUtils.js",
+      "profile": "weather",
+      "lines": 221,
+      "exports": [],
+      "imports": [
+        "../../config/weatherConfig"
+      ],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/weather/smartWarnings.js",
+      "profile": "weather",
+      "lines": 317,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/api/weather/unifiedWeatherService.js",
+      "profile": "weather",
+      "lines": 780,
+      "exports": [],
+      "imports": [
+        "../../config/weatherConfig",
+        "./sharedWeatherUtils",
+        "../scheduled/locationPoller"
+      ],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/scheduled/forecastScheduler.js",
+      "profile": "weather",
+      "lines": 258,
+      "exports": [
+        "earlyMorningForecast",
+        "morningForecastUpdate",
+        "afternoonForecastUpdate",
+        "eveningForecastUpdate",
+        "emergencyForecastRefresh",
+        "forecastSchedulerHealth"
+      ],
+      "imports": [
+        "../api/weather/forecast"
+      ],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": true,
+      "has_tests": true
+    },
+    {
+      "path": "functions/scheduled/paddleScoreWarmer.js",
+      "profile": "weather",
+      "lines": 215,
+      "exports": [
+        "warmPaddleScoreCache",
+        "aggregatePaddleFeedback"
+      ],
+      "imports": [
+        "../cache/paddleScoreCache",
+        "../api/weather/paddleScoreCompute"
+      ],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": true,
+      "has_tests": true
+    }
+  ],
+  "edges": [
+    {
+      "from": "functions/middleware/rateLimit.js",
+      "to": "functions/api/weather/sharedWeatherUtils.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/index.js",
+      "to": "functions/api/weather/paddlingout.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/index.js",
+      "to": "functions/api/core/docs.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/index.js",
+      "to": "functions/api/weather/nearbyWater.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/index.js",
+      "to": "functions/api/weather/paddleScore.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/index.js",
+      "to": "functions/api/weather/fastForecast.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/index.js",
+      "to": "functions/api/weather/forecast.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/index.js",
+      "to": "functions/api/auth/authRoutes.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/index.js",
+      "to": "functions/middleware/authMiddleware.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/auth/authRoutes.js",
+      "to": "functions/middleware/authMiddleware.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/weather/fastForecast.js",
+      "to": "functions/api/weather/unifiedWeatherService.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/weather/fastForecast.js",
+      "to": "functions/api/weather/mlService.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/weather/fastForecast.js",
+      "to": "functions/api/weather/dataStandardization.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/weather/fastForecast.js",
+      "to": "functions/api/weather/paddlePenalties.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/weather/fastForecast.js",
+      "to": "functions/api/weather/inputStandardization.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/weather/fastForecast.js",
+      "to": "functions/api/weather/modelCalibration.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/weather/fastForecast.js",
+      "to": "functions/api/weather/smartWarnings.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/weather/forecast.js",
+      "to": "functions/middleware/rateLimit.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/weather/forecast.js",
+      "to": "functions/api/weather/unifiedWeatherService.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/weather/forecast.js",
+      "to": "functions/api/weather/mlService.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/weather/forecast.js",
+      "to": "functions/api/weather/inputStandardization.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/weather/paddleScore.js",
+      "to": "functions/api/weather/inputStandardization.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/weather/paddleScore.js",
+      "to": "functions/api/weather/paddleScoreCompute.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/weather/paddleScore.js",
+      "to": "functions/middleware/authMiddleware.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/weather/paddleScoreCompute.js",
+      "to": "functions/api/weather/unifiedWeatherService.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/weather/paddleScoreCompute.js",
+      "to": "functions/api/weather/mlService.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/weather/paddleScoreCompute.js",
+      "to": "functions/api/weather/dataStandardization.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/weather/paddleScoreCompute.js",
+      "to": "functions/api/weather/modelCalibration.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/weather/paddleScoreCompute.js",
+      "to": "functions/api/weather/paddlePenalties.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/weather/paddleScoreCompute.js",
+      "to": "functions/api/weather/smartWarnings.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/weather/unifiedWeatherService.js",
+      "to": "functions/api/weather/sharedWeatherUtils.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/scheduled/forecastScheduler.js",
+      "to": "functions/api/weather/forecast.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/scheduled/paddleScoreWarmer.js",
+      "to": "functions/api/weather/paddleScoreCompute.js",
+      "type": "imports"
+    }
+  ],
+  "stats": {
+    "total_files": 25,
+    "total_exports": 17,
+    "total_imports": 33
+  }
+}

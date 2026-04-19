@@ -1,0 +1,903 @@
+{
+  "area": "kamera",
+  "track": "kamera",
+  "generated_at": "2026-04-18T19:58:14.368Z",
+  "conventions": [
+    "Express.js routers mounted in functions/index.js",
+    "Middleware in functions/middleware/ — auth, CORS, rate limiting",
+    "Services in functions/services/ — shared business logic",
+    "Scheduled functions in functions/scheduled/",
+    "API routes follow RESTful patterns: router.get(), router.post()",
+    "Firebase Admin SDK for Firestore, Auth, Cloud Storage",
+    "Environment config via functions.config() or process.env",
+    "Error handling: try/catch with structured JSON error responses",
+    "module.exports for all public interfaces"
+  ],
+  "nodes": [
+    {
+      "path": "functions/middleware/apiKeyMiddleware.js",
+      "profile": "shared",
+      "lines": 325,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/middleware/authMiddleware.js",
+      "profile": "shared",
+      "lines": 316,
+      "exports": [],
+      "imports": [
+        "./middleware/authMiddleware"
+      ],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/middleware/kreatorAuthMiddleware.js",
+      "profile": "shared",
+      "lines": 313,
+      "exports": [],
+      "imports": [
+        "../services/kreatorService"
+      ],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/middleware/rateLimit.js",
+      "profile": "shared",
+      "lines": 14,
+      "exports": [],
+      "imports": [
+        "../api/weather/sharedWeatherUtils"
+      ],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/middleware/securityMiddleware.js",
+      "profile": "shared",
+      "lines": 232,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/api/core/docs.js",
+      "profile": "shared",
+      "lines": 144,
+      "exports": [],
+      "imports": [],
+      "has_router": true,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/index.js",
+      "profile": "shared",
+      "lines": 122,
+      "exports": [
+        "api",
+        "earlyMorningForecast",
+        "morningForecastUpdate",
+        "afternoonForecastUpdate",
+        "eveningForecastUpdate",
+        "emergencyForecastRefresh",
+        "forecastSchedulerHealth",
+        "warmPaddleScoreCache",
+        "aggregatePaddleFeedback"
+      ],
+      "imports": [
+        "./api/checkout/stripeWebhook",
+        "./api/products/images",
+        "./api/products/products",
+        "./api/weather/paddlingout",
+        "./api/core/docs",
+        "./api/weather/nearbyWater",
+        "./api/weather/paddleScore",
+        "./api/weather/fastForecast",
+        "./api/weather/forecast",
+        "./api/smartLinks/smartLinks",
+        "./api/kreators/kreatorRoutes",
+        "./api/ai/gptActions",
+        "./api/auth/authRoutes",
+        "./api/checkout/router",
+        "./api/billing/router",
+        "./middleware/authMiddleware",
+        "./api/admin/updateOrderStatus",
+        "./api/admin/getOrder",
+        "./api/kutz/kutzRouter",
+        "./api/cameras/camerasRoutes"
+      ],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/auth/authRoutes.js",
+      "profile": "shared",
+      "lines": 109,
+      "exports": [],
+      "imports": [
+        "../../middleware/authMiddleware"
+      ],
+      "has_router": true,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/utils/shared/cache.js",
+      "profile": "shared",
+      "lines": 120,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/api/cameras/audit/capabilitySchema.js",
+      "profile": "kamera",
+      "lines": 127,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/cameras/audit/officialBodies.js",
+      "profile": "kamera",
+      "lines": 127,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/cameras/camerasRoutes.js",
+      "profile": "kamera",
+      "lines": 62,
+      "exports": [],
+      "imports": [],
+      "has_router": true,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/cameras/data_cameras/canon.json",
+      "profile": "kamera",
+      "lines": 1054,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/cameras/data_cameras/sony.json",
+      "profile": "kamera",
+      "lines": 870,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/cameras/data_lenses/canon.json",
+      "profile": "kamera",
+      "lines": 2251,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/cameras/data_lenses/sony.json",
+      "profile": "kamera",
+      "lines": 1998,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/cameras/data_presets/architecture.json",
+      "profile": "kamera",
+      "lines": 382,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/cameras/data_presets/astro.json",
+      "profile": "kamera",
+      "lines": 458,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/cameras/data_presets/automotive.json",
+      "profile": "kamera",
+      "lines": 163,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/cameras/data_presets/concert.json",
+      "profile": "kamera",
+      "lines": 163,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/cameras/data_presets/drone.json",
+      "profile": "kamera",
+      "lines": 165,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/cameras/data_presets/event.json",
+      "profile": "kamera",
+      "lines": 382,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/cameras/data_presets/fashion.json",
+      "profile": "kamera",
+      "lines": 163,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/cameras/data_presets/food.json",
+      "profile": "kamera",
+      "lines": 164,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/cameras/data_presets/goldenhour.json",
+      "profile": "kamera",
+      "lines": 382,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/cameras/data_presets/index.js",
+      "profile": "kamera",
+      "lines": 24,
+      "exports": [],
+      "imports": [
+        "./portrait.json",
+        "./landscape.json",
+        "./astro.json",
+        "./wildlife.json",
+        "./sports.json",
+        "./macro.json",
+        "./indoorlowlight.json",
+        "./goldenhour.json",
+        "./street.json",
+        "./architecture.json",
+        "./event.json",
+        "./travel.json",
+        "./food.json",
+        "./realestate.json",
+        "./automotive.json",
+        "./product.json",
+        "./concert.json",
+        "./underwater.json",
+        "./drone.json",
+        "./newborn.json"
+      ],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/cameras/data_presets/indoorlowlight.json",
+      "profile": "kamera",
+      "lines": 382,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/cameras/data_presets/landscape.json",
+      "profile": "kamera",
+      "lines": 559,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/cameras/data_presets/macro.json",
+      "profile": "kamera",
+      "lines": 434,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/cameras/data_presets/newborn.json",
+      "profile": "kamera",
+      "lines": 164,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/cameras/data_presets/portrait.json",
+      "profile": "kamera",
+      "lines": 510,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/cameras/data_presets/product.json",
+      "profile": "kamera",
+      "lines": 163,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/cameras/data_presets/realestate.json",
+      "profile": "kamera",
+      "lines": 163,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/cameras/data_presets/sports.json",
+      "profile": "kamera",
+      "lines": 362,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/cameras/data_presets/street.json",
+      "profile": "kamera",
+      "lines": 382,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/cameras/data_presets/travel.json",
+      "profile": "kamera",
+      "lines": 382,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/cameras/data_presets/underwater.json",
+      "profile": "kamera",
+      "lines": 163,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/cameras/data_presets/wildlife.json",
+      "profile": "kamera",
+      "lines": 361,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/cameras/engine/evCalc.js",
+      "profile": "kamera",
+      "lines": 56,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/api/cameras/engine/presetEngine.js",
+      "profile": "kamera",
+      "lines": 123,
+      "exports": [],
+      "imports": [
+        "../data_presets/index",
+        "./evCalc",
+        "./sessionAdvisor"
+      ],
+      "has_router": false,
+      "has_middleware": true,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/cameras/engine/sessionAdvisor.js",
+      "profile": "kamera",
+      "lines": 929,
+      "exports": [],
+      "imports": [
+        "./evCalc"
+      ],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/api/cameras/lensesRoutes.js",
+      "profile": "kamera",
+      "lines": 44,
+      "exports": [],
+      "imports": [],
+      "has_router": true,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/cameras/presetsRoutes.js",
+      "profile": "kamera",
+      "lines": 84,
+      "exports": [],
+      "imports": [
+        "./validate",
+        "./engine/presetEngine",
+        "./data_presets/index"
+      ],
+      "has_router": true,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/cameras/smartRoutes.js",
+      "profile": "kamera",
+      "lines": 139,
+      "exports": [],
+      "imports": [
+        "./validate",
+        "./engine/presetEngine",
+        "./data_presets/index"
+      ],
+      "has_router": true,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/cameras/validate.js",
+      "profile": "kamera",
+      "lines": 107,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": true,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/scripts/camera-audit-report.js",
+      "profile": "kamera",
+      "lines": 398,
+      "exports": [],
+      "imports": [
+        "../api/cameras/audit/officialBodies",
+        "../api/cameras/audit/capabilitySchema"
+      ],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/scripts/camera-catalog-maintenance.js",
+      "profile": "kamera",
+      "lines": 830,
+      "exports": [],
+      "imports": [
+        "../api/cameras/audit/officialBodies"
+      ],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/scripts/camera-catalog-validate.js",
+      "profile": "kamera",
+      "lines": 96,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/scripts/camera-validation-packet.js",
+      "profile": "kamera",
+      "lines": 241,
+      "exports": [],
+      "imports": [
+        "../api/cameras/engine/presetEngine"
+      ],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/scripts/predeploy-check.js",
+      "profile": "kamera",
+      "lines": 64,
+      "exports": [],
+      "imports": [
+        "./api/deepLinks/deeplinkRoutes"
+      ],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": false
+    }
+  ],
+  "edges": [
+    {
+      "from": "functions/index.js",
+      "to": "functions/api/core/docs.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/index.js",
+      "to": "functions/api/auth/authRoutes.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/index.js",
+      "to": "functions/middleware/authMiddleware.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/index.js",
+      "to": "functions/api/cameras/camerasRoutes.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/auth/authRoutes.js",
+      "to": "functions/middleware/authMiddleware.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/cameras/data_presets/index.js",
+      "to": "functions/api/cameras/data_presets/portrait.json",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/cameras/data_presets/index.js",
+      "to": "functions/api/cameras/data_presets/landscape.json",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/cameras/data_presets/index.js",
+      "to": "functions/api/cameras/data_presets/astro.json",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/cameras/data_presets/index.js",
+      "to": "functions/api/cameras/data_presets/wildlife.json",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/cameras/data_presets/index.js",
+      "to": "functions/api/cameras/data_presets/sports.json",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/cameras/data_presets/index.js",
+      "to": "functions/api/cameras/data_presets/macro.json",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/cameras/data_presets/index.js",
+      "to": "functions/api/cameras/data_presets/indoorlowlight.json",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/cameras/data_presets/index.js",
+      "to": "functions/api/cameras/data_presets/goldenhour.json",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/cameras/data_presets/index.js",
+      "to": "functions/api/cameras/data_presets/street.json",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/cameras/data_presets/index.js",
+      "to": "functions/api/cameras/data_presets/architecture.json",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/cameras/data_presets/index.js",
+      "to": "functions/api/cameras/data_presets/event.json",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/cameras/data_presets/index.js",
+      "to": "functions/api/cameras/data_presets/travel.json",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/cameras/data_presets/index.js",
+      "to": "functions/api/cameras/data_presets/food.json",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/cameras/data_presets/index.js",
+      "to": "functions/api/cameras/data_presets/realestate.json",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/cameras/data_presets/index.js",
+      "to": "functions/api/cameras/data_presets/automotive.json",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/cameras/data_presets/index.js",
+      "to": "functions/api/cameras/data_presets/product.json",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/cameras/data_presets/index.js",
+      "to": "functions/api/cameras/data_presets/concert.json",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/cameras/data_presets/index.js",
+      "to": "functions/api/cameras/data_presets/underwater.json",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/cameras/data_presets/index.js",
+      "to": "functions/api/cameras/data_presets/drone.json",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/cameras/data_presets/index.js",
+      "to": "functions/api/cameras/data_presets/newborn.json",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/cameras/engine/presetEngine.js",
+      "to": "functions/api/cameras/data_presets/index.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/cameras/engine/presetEngine.js",
+      "to": "functions/api/cameras/engine/evCalc.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/cameras/engine/presetEngine.js",
+      "to": "functions/api/cameras/engine/sessionAdvisor.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/cameras/engine/sessionAdvisor.js",
+      "to": "functions/api/cameras/engine/evCalc.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/cameras/presetsRoutes.js",
+      "to": "functions/api/cameras/validate.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/cameras/presetsRoutes.js",
+      "to": "functions/api/cameras/engine/presetEngine.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/cameras/presetsRoutes.js",
+      "to": "functions/api/cameras/data_presets/index.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/cameras/smartRoutes.js",
+      "to": "functions/api/cameras/validate.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/cameras/smartRoutes.js",
+      "to": "functions/api/cameras/engine/presetEngine.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/cameras/smartRoutes.js",
+      "to": "functions/api/cameras/data_presets/index.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/scripts/camera-audit-report.js",
+      "to": "functions/api/cameras/audit/officialBodies.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/scripts/camera-audit-report.js",
+      "to": "functions/api/cameras/audit/capabilitySchema.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/scripts/camera-catalog-maintenance.js",
+      "to": "functions/api/cameras/audit/officialBodies.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/scripts/camera-validation-packet.js",
+      "to": "functions/api/cameras/engine/presetEngine.js",
+      "type": "imports"
+    }
+  ],
+  "stats": {
+    "total_files": 50,
+    "total_exports": 9,
+    "total_imports": 39
+  }
+}

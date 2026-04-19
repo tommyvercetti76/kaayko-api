@@ -1,0 +1,1974 @@
+{
+  "area": "shared",
+  "track": "shared",
+  "generated_at": "2026-04-18T19:58:14.103Z",
+  "conventions": [
+    "Express.js routers mounted in functions/index.js",
+    "Middleware in functions/middleware/ — auth, CORS, rate limiting",
+    "Services in functions/services/ — shared business logic",
+    "Scheduled functions in functions/scheduled/",
+    "API routes follow RESTful patterns: router.get(), router.post()",
+    "Firebase Admin SDK for Firestore, Auth, Cloud Storage",
+    "Environment config via functions.config() or process.env",
+    "Error handling: try/catch with structured JSON error responses",
+    "module.exports for all public interfaces"
+  ],
+  "nodes": [
+    {
+      "path": "functions/middleware/apiKeyMiddleware.js",
+      "profile": "shared",
+      "lines": 325,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/middleware/authMiddleware.js",
+      "profile": "shared",
+      "lines": 316,
+      "exports": [],
+      "imports": [
+        "./middleware/authMiddleware"
+      ],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/middleware/kreatorAuthMiddleware.js",
+      "profile": "shared",
+      "lines": 313,
+      "exports": [],
+      "imports": [
+        "../services/kreatorService"
+      ],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/middleware/rateLimit.js",
+      "profile": "shared",
+      "lines": 14,
+      "exports": [],
+      "imports": [
+        "../api/weather/sharedWeatherUtils"
+      ],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/middleware/securityMiddleware.js",
+      "profile": "shared",
+      "lines": 232,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/api/core/docs.js",
+      "profile": "shared",
+      "lines": 144,
+      "exports": [],
+      "imports": [],
+      "has_router": true,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/index.js",
+      "profile": "shared",
+      "lines": 122,
+      "exports": [
+        "api",
+        "earlyMorningForecast",
+        "morningForecastUpdate",
+        "afternoonForecastUpdate",
+        "eveningForecastUpdate",
+        "emergencyForecastRefresh",
+        "forecastSchedulerHealth",
+        "warmPaddleScoreCache",
+        "aggregatePaddleFeedback"
+      ],
+      "imports": [
+        "./api/checkout/stripeWebhook",
+        "./api/products/images",
+        "./api/products/products",
+        "./api/weather/paddlingout",
+        "./api/core/docs",
+        "./api/weather/nearbyWater",
+        "./api/weather/paddleScore",
+        "./api/weather/fastForecast",
+        "./api/weather/forecast",
+        "./api/smartLinks/smartLinks",
+        "./api/kreators/kreatorRoutes",
+        "./api/ai/gptActions",
+        "./api/auth/authRoutes",
+        "./api/checkout/router",
+        "./api/billing/router",
+        "./middleware/authMiddleware",
+        "./api/admin/updateOrderStatus",
+        "./api/admin/getOrder",
+        "./api/kutz/kutzRouter",
+        "./api/cameras/camerasRoutes"
+      ],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/auth/authRoutes.js",
+      "profile": "shared",
+      "lines": 109,
+      "exports": [],
+      "imports": [
+        "../../middleware/authMiddleware"
+      ],
+      "has_router": true,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/utils/shared/cache.js",
+      "profile": "shared",
+      "lines": 120,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/api/weather/dataStandardization.js",
+      "profile": "weather",
+      "lines": 208,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/weather/fastForecast.js",
+      "profile": "weather",
+      "lines": 365,
+      "exports": [],
+      "imports": [
+        "../../cache/forecastCache",
+        "./unifiedWeatherService",
+        "./mlService",
+        "./dataStandardization",
+        "./paddlePenalties",
+        "./inputStandardization",
+        "./modelCalibration",
+        "./smartWarnings"
+      ],
+      "has_router": true,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/api/weather/forecast.js",
+      "profile": "weather",
+      "lines": 396,
+      "exports": [],
+      "imports": [
+        "../../middleware/rateLimit",
+        "./unifiedWeatherService",
+        "./mlService",
+        "./inputStandardization"
+      ],
+      "has_router": true,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/api/weather/inputStandardization.js",
+      "profile": "weather",
+      "lines": 286,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/api/weather/mlService.js",
+      "profile": "weather",
+      "lines": 169,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/weather/modelCalibration.js",
+      "profile": "weather",
+      "lines": 286,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/api/weather/nearbyWater.js",
+      "profile": "weather",
+      "lines": 145,
+      "exports": [],
+      "imports": [
+        "../../data/lakeIndex"
+      ],
+      "has_router": true,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/weather/paddlePenalties.js",
+      "profile": "weather",
+      "lines": 402,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/weather/paddleScore.js",
+      "profile": "weather",
+      "lines": 262,
+      "exports": [],
+      "imports": [
+        "./inputStandardization",
+        "./paddleScoreCompute",
+        "../../cache/paddleScoreCache",
+        "../../middleware/authMiddleware"
+      ],
+      "has_router": true,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/api/weather/paddleScoreCompute.js",
+      "profile": "weather",
+      "lines": 173,
+      "exports": [],
+      "imports": [
+        "./unifiedWeatherService",
+        "./mlService",
+        "./dataStandardization",
+        "./modelCalibration",
+        "./paddlePenalties",
+        "./smartWarnings"
+      ],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/weather/paddlingout.js",
+      "profile": "weather",
+      "lines": 158,
+      "exports": [],
+      "imports": [
+        "../../cache/paddleScoreCache"
+      ],
+      "has_router": true,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/api/weather/sharedWeatherUtils.js",
+      "profile": "weather",
+      "lines": 221,
+      "exports": [],
+      "imports": [
+        "../../config/weatherConfig"
+      ],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/weather/smartWarnings.js",
+      "profile": "weather",
+      "lines": 317,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/api/weather/unifiedWeatherService.js",
+      "profile": "weather",
+      "lines": 780,
+      "exports": [],
+      "imports": [
+        "../../config/weatherConfig",
+        "./sharedWeatherUtils",
+        "../scheduled/locationPoller"
+      ],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/scheduled/forecastScheduler.js",
+      "profile": "weather",
+      "lines": 258,
+      "exports": [
+        "earlyMorningForecast",
+        "morningForecastUpdate",
+        "afternoonForecastUpdate",
+        "eveningForecastUpdate",
+        "emergencyForecastRefresh",
+        "forecastSchedulerHealth"
+      ],
+      "imports": [
+        "../api/weather/forecast"
+      ],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": true,
+      "has_tests": true
+    },
+    {
+      "path": "functions/scheduled/paddleScoreWarmer.js",
+      "profile": "weather",
+      "lines": 215,
+      "exports": [
+        "warmPaddleScoreCache",
+        "aggregatePaddleFeedback"
+      ],
+      "imports": [
+        "../cache/paddleScoreCache",
+        "../api/weather/paddleScoreCompute"
+      ],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": true,
+      "has_tests": true
+    },
+    {
+      "path": "functions/api/products/images.js",
+      "profile": "commerce",
+      "lines": 96,
+      "exports": [],
+      "imports": [],
+      "has_router": true,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/products/products.js",
+      "profile": "commerce",
+      "lines": 171,
+      "exports": [],
+      "imports": [],
+      "has_router": true,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/api/checkout/createPaymentIntent.js",
+      "profile": "commerce",
+      "lines": 189,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/api/checkout/router.js",
+      "profile": "commerce",
+      "lines": 23,
+      "exports": [],
+      "imports": [
+        "./createPaymentIntent",
+        "./updatePaymentIntentEmail",
+        "./stripeWebhook"
+      ],
+      "has_router": true,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/checkout/stripeWebhook.js",
+      "profile": "commerce",
+      "lines": 331,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/api/checkout/updatePaymentIntentEmail.js",
+      "profile": "commerce",
+      "lines": 79,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/api/smartLinks/attributionService.js",
+      "profile": "kortex",
+      "lines": 303,
+      "exports": [],
+      "imports": [
+        "./clickTracking"
+      ],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/smartLinks/clickTracking.js",
+      "profile": "kortex",
+      "lines": 457,
+      "exports": [],
+      "imports": [
+        "./webhookService"
+      ],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/api/smartLinks/publicApiRouter.js",
+      "profile": "kortex",
+      "lines": 396,
+      "exports": [],
+      "imports": [
+        "./api/smartLinks/publicApiRouter",
+        "./smartLinkService",
+        "../../middleware/apiKeyMiddleware",
+        "./clickTracking",
+        "./attributionService",
+        "./rateLimitService"
+      ],
+      "has_router": true,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/api/smartLinks/publicRouter.js",
+      "profile": "kortex",
+      "lines": 214,
+      "exports": [],
+      "imports": [
+        "./redirectHandler",
+        "./attributionService",
+        "./rateLimitService"
+      ],
+      "has_router": true,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/api/smartLinks/rateLimitService.js",
+      "profile": "kortex",
+      "lines": 314,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/api/smartLinks/redirectHandler.js",
+      "profile": "kortex",
+      "lines": 401,
+      "exports": [],
+      "imports": [
+        "./clickTracking"
+      ],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/smartLinks/smartLinkDefaults.js",
+      "profile": "kortex",
+      "lines": 108,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/smartLinks/smartLinkEnrichment.js",
+      "profile": "kortex",
+      "lines": 163,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/api/smartLinks/smartLinkService.js",
+      "profile": "kortex",
+      "lines": 284,
+      "exports": [],
+      "imports": [
+        "./smartLinkValidation",
+        "./tenantContext"
+      ],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/api/smartLinks/smartLinkValidation.js",
+      "profile": "kortex",
+      "lines": 84,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/api/smartLinks/smartLinks.js",
+      "profile": "kortex",
+      "lines": 498,
+      "exports": [],
+      "imports": [
+        "./redirectHandler",
+        "./smartLinkService",
+        "../../middleware/authMiddleware",
+        "./tenantContext",
+        "../../services/emailNotificationService",
+        "./webhookService",
+        "../../middleware/securityMiddleware"
+      ],
+      "has_router": true,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/api/smartLinks/tenantContext.js",
+      "profile": "kortex",
+      "lines": 265,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/api/smartLinks/webhookService.js",
+      "profile": "kortex",
+      "lines": 393,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/api/billing/router.js",
+      "profile": "kortex",
+      "lines": 433,
+      "exports": [],
+      "imports": [
+        "../../middleware/authMiddleware"
+      ],
+      "has_router": true,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/api/kreators/kreatorProductRoutes.js",
+      "profile": "kreator",
+      "lines": 428,
+      "exports": [],
+      "imports": [
+        "../../middleware/kreatorAuthMiddleware"
+      ],
+      "has_router": true,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/api/kreators/kreatorRoutes.js",
+      "profile": "kreator",
+      "lines": 1040,
+      "exports": [],
+      "imports": [
+        "../../services/kreatorApplicationService",
+        "../../services/kreatorService",
+        "../../middleware/authMiddleware",
+        "../../middleware/kreatorAuthMiddleware",
+        "./testRoutes",
+        "./kreatorProductRoutes"
+      ],
+      "has_router": true,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/api/kreators/testRoutes.js",
+      "profile": "kreator",
+      "lines": 321,
+      "exports": [],
+      "imports": [
+        "../../services/kreatorApplicationService"
+      ],
+      "has_router": true,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/api/cameras/audit/capabilitySchema.js",
+      "profile": "kamera",
+      "lines": 127,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/cameras/audit/officialBodies.js",
+      "profile": "kamera",
+      "lines": 127,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/cameras/camerasRoutes.js",
+      "profile": "kamera",
+      "lines": 62,
+      "exports": [],
+      "imports": [],
+      "has_router": true,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/cameras/data_cameras/canon.json",
+      "profile": "kamera",
+      "lines": 1054,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/cameras/data_cameras/sony.json",
+      "profile": "kamera",
+      "lines": 870,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/cameras/data_lenses/canon.json",
+      "profile": "kamera",
+      "lines": 2251,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/cameras/data_lenses/sony.json",
+      "profile": "kamera",
+      "lines": 1998,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/cameras/data_presets/architecture.json",
+      "profile": "kamera",
+      "lines": 382,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/cameras/data_presets/astro.json",
+      "profile": "kamera",
+      "lines": 458,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/cameras/data_presets/automotive.json",
+      "profile": "kamera",
+      "lines": 163,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/cameras/data_presets/concert.json",
+      "profile": "kamera",
+      "lines": 163,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/cameras/data_presets/drone.json",
+      "profile": "kamera",
+      "lines": 165,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/cameras/data_presets/event.json",
+      "profile": "kamera",
+      "lines": 382,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/cameras/data_presets/fashion.json",
+      "profile": "kamera",
+      "lines": 163,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/cameras/data_presets/food.json",
+      "profile": "kamera",
+      "lines": 164,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/cameras/data_presets/goldenhour.json",
+      "profile": "kamera",
+      "lines": 382,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/cameras/data_presets/index.js",
+      "profile": "kamera",
+      "lines": 24,
+      "exports": [],
+      "imports": [
+        "./portrait.json",
+        "./landscape.json",
+        "./astro.json",
+        "./wildlife.json",
+        "./sports.json",
+        "./macro.json",
+        "./indoorlowlight.json",
+        "./goldenhour.json",
+        "./street.json",
+        "./architecture.json",
+        "./event.json",
+        "./travel.json",
+        "./food.json",
+        "./realestate.json",
+        "./automotive.json",
+        "./product.json",
+        "./concert.json",
+        "./underwater.json",
+        "./drone.json",
+        "./newborn.json"
+      ],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/cameras/data_presets/indoorlowlight.json",
+      "profile": "kamera",
+      "lines": 382,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/cameras/data_presets/landscape.json",
+      "profile": "kamera",
+      "lines": 559,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/cameras/data_presets/macro.json",
+      "profile": "kamera",
+      "lines": 434,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/cameras/data_presets/newborn.json",
+      "profile": "kamera",
+      "lines": 164,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/cameras/data_presets/portrait.json",
+      "profile": "kamera",
+      "lines": 510,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/cameras/data_presets/product.json",
+      "profile": "kamera",
+      "lines": 163,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/cameras/data_presets/realestate.json",
+      "profile": "kamera",
+      "lines": 163,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/cameras/data_presets/sports.json",
+      "profile": "kamera",
+      "lines": 362,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/cameras/data_presets/street.json",
+      "profile": "kamera",
+      "lines": 382,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/cameras/data_presets/travel.json",
+      "profile": "kamera",
+      "lines": 382,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/cameras/data_presets/underwater.json",
+      "profile": "kamera",
+      "lines": 163,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/cameras/data_presets/wildlife.json",
+      "profile": "kamera",
+      "lines": 361,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/cameras/engine/evCalc.js",
+      "profile": "kamera",
+      "lines": 56,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/api/cameras/engine/presetEngine.js",
+      "profile": "kamera",
+      "lines": 123,
+      "exports": [],
+      "imports": [
+        "../data_presets/index",
+        "./evCalc",
+        "./sessionAdvisor"
+      ],
+      "has_router": false,
+      "has_middleware": true,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/cameras/engine/sessionAdvisor.js",
+      "profile": "kamera",
+      "lines": 929,
+      "exports": [],
+      "imports": [
+        "./evCalc"
+      ],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/api/cameras/lensesRoutes.js",
+      "profile": "kamera",
+      "lines": 44,
+      "exports": [],
+      "imports": [],
+      "has_router": true,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/cameras/presetsRoutes.js",
+      "profile": "kamera",
+      "lines": 84,
+      "exports": [],
+      "imports": [
+        "./validate",
+        "./engine/presetEngine",
+        "./data_presets/index"
+      ],
+      "has_router": true,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/cameras/smartRoutes.js",
+      "profile": "kamera",
+      "lines": 139,
+      "exports": [],
+      "imports": [
+        "./validate",
+        "./engine/presetEngine",
+        "./data_presets/index"
+      ],
+      "has_router": true,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/cameras/validate.js",
+      "profile": "kamera",
+      "lines": 107,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": true,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/scripts/camera-audit-report.js",
+      "profile": "kamera",
+      "lines": 398,
+      "exports": [],
+      "imports": [
+        "../api/cameras/audit/officialBodies",
+        "../api/cameras/audit/capabilitySchema"
+      ],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/scripts/camera-catalog-maintenance.js",
+      "profile": "kamera",
+      "lines": 830,
+      "exports": [],
+      "imports": [
+        "../api/cameras/audit/officialBodies"
+      ],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/scripts/camera-catalog-validate.js",
+      "profile": "kamera",
+      "lines": 96,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/scripts/camera-validation-packet.js",
+      "profile": "kamera",
+      "lines": 241,
+      "exports": [],
+      "imports": [
+        "../api/cameras/engine/presetEngine"
+      ],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/scripts/predeploy-check.js",
+      "profile": "kamera",
+      "lines": 64,
+      "exports": [],
+      "imports": [
+        "./api/deepLinks/deeplinkRoutes"
+      ],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/kutz/aiClient.js",
+      "profile": "kutz",
+      "lines": 131,
+      "exports": [],
+      "imports": [
+        "./aiClient"
+      ],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/kutz/fitbit.js",
+      "profile": "kutz",
+      "lines": 307,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": true,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/kutz/kutzRouter.js",
+      "profile": "kutz",
+      "lines": 57,
+      "exports": [],
+      "imports": [
+        "../../middleware/authMiddleware",
+        "./parseFoods",
+        "./parsePhoto",
+        "./searchFoods",
+        "./weeklyReport",
+        "./suggest",
+        "./fitbit"
+      ],
+      "has_router": true,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/kutz/parseFoods.js",
+      "profile": "kutz",
+      "lines": 242,
+      "exports": [
+        "_rateLimitMap"
+      ],
+      "imports": [
+        "./aiClient"
+      ],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/api/kutz/parsePhoto.js",
+      "profile": "kutz",
+      "lines": 192,
+      "exports": [],
+      "imports": [
+        "./aiClient",
+        "./parseFoods"
+      ],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/api/kutz/searchFoods.js",
+      "profile": "kutz",
+      "lines": 148,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/kutz/suggest.js",
+      "profile": "kutz",
+      "lines": 278,
+      "exports": [],
+      "imports": [
+        "./aiClient"
+      ],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/api/kutz/weeklyReport.js",
+      "profile": "kutz",
+      "lines": 101,
+      "exports": [],
+      "imports": [
+        "./aiClient"
+      ],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": true
+    }
+  ],
+  "edges": [
+    {
+      "from": "functions/middleware/rateLimit.js",
+      "to": "functions/api/weather/sharedWeatherUtils.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/index.js",
+      "to": "functions/api/checkout/stripeWebhook.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/index.js",
+      "to": "functions/api/products/images.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/index.js",
+      "to": "functions/api/products/products.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/index.js",
+      "to": "functions/api/weather/paddlingout.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/index.js",
+      "to": "functions/api/core/docs.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/index.js",
+      "to": "functions/api/weather/nearbyWater.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/index.js",
+      "to": "functions/api/weather/paddleScore.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/index.js",
+      "to": "functions/api/weather/fastForecast.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/index.js",
+      "to": "functions/api/weather/forecast.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/index.js",
+      "to": "functions/api/smartLinks/smartLinks.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/index.js",
+      "to": "functions/api/kreators/kreatorRoutes.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/index.js",
+      "to": "functions/api/auth/authRoutes.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/index.js",
+      "to": "functions/api/checkout/router.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/index.js",
+      "to": "functions/api/billing/router.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/index.js",
+      "to": "functions/middleware/authMiddleware.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/index.js",
+      "to": "functions/api/kutz/kutzRouter.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/index.js",
+      "to": "functions/api/cameras/camerasRoutes.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/auth/authRoutes.js",
+      "to": "functions/middleware/authMiddleware.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/weather/fastForecast.js",
+      "to": "functions/api/weather/unifiedWeatherService.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/weather/fastForecast.js",
+      "to": "functions/api/weather/mlService.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/weather/fastForecast.js",
+      "to": "functions/api/weather/dataStandardization.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/weather/fastForecast.js",
+      "to": "functions/api/weather/paddlePenalties.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/weather/fastForecast.js",
+      "to": "functions/api/weather/inputStandardization.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/weather/fastForecast.js",
+      "to": "functions/api/weather/modelCalibration.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/weather/fastForecast.js",
+      "to": "functions/api/weather/smartWarnings.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/weather/forecast.js",
+      "to": "functions/middleware/rateLimit.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/weather/forecast.js",
+      "to": "functions/api/weather/unifiedWeatherService.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/weather/forecast.js",
+      "to": "functions/api/weather/mlService.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/weather/forecast.js",
+      "to": "functions/api/weather/inputStandardization.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/weather/paddleScore.js",
+      "to": "functions/api/weather/inputStandardization.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/weather/paddleScore.js",
+      "to": "functions/api/weather/paddleScoreCompute.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/weather/paddleScore.js",
+      "to": "functions/middleware/authMiddleware.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/weather/paddleScoreCompute.js",
+      "to": "functions/api/weather/unifiedWeatherService.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/weather/paddleScoreCompute.js",
+      "to": "functions/api/weather/mlService.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/weather/paddleScoreCompute.js",
+      "to": "functions/api/weather/dataStandardization.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/weather/paddleScoreCompute.js",
+      "to": "functions/api/weather/modelCalibration.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/weather/paddleScoreCompute.js",
+      "to": "functions/api/weather/paddlePenalties.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/weather/paddleScoreCompute.js",
+      "to": "functions/api/weather/smartWarnings.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/weather/unifiedWeatherService.js",
+      "to": "functions/api/weather/sharedWeatherUtils.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/scheduled/forecastScheduler.js",
+      "to": "functions/api/weather/forecast.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/scheduled/paddleScoreWarmer.js",
+      "to": "functions/api/weather/paddleScoreCompute.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/checkout/router.js",
+      "to": "functions/api/checkout/createPaymentIntent.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/checkout/router.js",
+      "to": "functions/api/checkout/updatePaymentIntentEmail.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/checkout/router.js",
+      "to": "functions/api/checkout/stripeWebhook.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/smartLinks/attributionService.js",
+      "to": "functions/api/smartLinks/clickTracking.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/smartLinks/clickTracking.js",
+      "to": "functions/api/smartLinks/webhookService.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/smartLinks/publicApiRouter.js",
+      "to": "functions/api/smartLinks/smartLinkService.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/smartLinks/publicApiRouter.js",
+      "to": "functions/middleware/apiKeyMiddleware.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/smartLinks/publicApiRouter.js",
+      "to": "functions/api/smartLinks/clickTracking.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/smartLinks/publicApiRouter.js",
+      "to": "functions/api/smartLinks/attributionService.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/smartLinks/publicApiRouter.js",
+      "to": "functions/api/smartLinks/rateLimitService.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/smartLinks/publicRouter.js",
+      "to": "functions/api/smartLinks/redirectHandler.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/smartLinks/publicRouter.js",
+      "to": "functions/api/smartLinks/attributionService.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/smartLinks/publicRouter.js",
+      "to": "functions/api/smartLinks/rateLimitService.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/smartLinks/redirectHandler.js",
+      "to": "functions/api/smartLinks/clickTracking.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/smartLinks/smartLinkService.js",
+      "to": "functions/api/smartLinks/smartLinkValidation.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/smartLinks/smartLinkService.js",
+      "to": "functions/api/smartLinks/tenantContext.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/smartLinks/smartLinks.js",
+      "to": "functions/api/smartLinks/redirectHandler.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/smartLinks/smartLinks.js",
+      "to": "functions/api/smartLinks/smartLinkService.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/smartLinks/smartLinks.js",
+      "to": "functions/middleware/authMiddleware.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/smartLinks/smartLinks.js",
+      "to": "functions/api/smartLinks/tenantContext.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/smartLinks/smartLinks.js",
+      "to": "functions/api/smartLinks/webhookService.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/smartLinks/smartLinks.js",
+      "to": "functions/middleware/securityMiddleware.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/billing/router.js",
+      "to": "functions/middleware/authMiddleware.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/kreators/kreatorProductRoutes.js",
+      "to": "functions/middleware/kreatorAuthMiddleware.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/kreators/kreatorRoutes.js",
+      "to": "functions/middleware/authMiddleware.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/kreators/kreatorRoutes.js",
+      "to": "functions/middleware/kreatorAuthMiddleware.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/kreators/kreatorRoutes.js",
+      "to": "functions/api/kreators/testRoutes.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/kreators/kreatorRoutes.js",
+      "to": "functions/api/kreators/kreatorProductRoutes.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/cameras/data_presets/index.js",
+      "to": "functions/api/cameras/data_presets/portrait.json",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/cameras/data_presets/index.js",
+      "to": "functions/api/cameras/data_presets/landscape.json",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/cameras/data_presets/index.js",
+      "to": "functions/api/cameras/data_presets/astro.json",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/cameras/data_presets/index.js",
+      "to": "functions/api/cameras/data_presets/wildlife.json",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/cameras/data_presets/index.js",
+      "to": "functions/api/cameras/data_presets/sports.json",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/cameras/data_presets/index.js",
+      "to": "functions/api/cameras/data_presets/macro.json",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/cameras/data_presets/index.js",
+      "to": "functions/api/cameras/data_presets/indoorlowlight.json",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/cameras/data_presets/index.js",
+      "to": "functions/api/cameras/data_presets/goldenhour.json",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/cameras/data_presets/index.js",
+      "to": "functions/api/cameras/data_presets/street.json",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/cameras/data_presets/index.js",
+      "to": "functions/api/cameras/data_presets/architecture.json",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/cameras/data_presets/index.js",
+      "to": "functions/api/cameras/data_presets/event.json",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/cameras/data_presets/index.js",
+      "to": "functions/api/cameras/data_presets/travel.json",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/cameras/data_presets/index.js",
+      "to": "functions/api/cameras/data_presets/food.json",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/cameras/data_presets/index.js",
+      "to": "functions/api/cameras/data_presets/realestate.json",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/cameras/data_presets/index.js",
+      "to": "functions/api/cameras/data_presets/automotive.json",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/cameras/data_presets/index.js",
+      "to": "functions/api/cameras/data_presets/product.json",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/cameras/data_presets/index.js",
+      "to": "functions/api/cameras/data_presets/concert.json",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/cameras/data_presets/index.js",
+      "to": "functions/api/cameras/data_presets/underwater.json",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/cameras/data_presets/index.js",
+      "to": "functions/api/cameras/data_presets/drone.json",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/cameras/data_presets/index.js",
+      "to": "functions/api/cameras/data_presets/newborn.json",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/cameras/engine/presetEngine.js",
+      "to": "functions/api/cameras/data_presets/index.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/cameras/engine/presetEngine.js",
+      "to": "functions/api/cameras/engine/evCalc.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/cameras/engine/presetEngine.js",
+      "to": "functions/api/cameras/engine/sessionAdvisor.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/cameras/engine/sessionAdvisor.js",
+      "to": "functions/api/cameras/engine/evCalc.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/cameras/presetsRoutes.js",
+      "to": "functions/api/cameras/validate.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/cameras/presetsRoutes.js",
+      "to": "functions/api/cameras/engine/presetEngine.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/cameras/presetsRoutes.js",
+      "to": "functions/api/cameras/data_presets/index.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/cameras/smartRoutes.js",
+      "to": "functions/api/cameras/validate.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/cameras/smartRoutes.js",
+      "to": "functions/api/cameras/engine/presetEngine.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/cameras/smartRoutes.js",
+      "to": "functions/api/cameras/data_presets/index.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/scripts/camera-audit-report.js",
+      "to": "functions/api/cameras/audit/officialBodies.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/scripts/camera-audit-report.js",
+      "to": "functions/api/cameras/audit/capabilitySchema.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/scripts/camera-catalog-maintenance.js",
+      "to": "functions/api/cameras/audit/officialBodies.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/scripts/camera-validation-packet.js",
+      "to": "functions/api/cameras/engine/presetEngine.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/kutz/aiClient.js",
+      "to": "functions/api/kutz/aiClient.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/kutz/kutzRouter.js",
+      "to": "functions/middleware/authMiddleware.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/kutz/kutzRouter.js",
+      "to": "functions/api/kutz/parseFoods.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/kutz/kutzRouter.js",
+      "to": "functions/api/kutz/parsePhoto.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/kutz/kutzRouter.js",
+      "to": "functions/api/kutz/searchFoods.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/kutz/kutzRouter.js",
+      "to": "functions/api/kutz/weeklyReport.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/kutz/kutzRouter.js",
+      "to": "functions/api/kutz/suggest.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/kutz/kutzRouter.js",
+      "to": "functions/api/kutz/fitbit.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/kutz/parseFoods.js",
+      "to": "functions/api/kutz/aiClient.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/kutz/parsePhoto.js",
+      "to": "functions/api/kutz/aiClient.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/kutz/parsePhoto.js",
+      "to": "functions/api/kutz/parseFoods.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/kutz/suggest.js",
+      "to": "functions/api/kutz/aiClient.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/kutz/weeklyReport.js",
+      "to": "functions/api/kutz/aiClient.js",
+      "type": "imports"
+    }
+  ],
+  "stats": {
+    "total_files": 97,
+    "total_exports": 18,
+    "total_imports": 117
+  }
+}

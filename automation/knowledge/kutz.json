@@ -1,0 +1,379 @@
+{
+  "area": "kutz",
+  "track": "kutz",
+  "generated_at": "2026-04-18T19:58:14.421Z",
+  "conventions": [
+    "Express.js routers mounted in functions/index.js",
+    "Middleware in functions/middleware/ — auth, CORS, rate limiting",
+    "Services in functions/services/ — shared business logic",
+    "Scheduled functions in functions/scheduled/",
+    "API routes follow RESTful patterns: router.get(), router.post()",
+    "Firebase Admin SDK for Firestore, Auth, Cloud Storage",
+    "Environment config via functions.config() or process.env",
+    "Error handling: try/catch with structured JSON error responses",
+    "module.exports for all public interfaces"
+  ],
+  "nodes": [
+    {
+      "path": "functions/middleware/apiKeyMiddleware.js",
+      "profile": "shared",
+      "lines": 325,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/middleware/authMiddleware.js",
+      "profile": "shared",
+      "lines": 316,
+      "exports": [],
+      "imports": [
+        "./middleware/authMiddleware"
+      ],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/middleware/kreatorAuthMiddleware.js",
+      "profile": "shared",
+      "lines": 313,
+      "exports": [],
+      "imports": [
+        "../services/kreatorService"
+      ],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/middleware/rateLimit.js",
+      "profile": "shared",
+      "lines": 14,
+      "exports": [],
+      "imports": [
+        "../api/weather/sharedWeatherUtils"
+      ],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/middleware/securityMiddleware.js",
+      "profile": "shared",
+      "lines": 232,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/api/core/docs.js",
+      "profile": "shared",
+      "lines": 144,
+      "exports": [],
+      "imports": [],
+      "has_router": true,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/index.js",
+      "profile": "shared",
+      "lines": 122,
+      "exports": [
+        "api",
+        "earlyMorningForecast",
+        "morningForecastUpdate",
+        "afternoonForecastUpdate",
+        "eveningForecastUpdate",
+        "emergencyForecastRefresh",
+        "forecastSchedulerHealth",
+        "warmPaddleScoreCache",
+        "aggregatePaddleFeedback"
+      ],
+      "imports": [
+        "./api/checkout/stripeWebhook",
+        "./api/products/images",
+        "./api/products/products",
+        "./api/weather/paddlingout",
+        "./api/core/docs",
+        "./api/weather/nearbyWater",
+        "./api/weather/paddleScore",
+        "./api/weather/fastForecast",
+        "./api/weather/forecast",
+        "./api/smartLinks/smartLinks",
+        "./api/kreators/kreatorRoutes",
+        "./api/ai/gptActions",
+        "./api/auth/authRoutes",
+        "./api/checkout/router",
+        "./api/billing/router",
+        "./middleware/authMiddleware",
+        "./api/admin/updateOrderStatus",
+        "./api/admin/getOrder",
+        "./api/kutz/kutzRouter",
+        "./api/cameras/camerasRoutes"
+      ],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/auth/authRoutes.js",
+      "profile": "shared",
+      "lines": 109,
+      "exports": [],
+      "imports": [
+        "../../middleware/authMiddleware"
+      ],
+      "has_router": true,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/utils/shared/cache.js",
+      "profile": "shared",
+      "lines": 120,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/api/kutz/aiClient.js",
+      "profile": "kutz",
+      "lines": 131,
+      "exports": [],
+      "imports": [
+        "./aiClient"
+      ],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/kutz/fitbit.js",
+      "profile": "kutz",
+      "lines": 307,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": true,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/kutz/kutzRouter.js",
+      "profile": "kutz",
+      "lines": 57,
+      "exports": [],
+      "imports": [
+        "../../middleware/authMiddleware",
+        "./parseFoods",
+        "./parsePhoto",
+        "./searchFoods",
+        "./weeklyReport",
+        "./suggest",
+        "./fitbit"
+      ],
+      "has_router": true,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/kutz/parseFoods.js",
+      "profile": "kutz",
+      "lines": 242,
+      "exports": [
+        "_rateLimitMap"
+      ],
+      "imports": [
+        "./aiClient"
+      ],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/api/kutz/parsePhoto.js",
+      "profile": "kutz",
+      "lines": 192,
+      "exports": [],
+      "imports": [
+        "./aiClient",
+        "./parseFoods"
+      ],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/api/kutz/searchFoods.js",
+      "profile": "kutz",
+      "lines": 148,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/kutz/suggest.js",
+      "profile": "kutz",
+      "lines": 278,
+      "exports": [],
+      "imports": [
+        "./aiClient"
+      ],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/api/kutz/weeklyReport.js",
+      "profile": "kutz",
+      "lines": 101,
+      "exports": [],
+      "imports": [
+        "./aiClient"
+      ],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": true
+    }
+  ],
+  "edges": [
+    {
+      "from": "functions/index.js",
+      "to": "functions/api/core/docs.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/index.js",
+      "to": "functions/api/auth/authRoutes.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/index.js",
+      "to": "functions/middleware/authMiddleware.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/index.js",
+      "to": "functions/api/kutz/kutzRouter.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/auth/authRoutes.js",
+      "to": "functions/middleware/authMiddleware.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/kutz/aiClient.js",
+      "to": "functions/api/kutz/aiClient.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/kutz/kutzRouter.js",
+      "to": "functions/middleware/authMiddleware.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/kutz/kutzRouter.js",
+      "to": "functions/api/kutz/parseFoods.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/kutz/kutzRouter.js",
+      "to": "functions/api/kutz/parsePhoto.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/kutz/kutzRouter.js",
+      "to": "functions/api/kutz/searchFoods.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/kutz/kutzRouter.js",
+      "to": "functions/api/kutz/weeklyReport.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/kutz/kutzRouter.js",
+      "to": "functions/api/kutz/suggest.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/kutz/kutzRouter.js",
+      "to": "functions/api/kutz/fitbit.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/kutz/parseFoods.js",
+      "to": "functions/api/kutz/aiClient.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/kutz/parsePhoto.js",
+      "to": "functions/api/kutz/aiClient.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/kutz/parsePhoto.js",
+      "to": "functions/api/kutz/parseFoods.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/kutz/suggest.js",
+      "to": "functions/api/kutz/aiClient.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/kutz/weeklyReport.js",
+      "to": "functions/api/kutz/aiClient.js",
+      "type": "imports"
+    }
+  ],
+  "stats": {
+    "total_files": 17,
+    "total_exports": 10,
+    "total_imports": 18
+  }
+}

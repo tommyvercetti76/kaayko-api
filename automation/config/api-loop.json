@@ -1,0 +1,155 @@
+{
+  "schema_version": "api-model-loop.v1",
+  "training_policy": {
+    "minimum_accuracy_score": 90,
+    "minimum_maintainability_score": 85,
+    "require_quality_gates_passed": true,
+    "disqualifying_open_severities": [
+      "critical",
+      "high"
+    ]
+  },
+  "auto_review_policy": {
+    "base_accuracy_score": 96,
+    "base_maintainability_score": 93,
+    "base_confidence_score": 88,
+    "minimum_confidence_for_auto_approval": 80,
+    "auto_training_approval_if_clean": true,
+    "large_change_changed_files_threshold": 14,
+    "large_change_churn_threshold": 400,
+    "gold_changed_files_threshold": 20,
+    "gold_churn_threshold": 600
+  },
+  "repo": {
+    "path": ".",
+    "role": "api"
+  },
+  "tracks": {
+    "weather": {
+      "description": "Forecast scheduling, paddle score, nearby water, and weather reliability.",
+      "learnings_slug": "weather",
+      "quality_gates": [
+        {
+          "id": "weather-tests",
+          "label": "Weather API tests",
+          "cwd": "functions",
+          "command": "node ./node_modules/jest/bin/jest.js --runInBand __tests__/weather-paddle-score.test.js --forceExit --detectOpenHandles"
+        }
+      ],
+      "risk_checks": [
+        "Cache invalidation behavior is preserved on warm and cold paths.",
+        "Score normalization changes do not silently shift output ranges.",
+        "Scheduled function cron expressions remain unchanged unless explicitly updated.",
+        "Error fallbacks still emit correct confidence levels to the frontend."
+      ]
+    },
+    "commerce": {
+      "description": "Products catalog, checkout, payment intent, and order completion.",
+      "learnings_slug": "commerce",
+      "quality_gates": [
+        {
+          "id": "store-tests",
+          "label": "Store API tests",
+          "cwd": "functions",
+          "command": "npm run test:store"
+        }
+      ],
+      "risk_checks": [
+        "Stripe payment intent creation and confirmation flow is preserved.",
+        "Product vote rate limiting is not weakened or removed.",
+        "Image serving routes still enforce correct content-type headers.",
+        "No cart or order mutation is exposed without authentication."
+      ]
+    },
+    "kortex": {
+      "description": "Smart links, tenant auth, redirect handling, billing, and analytics.",
+      "learnings_slug": "kortex",
+      "quality_gates": [
+        {
+          "id": "kortex-tests",
+          "label": "KORTEX API tests",
+          "cwd": "functions",
+          "command": "npm run test:kortex"
+        }
+      ],
+      "risk_checks": [
+        "Tenant isolation is preserved — no cross-tenant data leak is possible.",
+        "Public redirect paths stay strictly separate from admin-only mutations.",
+        "Auth claim checks (admin, kreator) are enforced before any data mutation.",
+        "Billing visibility surfaces remain read-only from tenant perspective."
+      ]
+    },
+    "kreator": {
+      "description": "Creator application intake, onboarding state machine, and admin review.",
+      "learnings_slug": "kreator",
+      "quality_gates": [
+        {
+          "id": "kreator-tests",
+          "label": "Kreator API tests",
+          "cwd": "functions",
+          "command": "npm run test:kreator"
+        }
+      ],
+      "risk_checks": [
+        "Application state transitions are validated server-side.",
+        "Admin-only endpoints verify the admin custom claim before acting.",
+        "Google OAuth flow endpoints are not exposed to unauthenticated callers.",
+        "Onboarding completion is idempotent and does not double-process."
+      ]
+    },
+    "kamera": {
+      "description": "Camera catalog, lens data, preset generation, and predeploy validation.",
+      "learnings_slug": "kamera",
+      "quality_gates": [
+        {
+          "id": "kamera-tests",
+          "label": "Camera API tests",
+          "cwd": "functions",
+          "command": "npm run test:smoke"
+        }
+      ],
+      "risk_checks": [
+        "Preset generation respects skill-level branching for apprentice/enthusiast/professional.",
+        "Camera catalog provenance metadata is not silently stripped.",
+        "Lens compatibility data is preserved when catalog entries are updated.",
+        "Predeploy validation checks are not weakened to make the deploy pass faster."
+      ]
+    },
+    "kutz": {
+      "description": "Nutrition parsing, meal suggestion, food search, and Fitbit integration.",
+      "learnings_slug": "kutz",
+      "quality_gates": [
+        {
+          "id": "kutz-tests",
+          "label": "Kutz API tests",
+          "cwd": "functions",
+          "command": "npm run test:kutz"
+        }
+      ],
+      "risk_checks": [
+        "Fitbit OAuth token refresh logic is not broken by middleware changes.",
+        "Food parsing edge cases (missing macros, null values) still return safe defaults.",
+        "Meal suggestion ranking does not expose raw Firestore document keys.",
+        "Rate-limited endpoints remain protected after any middleware refactor."
+      ]
+    },
+    "shared": {
+      "description": "Cross-API middleware, auth guards, error handling, and smoke validation.",
+      "learnings_slug": "shared",
+      "quality_gates": [
+        {
+          "id": "smoke-tests",
+          "label": "API smoke tests",
+          "cwd": "functions",
+          "command": "npm run test:smoke"
+        }
+      ],
+      "risk_checks": [
+        "Middleware execution order is preserved across all mounted routers.",
+        "Error handler shape is consistent — clients must not receive raw stack traces.",
+        "Firebase Admin SDK initialization is not duplicated or re-initialized per-request.",
+        "CORS and security headers are enforced before any route logic executes."
+      ]
+    }
+  }
+}

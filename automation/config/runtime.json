@@ -1,0 +1,57 @@
+{
+  "review_engine": {
+    "mode": "ollama",
+    "notes": "Real local-model execution is enabled. `agent` will call the selected Ollama model and can apply guarded safe edits."
+  },
+  "local_model_runtime": {
+    "provider": "ollama",
+    "model": "qwen2.5-coder:7b",
+    "base_url": "http://127.0.0.1:11434",
+    "allow_cli_fallback": true,
+    "temperature": 0.1,
+    "max_tokens": 4096,
+    "timeout_ms": 300000
+  },
+  "operator_console": {
+    "theme": "retro-green",
+    "show_banner": true
+  },
+  "recommended_models": [
+    {
+      "id": "qwen2.5-coder:7b",
+      "provider": "ollama",
+      "label": "Qwen 2.5 Coder 7B",
+      "fit": "Fast local iteration"
+    },
+    {
+      "id": "qwen2.5-coder:14b",
+      "provider": "ollama",
+      "label": "Qwen 2.5 Coder 14B",
+      "fit": "Best default for local API coding"
+    },
+    {
+      "id": "qwen2.5-coder:32b",
+      "provider": "ollama",
+      "label": "Qwen 2.5 Coder 32B",
+      "fit": "Higher quality if memory allows"
+    },
+    {
+      "id": "qwen3:8b",
+      "provider": "ollama",
+      "label": "Qwen 3 8B",
+      "fit": "Balanced general reasoning"
+    },
+    {
+      "id": "deepseek-coder-v2:16b",
+      "provider": "ollama",
+      "label": "DeepSeek Coder V2 16B",
+      "fit": "Strong code review and security analysis"
+    },
+    {
+      "id": "llama3.1:8b",
+      "provider": "ollama",
+      "label": "Llama 3.1 8B",
+      "fit": "General fallback"
+    }
+  ]
+}

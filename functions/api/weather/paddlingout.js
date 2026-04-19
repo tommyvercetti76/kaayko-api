@@ -98,7 +98,7 @@ router.get('/', async (req, res) => {
     return res.json(spots);
 
   } catch (err) {
-    console.error('paddlingOut GET / error:', err.message);
+    console.error('paddlingOut GET / error:', err.message, err.stack);
     return res.status(500).json({
       error: 'Server error',
       details: err.message,

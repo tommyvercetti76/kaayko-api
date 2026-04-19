@@ -65,3 +65,7 @@ mp3-service/
 
 # Claude / AI assistant local settings
 .claude/
+
+# Automation — ephemeral run output and generated dashboard
+automation/runs/
+automation/dashboard/

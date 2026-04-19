@@ -1,0 +1,500 @@
+{
+  "area": "kortex",
+  "track": "kortex",
+  "generated_at": "2026-04-18T19:58:14.261Z",
+  "conventions": [
+    "Express.js routers mounted in functions/index.js",
+    "Middleware in functions/middleware/ — auth, CORS, rate limiting",
+    "Services in functions/services/ — shared business logic",
+    "Scheduled functions in functions/scheduled/",
+    "API routes follow RESTful patterns: router.get(), router.post()",
+    "Firebase Admin SDK for Firestore, Auth, Cloud Storage",
+    "Environment config via functions.config() or process.env",
+    "Error handling: try/catch with structured JSON error responses",
+    "module.exports for all public interfaces"
+  ],
+  "nodes": [
+    {
+      "path": "functions/middleware/apiKeyMiddleware.js",
+      "profile": "shared",
+      "lines": 325,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/middleware/authMiddleware.js",
+      "profile": "shared",
+      "lines": 316,
+      "exports": [],
+      "imports": [
+        "./middleware/authMiddleware"
+      ],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/middleware/kreatorAuthMiddleware.js",
+      "profile": "shared",
+      "lines": 313,
+      "exports": [],
+      "imports": [
+        "../services/kreatorService"
+      ],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/middleware/rateLimit.js",
+      "profile": "shared",
+      "lines": 14,
+      "exports": [],
+      "imports": [
+        "../api/weather/sharedWeatherUtils"
+      ],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/middleware/securityMiddleware.js",
+      "profile": "shared",
+      "lines": 232,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/api/core/docs.js",
+      "profile": "shared",
+      "lines": 144,
+      "exports": [],
+      "imports": [],
+      "has_router": true,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/index.js",
+      "profile": "shared",
+      "lines": 122,
+      "exports": [
+        "api",
+        "earlyMorningForecast",
+        "morningForecastUpdate",
+        "afternoonForecastUpdate",
+        "eveningForecastUpdate",
+        "emergencyForecastRefresh",
+        "forecastSchedulerHealth",
+        "warmPaddleScoreCache",
+        "aggregatePaddleFeedback"
+      ],
+      "imports": [
+        "./api/checkout/stripeWebhook",
+        "./api/products/images",
+        "./api/products/products",
+        "./api/weather/paddlingout",
+        "./api/core/docs",
+        "./api/weather/nearbyWater",
+        "./api/weather/paddleScore",
+        "./api/weather/fastForecast",
+        "./api/weather/forecast",
+        "./api/smartLinks/smartLinks",
+        "./api/kreators/kreatorRoutes",
+        "./api/ai/gptActions",
+        "./api/auth/authRoutes",
+        "./api/checkout/router",
+        "./api/billing/router",
+        "./middleware/authMiddleware",
+        "./api/admin/updateOrderStatus",
+        "./api/admin/getOrder",
+        "./api/kutz/kutzRouter",
+        "./api/cameras/camerasRoutes"
+      ],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/auth/authRoutes.js",
+      "profile": "shared",
+      "lines": 109,
+      "exports": [],
+      "imports": [
+        "../../middleware/authMiddleware"
+      ],
+      "has_router": true,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/utils/shared/cache.js",
+      "profile": "shared",
+      "lines": 120,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/api/smartLinks/attributionService.js",
+      "profile": "kortex",
+      "lines": 303,
+      "exports": [],
+      "imports": [
+        "./clickTracking"
+      ],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/smartLinks/clickTracking.js",
+      "profile": "kortex",
+      "lines": 457,
+      "exports": [],
+      "imports": [
+        "./webhookService"
+      ],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/api/smartLinks/publicApiRouter.js",
+      "profile": "kortex",
+      "lines": 396,
+      "exports": [],
+      "imports": [
+        "./api/smartLinks/publicApiRouter",
+        "./smartLinkService",
+        "../../middleware/apiKeyMiddleware",
+        "./clickTracking",
+        "./attributionService",
+        "./rateLimitService"
+      ],
+      "has_router": true,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/api/smartLinks/publicRouter.js",
+      "profile": "kortex",
+      "lines": 214,
+      "exports": [],
+      "imports": [
+        "./redirectHandler",
+        "./attributionService",
+        "./rateLimitService"
+      ],
+      "has_router": true,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/api/smartLinks/rateLimitService.js",
+      "profile": "kortex",
+      "lines": 314,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/api/smartLinks/redirectHandler.js",
+      "profile": "kortex",
+      "lines": 401,
+      "exports": [],
+      "imports": [
+        "./clickTracking"
+      ],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/smartLinks/smartLinkDefaults.js",
+      "profile": "kortex",
+      "lines": 108,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": false
+    },
+    {
+      "path": "functions/api/smartLinks/smartLinkEnrichment.js",
+      "profile": "kortex",
+      "lines": 163,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/api/smartLinks/smartLinkService.js",
+      "profile": "kortex",
+      "lines": 284,
+      "exports": [],
+      "imports": [
+        "./smartLinkValidation",
+        "./tenantContext"
+      ],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/api/smartLinks/smartLinkValidation.js",
+      "profile": "kortex",
+      "lines": 84,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": false,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/api/smartLinks/smartLinks.js",
+      "profile": "kortex",
+      "lines": 498,
+      "exports": [],
+      "imports": [
+        "./redirectHandler",
+        "./smartLinkService",
+        "../../middleware/authMiddleware",
+        "./tenantContext",
+        "../../services/emailNotificationService",
+        "./webhookService",
+        "../../middleware/securityMiddleware"
+      ],
+      "has_router": true,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/api/smartLinks/tenantContext.js",
+      "profile": "kortex",
+      "lines": 265,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/api/smartLinks/webhookService.js",
+      "profile": "kortex",
+      "lines": 393,
+      "exports": [],
+      "imports": [],
+      "has_router": false,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": true
+    },
+    {
+      "path": "functions/api/billing/router.js",
+      "profile": "kortex",
+      "lines": 433,
+      "exports": [],
+      "imports": [
+        "../../middleware/authMiddleware"
+      ],
+      "has_router": true,
+      "has_middleware": false,
+      "has_firebase_admin": true,
+      "has_scheduled": false,
+      "has_tests": true
+    }
+  ],
+  "edges": [
+    {
+      "from": "functions/index.js",
+      "to": "functions/api/core/docs.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/index.js",
+      "to": "functions/api/smartLinks/smartLinks.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/index.js",
+      "to": "functions/api/auth/authRoutes.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/index.js",
+      "to": "functions/api/billing/router.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/index.js",
+      "to": "functions/middleware/authMiddleware.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/auth/authRoutes.js",
+      "to": "functions/middleware/authMiddleware.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/smartLinks/attributionService.js",
+      "to": "functions/api/smartLinks/clickTracking.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/smartLinks/clickTracking.js",
+      "to": "functions/api/smartLinks/webhookService.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/smartLinks/publicApiRouter.js",
+      "to": "functions/api/smartLinks/smartLinkService.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/smartLinks/publicApiRouter.js",
+      "to": "functions/middleware/apiKeyMiddleware.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/smartLinks/publicApiRouter.js",
+      "to": "functions/api/smartLinks/clickTracking.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/smartLinks/publicApiRouter.js",
+      "to": "functions/api/smartLinks/attributionService.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/smartLinks/publicApiRouter.js",
+      "to": "functions/api/smartLinks/rateLimitService.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/smartLinks/publicRouter.js",
+      "to": "functions/api/smartLinks/redirectHandler.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/smartLinks/publicRouter.js",
+      "to": "functions/api/smartLinks/attributionService.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/smartLinks/publicRouter.js",
+      "to": "functions/api/smartLinks/rateLimitService.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/smartLinks/redirectHandler.js",
+      "to": "functions/api/smartLinks/clickTracking.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/smartLinks/smartLinkService.js",
+      "to": "functions/api/smartLinks/smartLinkValidation.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/smartLinks/smartLinkService.js",
+      "to": "functions/api/smartLinks/tenantContext.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/smartLinks/smartLinks.js",
+      "to": "functions/api/smartLinks/redirectHandler.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/smartLinks/smartLinks.js",
+      "to": "functions/api/smartLinks/smartLinkService.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/smartLinks/smartLinks.js",
+      "to": "functions/middleware/authMiddleware.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/smartLinks/smartLinks.js",
+      "to": "functions/api/smartLinks/tenantContext.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/smartLinks/smartLinks.js",
+      "to": "functions/api/smartLinks/webhookService.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/smartLinks/smartLinks.js",
+      "to": "functions/middleware/securityMiddleware.js",
+      "type": "imports"
+    },
+    {
+      "from": "functions/api/billing/router.js",
+      "to": "functions/middleware/authMiddleware.js",
+      "type": "imports"
+    }
+  ],
+  "stats": {
+    "total_files": 23,
+    "total_exports": 9,
+    "total_imports": 26
+  }
+}

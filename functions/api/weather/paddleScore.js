@@ -135,7 +135,7 @@ router.get('/', createInputMiddleware('paddleScore'), async (req, res) => {
     });
 
   } catch (error) {
-    console.error('paddleScore GET / error:', error.message);
+    console.error('paddleScore GET / error:', error.message, error.stack);
     return res.status(500).json({
       success: false,
       error: 'Server error',
@@ -195,7 +195,7 @@ router.post('/feedback', async (req, res) => {
     return res.json({ success: true, message: 'Feedback recorded. Thank you!' });
 
   } catch (error) {
-    console.error('paddleScore POST /feedback error:', error.message);
+    console.error('paddleScore POST /feedback error:', error.message, error.stack);
     return res.status(500).json({ success: false, error: 'Failed to record feedback' });
   }
 });
@@ -253,7 +253,7 @@ router.get('/metrics', requireAdmin, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('paddleScore GET /metrics error:', error.message);
+    console.error('paddleScore GET /metrics error:', error.message, error.stack);
     return res.status(500).json({ success: false, error: 'Failed to fetch metrics' });
   }
 });
