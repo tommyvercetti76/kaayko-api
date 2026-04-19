@@ -128,20 +128,58 @@ function moveItem(itemId, fromState, toState, updates = {}) {
   return item;
 }
 
+const DEQUEUE_LOCK_PATH = path.join(QUEUE_ROOT, ".dequeue.lock");
+const DEQUEUE_LOCK_STALE_MS = 30_000; // 30s — if lock is older than this, it's from a dead process
+
+/**
+ * Acquire an advisory dequeue lock using mkdir (atomic on POSIX).
+ * Returns true if acquired, false if already held.
+ */
+function acquireDequeuelock() {
+  try {
+    // Check for stale lock
+    if (fs.existsSync(DEQUEUE_LOCK_PATH)) {
+      const stat = fs.statSync(DEQUEUE_LOCK_PATH);
+      if (Date.now() - stat.mtimeMs > DEQUEUE_LOCK_STALE_MS) {
+        fs.rmSync(DEQUEUE_LOCK_PATH, { force: true });
+      } else {
+        return false;
+      }
+    }
+    fs.mkdirSync(DEQUEUE_LOCK_PATH); // atomic on POSIX — throws if exists
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function releaseDequeuelock() {
+  try { fs.rmdirSync(DEQUEUE_LOCK_PATH); } catch { /* ignore */ }
+}
+
 /**
  * Get next item to process (highest priority, oldest first).
+ * Uses an advisory lock to prevent double-dequeue under concurrent workers.
  */
 function dequeue() {
-  const pending = listItems("pending");
-  if (!pending.length) return null;
+  if (!acquireDequeuelock()) return null; // another caller holds the lock
+  try {
+    const pending = listItems("pending");
+    if (!pending.length) return null;
 
-  // Sort by priority (lower = higher), then by creation time
-  pending.sort((a, b) => {
-    if (a.priority !== b.priority) return a.priority - b.priority;
-    return new Date(a.createdAt) - new Date(b.createdAt);
-  });
+    // Sort by priority (lower = higher), then by creation time
+    pending.sort((a, b) => {
+      if (a.priority !== b.priority) return a.priority - b.priority;
+      return new Date(a.createdAt) - new Date(b.createdAt);
+    });
 
-  return pending[0];
+    const item = pending[0];
+    // Move to processing while lock is held — prevents any concurrent dequeue from picking it
+    moveItem(item.id, "pending", "processing", { startedAt: new Date().toISOString() });
+    return item;
+  } finally {
+    releaseDequeuelock();
+  }
 }
 
 // ── Queue Processor ─────────────────────────────────────────────
@@ -216,8 +254,7 @@ class QueueProcessor extends EventEmitter {
     this.currentItem = item;
     this.consecutiveFailures = 0;
 
-    // Move to processing
-    moveItem(item.id, "pending", "processing", { startedAt: new Date().toISOString() });
+    // Item is already in processing state (dequeue() moved it atomically)
     this.emit("start", { item });
 
     const startTime = Date.now();

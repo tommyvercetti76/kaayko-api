@@ -11,30 +11,50 @@
  *
  * How it works:
  * - Content-hash each finding (normalized title+detail) for deduplication
- * - Cross-reference against actual code to verify (function exists? file exists?)
- * - Score = severity_weight × confidence × recurrence
+ * - Cross-reference against actual code to verify (file exists? identifier exists?)
+ * - Score = (severity_weight × confidence) + 0.5 × log2(recurrence + 1)
  * - Flag "needs detail" findings that lack actionable content
  */
 
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
+const { spawnSync } = require("child_process");
 
 // ── Suppressions ────────────────────────────────────────────────
 
 const SUPPRESSIONS_PATH = path.join(__dirname, "..", "config", "suppressions.json");
 
+const SUPPRESSION_TTL_DAYS = 90;
+
 /**
  * Load suppressions database (fingerprints + title patterns).
+ * Entries with `created_at` older than SUPPRESSION_TTL_DAYS are expired and re-surfaced.
  * Returns { fingerprints: Map<string, object>, patterns: Array<{regex, scope, reason}> }
  */
 function loadSuppressions() {
   try {
     const raw = JSON.parse(fs.readFileSync(SUPPRESSIONS_PATH, "utf8"));
+    const now = Date.now();
+    const ttlMs = SUPPRESSION_TTL_DAYS * 24 * 60 * 60 * 1000;
+    let expiredCount = 0;
+
     const fpMap = new Map();
     for (const entry of raw.fingerprints || []) {
+      if (entry.created_at) {
+        const age = now - new Date(entry.created_at).getTime();
+        if (age > ttlMs) {
+          expiredCount++;
+          continue; // expired — let finding resurface for re-evaluation
+        }
+      }
       fpMap.set(entry.fingerprint, entry);
     }
+
+    if (expiredCount > 0) {
+      process.stderr.write(`[finding-intelligence] Re-surfacing ${expiredCount} expired suppression(s) (>${SUPPRESSION_TTL_DAYS}d old) for re-evaluation.\n`);
+    }
+
     const patterns = (raw.title_patterns || []).map((p) => ({
       regex: new RegExp(p.pattern, "i"),
       scope: p.scope || null,
@@ -107,6 +127,7 @@ function fingerprintFinding(finding) {
 
 /**
  * Check if a finding references real code artifacts.
+ * Two-pass: (1) file existence, (2) identifier grep inside matched files.
  *
  * @param {object} finding - the finding object
  * @param {string} repoRoot - absolute path to repo
@@ -116,11 +137,12 @@ function verifyFinding(finding, repoRoot) {
   const evidence = [];
   const detail = (finding.detail || "") + " " + (finding.title || "");
 
-  // Extract file paths mentioned in the finding
+  // Pass 1: file existence
   const fileRefs = detail.match(/(?:functions|api|src|middleware|services)\/[\w/./-]+\.(?:js|ts|json)/gi) || [];
 
   let fileHits = 0;
   let fileMisses = 0;
+  const resolvedPaths = [];
 
   for (const ref of fileRefs) {
     const candidates = [
@@ -128,9 +150,10 @@ function verifyFinding(finding, repoRoot) {
       path.join(repoRoot, "functions", ref),
       path.join(repoRoot, "src", ref)
     ];
-    const found = candidates.some((p) => fs.existsSync(p));
-    if (found) {
+    const resolved = candidates.find((p) => fs.existsSync(p));
+    if (resolved) {
       fileHits++;
+      resolvedPaths.push(resolved);
       evidence.push(`file exists: ${ref}`);
     } else {
       fileMisses++;
@@ -138,18 +161,55 @@ function verifyFinding(finding, repoRoot) {
     }
   }
 
-  // Extract function/variable names (camelCase or snake_case identifiers)
-  const funcRefs = detail.match(/\b(?:function|method|handler|endpoint)\s+[`'"]?(\w+)[`'"]?/gi) || [];
-
-  // Classify confidence
+  // All file refs are missing → hallucination
   if (fileMisses > 0 && fileHits === 0 && fileRefs.length > 0) {
     return { confidence: "hallucination", evidence };
   }
+
+  // Pass 2: identifier grep inside matched files
+  // Extract camelCase/snake_case identifiers referenced after "function", "method", backtick, or quotes
+  const identifierRefs = [];
+  const identRe = /\b(?:function|method|handler|endpoint|`|'|")(\w{3,})\b/g;
+  let m;
+  while ((m = identRe.exec(detail)) !== null) {
+    identifierRefs.push(m[1]);
+  }
+
+  if (resolvedPaths.length > 0 && identifierRefs.length > 0) {
+    let identHits = 0;
+    let identMisses = 0;
+
+    for (const ident of identifierRefs) {
+      // Search for the identifier in any of the resolved files
+      const result = spawnSync("grep", ["-rl", "--include=*.js", ident, ...resolvedPaths], {
+        encoding: "utf8",
+        timeout: 3000
+      });
+      if (result.status === 0 && result.stdout.trim()) {
+        identHits++;
+        evidence.push(`identifier found: ${ident}`);
+      } else {
+        identMisses++;
+        evidence.push(`identifier NOT found: ${ident}`);
+      }
+    }
+
+    // All identifiers missing in existing files → near-hallucination
+    if (identMisses > 0 && identHits === 0) {
+      return { confidence: "unverified", evidence };
+    }
+    if (identHits > 0) {
+      return { confidence: "verified", evidence };
+    }
+  }
+
   if (fileHits > 0) {
     return { confidence: "verified", evidence };
   }
+
+  // Generic finding with no code references — plausible but unverifiable
+  const funcRefs = detail.match(/\b(?:function|method|handler|endpoint)\s+[`'"]?(\w+)[`'"]?/gi) || [];
   if (fileRefs.length === 0 && funcRefs.length === 0) {
-    // Generic finding with no code references — plausible but unverifiable
     return { confidence: "plausible", evidence: ["No specific code references to verify"] };
   }
   return { confidence: "unverified", evidence };
@@ -202,7 +262,10 @@ function deduplicateFindings(allFindings) {
 
 /**
  * Score findings by priority.
- * score = severity_weight × confidence × log2(recurrence + 1)
+ * score = (severity_weight × confidence) + 0.5 × log2(recurrence + 1)
+ *
+ * Severity always dominates — a novel critical beats a recurring medium.
+ * Recurrence adds signal as a bonus without hijacking rank.
  *
  * @param {Array} findings - deduplicated findings
  * @param {string} repoRoot - for verification
@@ -222,9 +285,9 @@ function scoreFindings(findings, repoRoot) {
       const sevWeight = SEVERITY_WEIGHTS[finding.severity] || SEVERITY_WEIGHTS.medium;
       const verification = verifyFinding(finding, repoRoot);
       const confWeight = VERIFICATION_CONFIDENCE[verification.confidence] || 0.4;
-      const recurrenceWeight = Math.log2((finding.recurrence || 1) + 1);
+      const frequencyBonus = 0.5 * Math.log2((finding.recurrence || 1) + 1);
 
-      const score = sevWeight * confWeight * recurrenceWeight;
+      const score = (sevWeight * confWeight) + frequencyBonus;
 
       return {
         ...finding,
