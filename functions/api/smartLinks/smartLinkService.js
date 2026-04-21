@@ -15,6 +15,58 @@ const { DEFAULT_TENANT_ID } = require('./tenantContext');
 
 const db = admin.firestore();
 
+const ALUMNI_METADATA_KEYS = new Set([
+  'campaign',
+  'sourceGroup',
+  'sourceBatch',
+  'schoolName',
+  'schoolId',
+  'campaignId',
+  'channel',
+  'chapterOrRegion',
+  'audienceType',
+  'organizerRole',
+  'messageTemplateId',
+  'sender',
+  'maxUses',
+  'votingDeadline'
+]);
+
+function isAlumniDestination(url) {
+  const raw = String(url || '').trim().toLowerCase();
+  if (!raw) return false;
+
+  let path = raw;
+  try {
+    const normalized = raw.startsWith('http://') || raw.startsWith('https://')
+      ? new URL(raw)
+      : new URL(raw.startsWith('/') ? raw : `/${raw}`, 'https://kaayko.com');
+    path = String(normalized.pathname || '').toLowerCase();
+  } catch (_) {
+    path = raw;
+  }
+
+  return path === '/alumni' || path.startsWith('/alumni/');
+}
+
+function sanitizeMetadataForDestination(metadata, webDestination) {
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) {
+    return {};
+  }
+
+  // Allow full metadata on alumni links
+  if (isAlumniDestination(webDestination)) {
+    return { ...metadata };
+  }
+
+  // Strip alumni-only fields from non-alumni links
+  const sanitized = { ...metadata };
+  for (const key of ALUMNI_METADATA_KEYS) {
+    delete sanitized[key];
+  }
+  return sanitized;
+}
+
 /**
  * Create a short code link
  * ENRICHED: Full metadata support - destinations, UTM, expiry, creator, custom fields
@@ -85,6 +137,8 @@ async function createShortLink(data) {
   const shortUrl = `${shortDomain}${pathPrefix}/${shortCode}`;
   const qrCodeUrl = `${shortDomain}/qr/${shortCode}.png`;
 
+  const sanitizedMetadata = sanitizeMetadataForDestination(metadata, webDestination);
+
   // Create ENRICHED short link document with ALL metadata + multi-tenant fields
   const linkDoc = {
     code: shortCode,
@@ -105,12 +159,13 @@ async function createShortLink(data) {
     },
     title,
     description,
-    metadata, // Custom key-value data
+    metadata: sanitizedMetadata, // Custom key-value data
     utm, // UTM tracking params
     expiresAt: expiresAt ? admin.firestore.Timestamp.fromDate(new Date(expiresAt)) : null,
     clickCount: 0,
     installCount: 0,
     uniqueUsers: [],
+    uniqueVisitCount: 0, // Alumni campaign: counts unique visits before redirecting
     lastClickedAt: null, // Track last click timestamp
     lastInstallAt: null, // Track last install timestamp
     enabled, // Active/inactive status
@@ -134,7 +189,7 @@ async function createShortLink(data) {
     destinations: linkDoc.destinations,
     title,
     description,
-    metadata,
+    metadata: sanitizedMetadata,
     utm,
     expiresAt,
     clickCount: 0,
@@ -216,7 +271,13 @@ async function updateShortLink(code, updates) {
     updatedAt: FieldValue.serverTimestamp()
   };
 
-  if (metadata !== undefined) updateData.metadata = metadata;
+  if (metadata !== undefined) {
+    const currentDestinations = linkDoc.data()?.destinations || {};
+    const nextWebDestination = destinations?.web !== undefined
+      ? destinations.web
+      : currentDestinations.web;
+    updateData.metadata = sanitizeMetadataForDestination(metadata, nextWebDestination);
+  }
   if (utm !== undefined) updateData.utm = utm;
   if (destinations !== undefined) updateData.destinations = destinations;
   if (enabled !== undefined) updateData.enabled = enabled;

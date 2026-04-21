@@ -17,6 +17,88 @@ const { FieldValue } = require('firebase-admin/firestore');
 const { trackClick, updateClickRedirect } = require('./clickTracking');
 
 const db = admin.firestore();
+const ALUMNI_POLL_TITLE = 'What would bring you back to your school?';
+const ALUMNI_POLL_DESCRIPTION_FALLBACK = 'One tap. Anonymous. No signup. Closes in 6 days.';
+const ALUMNI_POLL_OG_IMAGE = 'https://kaayko.com/og/diya.png?v=20260420c';
+
+function isSocialCrawler(userAgent = '') {
+  const ua = String(userAgent).toLowerCase();
+  return (
+    ua.includes('facebookexternalhit') ||
+    ua.includes('facebot') ||
+    ua.includes('twitterbot') ||
+    ua.includes('whatsapp') ||
+    ua.includes('telegrambot') ||
+    ua.includes('discordbot') ||
+    ua.includes('slackbot') ||
+    ua.includes('linkedinbot') ||
+    ua.includes('applebot') ||
+    ua.includes('skypeuripreview')
+  );
+}
+
+function escapeHtml(value = '') {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function buildAlumniPollDescription(votingDeadline) {
+  if (!votingDeadline) {
+    // TODO: remove fallback when all alumni links store a normalized deadline.
+    return ALUMNI_POLL_DESCRIPTION_FALLBACK;
+  }
+
+  const deadlineDate = votingDeadline.toDate ? votingDeadline.toDate() : new Date(votingDeadline);
+  if (Number.isNaN(deadlineDate.getTime())) {
+    return ALUMNI_POLL_DESCRIPTION_FALLBACK;
+  }
+
+  const dayMs = 24 * 60 * 60 * 1000;
+  const daysLeft = Math.ceil((deadlineDate.getTime() - Date.now()) / dayMs);
+  if (daysLeft <= 0) {
+    return 'One tap. Anonymous. No signup. Poll closes today.';
+  }
+
+  const dayLabel = daysLeft === 1 ? 'day' : 'days';
+  return `One tap. Anonymous. No signup. Closes in ${daysLeft} ${dayLabel}.`;
+}
+
+function renderSocialPreviewPage({ code, title, description, imageUrl }) {
+  const canonicalUrl = `https://kaayko.com/l/${encodeURIComponent(code)}`;
+  const safeTitle = escapeHtml(title);
+  const safeDescription = escapeHtml(description);
+  const safeImageUrl = escapeHtml(imageUrl);
+  const safeCanonicalUrl = escapeHtml(canonicalUrl);
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>${safeTitle}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="${safeDescription}">
+  <link rel="canonical" href="${safeCanonicalUrl}">
+
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="${safeCanonicalUrl}">
+  <meta property="og:title" content="${safeTitle}">
+  <meta property="og:description" content="${safeDescription}">
+  <meta property="og:image" content="${safeImageUrl}">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="${safeTitle}">
+  <meta name="twitter:description" content="${safeDescription}">
+  <meta name="twitter:image" content="${safeImageUrl}">
+</head>
+<body></body>
+</html>`;
+}
 
 /**
  * Detect user's platform from User-Agent string
@@ -60,37 +142,28 @@ function errorPage(code, title, message, showAppButton = true) {
           font-family: 'Josefin Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
           min-height: 100vh;
           display: flex;
-          align-items: center;
-          justify-content: center;
-          background: #0a0a0a;
-          color: #fff;
-          padding: 20px;
+          flex-direction: column;
+          background: #080808;
+          color: #f0f0f0;
         }
+        nav {
+          position: sticky; top: 0; z-index: 50;
+          background: rgba(8,8,8,0.92); backdrop-filter: blur(14px);
+          border-bottom: 1px solid #1e1e1e;
+          padding: 14px 20px; display: flex; align-items: center; justify-content: center;
+        }
+        .nav-logo { font-size: 1rem; font-weight: 700; color: #D4A84B; letter-spacing: 0.14em; }
         .container {
           max-width: 420px;
           width: 100%;
-          text-align: center;
-        }
-        .logo {
-          width: 60px;
-          height: 60px;
-          margin: 0 auto 24px;
-          background: linear-gradient(135deg, #D4A84B 0%, #C4983B 100%);
-          border-radius: 50%;
+          margin: 0 auto;
+          padding: 20px;
+          flex: 1;
           display: flex;
           align-items: center;
           justify-content: center;
-          font-size: 28px;
-          font-weight: 700;
-          color: #0a0a0a;
-          box-shadow: 0 4px 20px rgba(212, 168, 75, 0.3);
         }
-        .card {
-          background: #141414;
-          border: 1px solid #2a2a2a;
-          border-radius: 16px;
-          padding: 40px 32px;
-        }
+        .inner { text-align: center; width: 100%; }
         .icon {
           font-size: 48px;
           margin-bottom: 16px;
@@ -98,59 +171,69 @@ function errorPage(code, title, message, showAppButton = true) {
         h1 {
           font-size: 24px;
           font-weight: 700;
-          color: #fff;
+          color: #f0f0f0;
           margin-bottom: 8px;
         }
         p {
           font-size: 15px;
-          color: #888;
-          line-height: 1.5;
+          color: #666;
+          line-height: 1.6;
           margin-bottom: 24px;
         }
-        .btn {
-          display: inline-block;
-          background: linear-gradient(135deg, #D4A84B 0%, #C4983B 100%);
-          color: #0a0a0a;
-          font-family: inherit;
-          font-size: 14px;
-          font-weight: 600;
-          padding: 12px 28px;
-          border-radius: 8px;
-          text-decoration: none;
-          transition: all 0.2s ease;
-          box-shadow: 0 2px 12px rgba(212, 168, 75, 0.25);
-        }
-        .btn:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 4px 20px rgba(212, 168, 75, 0.4);
-        }
-        .footer {
-          margin-top: 32px;
+        .contact {
           font-size: 13px;
           color: #555;
+          margin-bottom: 28px;
         }
-        .footer a {
+        .contact a {
           color: #D4A84B;
           text-decoration: none;
         }
-        .footer a:hover {
-          text-decoration: underline;
+        .contact a:hover { text-decoration: underline; }
+        .btn {
+          display: inline-block;
+          background: #D4A84B;
+          color: #080808;
+          font-family: inherit;
+          font-size: 14px;
+          font-weight: 700;
+          padding: 12px 28px;
+          border-radius: 10px;
+          text-decoration: none;
+          transition: all 0.2s ease;
         }
+        .btn:hover {
+          background: #e0b757;
+          transform: translateY(-1px);
+          box-shadow: 0 6px 24px rgba(212,168,75,0.3);
+        }
+        .site-footer {
+          border-top: 1px solid #1e1e1e;
+          padding: 18px 20px;
+          display: flex; align-items: center; justify-content: center; gap: 10px;
+        }
+        .footer-brand { font-size: 0.85rem; font-weight: 700; color: #D4A84B; letter-spacing: 0.12em; }
+        .footer-sep { color: #1e1e1e; }
+        .footer-link { font-size: 0.72rem; color: #666; text-decoration: none; }
+        .footer-link:hover { color: #D4A84B; }
       </style>
     </head>
     <body>
+      <nav><span class="nav-logo">KAAYKO</span></nav>
       <div class="container">
-        <div class="logo">K</div>
-        <div class="card">
+        <div class="inner">
           <div class="icon">${icon}</div>
           <h1>${title}</h1>
           <p>${message}</p>
+          <p class="contact">Questions? <a href="mailto:rohan@kaayko.com">rohan@kaayko.com</a></p>
           ${appButton}
         </div>
-        <div class="footer">
-          <a href="https://kaayko.com">kaayko.com</a> · Know Before You Go
-        </div>
       </div>
+      <footer class="site-footer">
+        <span class="footer-brand">KAAYKO</span>
+        <span class="footer-sep">&middot;</span>
+        <a href="mailto:rohan@kaayko.com" class="footer-link">rohan@kaayko.com</a>
+      </footer>
     </body>
     </html>
   `;
@@ -205,6 +288,115 @@ async function handleRedirect(req, res, code, options = {}) {
           'Link Expired',
           'This link has expired and is no longer available.'
         ));
+      }
+    }
+
+    // Case 4: Alumni campaign — maxUses cap + single-use visit token
+    if (linkData.metadata?.campaign === 'alumni') {
+
+      // Admin link — look up the report key and redirect to the report page
+      if (linkData.metadata?.isAdmin) {
+        try {
+          const rkSnap = await db.collection('alumni_report_keys')
+            .where('linkCode', '==', code)
+            .limit(1)
+            .get();
+          if (!rkSnap.empty) {
+            const rk = rkSnap.docs[0].data().key;
+            return res.redirect(302, `https://kaayko.com/alumni-report?rk=${encodeURIComponent(rk)}`);
+          }
+          // No report key yet — generate one on the fly
+          const { generateReportKey } = require('../alumni/reportKeyService');
+          const { key } = await generateReportKey({
+            linkCode:    code,
+            sourceGroup: linkData.metadata.sourceGroup || null,
+            sourceBatch: String(linkData.metadata.sourceBatch || ''),
+            label:       linkData.title || 'Alumni Campaign',
+            expiresAt:   null,
+          });
+          return res.redirect(302, `https://kaayko.com/alumni-report?rk=${encodeURIComponent(key)}`);
+        } catch (adminErr) {
+          console.error('[Alumni] Admin redirect failed:', adminErr);
+          return res.redirect(302, 'https://kaayko.com/admin/alumni');
+        }
+      }
+
+      const maxUses          = linkData.metadata.maxUses || 50;
+      const uniqueVisitCount = linkData.uniqueVisitCount || 0;
+
+      if (uniqueVisitCount >= maxUses) {
+        return res.status(410).send(errorPage(
+          410,
+          'Link Limit Reached',
+          'This link has been used the maximum number of times. Please ask the sender for a fresh link.'
+        ));
+      }
+
+      if (isSocialCrawler(userAgent)) {
+        const socialDescription = buildAlumniPollDescription(linkData.metadata?.votingDeadline);
+        return res
+          .status(200)
+          .set('Content-Type', 'text/html; charset=utf-8')
+          .set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+          .set('Pragma', 'no-cache')
+          .set('Expires', '0')
+          .set('Vary', 'User-Agent')
+          .send(renderSocialPreviewPage({
+            code,
+            title: ALUMNI_POLL_TITLE,
+            description: socialDescription,
+            imageUrl: ALUMNI_POLL_OG_IMAGE,
+          }));
+      }
+
+      // Track full click analytics (non-blocking)
+      if (options.trackAnalytics) {
+        trackClick({
+          linkCode: code,
+          tenantId: linkData.tenantId || 'kaayko-default',
+          platform,
+          userAgent,
+          ip: req.ip || req.connection.remoteAddress,
+          referrer: req.get('referer') || null,
+          utm: extractUTMParams(req.query),
+          metadata: { linkTitle: linkData.title, linkMetadata: linkData.metadata }
+        }).catch(err => console.error('[Alumni] click tracking failed:', err));
+      }
+
+      // Issue (or reuse) a single-use visit token and redirect to the landing page
+      try {
+        const { issueVisitToken } = require('../alumni/visitTokenService');
+        const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
+                   req.headers['x-real-ip'] ||
+                   req.socket?.remoteAddress || 'unknown';
+
+        const { token: visitToken, reused } = await issueVisitToken(code, ip, {
+          sourceGroup: linkData.metadata.sourceGroup,
+          sourceBatch: linkData.metadata.sourceBatch,
+          campaign:    'alumni',
+          sender:      linkData.metadata.sender,
+        });
+
+        // Only count a new unique visit when we minted a fresh token
+        if (!reused) {
+          db.collection('short_links').doc(code).update({
+            uniqueVisitCount: FieldValue.increment(1),
+            clickCount: FieldValue.increment(1),
+            lastClickedAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+          }).catch(err => console.error('[Alumni] uniqueVisitCount update failed:', err));
+        }
+
+        const landingUrl = new URL('https://kaayko.com/alumni');
+        landingUrl.searchParams.set('vtok', visitToken);
+        landingUrl.searchParams.set('src',  code);
+        if (linkData.metadata.schoolName) {
+          landingUrl.searchParams.set('school', linkData.metadata.schoolName);
+        }
+        return res.redirect(302, landingUrl.toString());
+      } catch (alumniErr) {
+        console.error('[Alumni] Visit token issuance failed:', alumniErr);
+        return res.status(500).send(errorPage(500, 'Something Went Wrong', 'Please try the link again.'));
       }
     }
 
