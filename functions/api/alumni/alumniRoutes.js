@@ -432,7 +432,7 @@ router.get('/report', rateLimiter(), async (req, res) => {
       if (doc.fraudPenalty > 0)                    buckets.flagged++;
       const b = (doc.batch || '').trim();
       if (b) batchDist[b] = (batchDist[b] || 0) + 1;
-      if (doc.sourceGroup)                                       signals.fromTrustedLink++;
+      if (doc.linkCode)                                          signals.fromTrustedLink++;
       if (b)                                                     signals.hasBatch++;
       if (doc.city || doc.country)                               signals.hasLocation++;
       if ((doc.comment || '').trim().length >= 10)               signals.hasComment++;
