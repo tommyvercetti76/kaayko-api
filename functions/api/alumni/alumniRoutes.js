@@ -399,7 +399,12 @@ router.get('/report', rateLimiter(), async (req, res) => {
           votes: submissions,
           interests:     linkInterests,
           conversionPct: consumedClicks > 0 ? Math.round((submissions / consumedClicks) * 100) : 0,
-          maxUses:       ld.metadata?.maxUses ?? null,
+          maxUses:       ld.metadata?.maxUses      ?? null,
+          schoolName:    ld.metadata?.schoolName    ?? null,
+          sourceGroup:   ld.metadata?.sourceGroup   ?? null,
+          sourceBatch:   ld.metadata?.sourceBatch   ?? null,
+          channel:       ld.metadata?.channel       ?? null,
+          chapterOrRegion: ld.metadata?.chapterOrRegion ?? null,
           enabled:       ld.enabled !== false,
           createdAt:     ld.createdAt?.toMillis?.() ?? null,
         };
