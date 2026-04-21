@@ -413,6 +413,7 @@ router.get('/report', rateLimiter(), async (req, res) => {
     const batchDist  = {};
     const ACTION_READY = new Set(['mentor', 'volunteer', 'donate_later', 'advisory']);
     let actionReadyCount = 0;
+    const signals = { fromTrustedLink: 0, hasBatch: 0, hasLocation: 0, hasComment: 0, emailVerified: 0 };
 
     for (const doc of allDocs) {
       const interests = Array.isArray(doc.interestType) ? doc.interestType : [];
@@ -426,6 +427,11 @@ router.get('/report', rateLimiter(), async (req, res) => {
       if (doc.fraudPenalty > 0)                    buckets.flagged++;
       const b = (doc.batch || '').trim();
       if (b) batchDist[b] = (batchDist[b] || 0) + 1;
+      if (doc.sourceGroup)                                       signals.fromTrustedLink++;
+      if (b)                                                     signals.hasBatch++;
+      if (doc.city || doc.country)                               signals.hasLocation++;
+      if ((doc.comment || '').trim().length >= 10)               signals.hasComment++;
+      if (doc.emailVerified === true)                            signals.emailVerified++;
     }
 
     // Paginate the visible leads list
@@ -452,7 +458,7 @@ router.get('/report', rateLimiter(), async (req, res) => {
         expiresAt:   keyData.expiresAt,
         viewCount:   keyData.viewCount,
       },
-      stats: { total, breakdown, buckets, batchDist, actionReadyCount },
+      stats: { total, breakdown, buckets, batchDist, actionReadyCount, signals },
       links: alumniLinks,
       leads,
       hasMore: startIdx + PAGE_SIZE < total,
