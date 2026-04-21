@@ -368,7 +368,7 @@ router.get('/report', rateLimiter(), async (req, res) => {
       .filter(doc => {
         if (sourceGroup && doc.sourceGroup !== sourceGroup) return false;
         if (sourceBatch && doc.sourceBatch !== String(sourceBatch)) return false;
-        if (doc.linkCode && !enabledAlumniLinkCodes.has(doc.linkCode)) return false;
+        if (!doc.linkCode || !enabledAlumniLinkCodes.has(doc.linkCode)) return false;
         return true;
       })
       .sort((a, b) => {
@@ -411,12 +411,15 @@ router.get('/report', rateLimiter(), async (req, res) => {
     const breakdown  = Object.fromEntries(INTEREST_TYPES.map(t => [t, 0]));
     const buckets    = { verified: 0, medium: 0, low: 0, flagged: 0 };
     const batchDist  = {};
+    const ACTION_READY = new Set(['mentor', 'volunteer', 'donate_later', 'advisory']);
+    let actionReadyCount = 0;
 
     for (const doc of allDocs) {
       const interests = Array.isArray(doc.interestType) ? doc.interestType : [];
       for (const t of interests) {
         if (breakdown[t] !== undefined) breakdown[t]++;
       }
+      if (interests.some(t => ACTION_READY.has(t))) actionReadyCount++;
       if (doc.bucket === 'verified')               buckets.verified++;
       else if (doc.bucket === 'medium_confidence') buckets.medium++;
       else if (doc.bucket === 'low_confidence')    buckets.low++;
@@ -449,7 +452,7 @@ router.get('/report', rateLimiter(), async (req, res) => {
         expiresAt:   keyData.expiresAt,
         viewCount:   keyData.viewCount,
       },
-      stats: { total, breakdown, buckets, batchDist },
+      stats: { total, breakdown, buckets, batchDist, actionReadyCount },
       links: alumniLinks,
       leads,
       hasMore: startIdx + PAGE_SIZE < total,
