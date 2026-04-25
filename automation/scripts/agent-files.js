@@ -259,13 +259,16 @@ function collectAgentCandidateFiles(config, manifest, area, goal, coachingBundle
       const prefixedPath = `${repoKey}:${relativePath}`;
       const score = scoreAgentCandidateFile(prefixedPath, area, manifest.track, goalTokens, stat.size, logicalRoot, coachingBundle, goalHints);
 
+      let lineCount = 0;
+      try { lineCount = fs.readFileSync(absolutePath, "utf8").split("\n").length; } catch { /* unreadable file — skip line count */ }
+
       candidates.push({
         path: prefixedPath,
         repo: repoKey,
         relative_path: relativePath,
         logical_root: logicalRoot,
         size_bytes: stat.size,
-        line_count: fs.readFileSync(absolutePath, "utf8").split("\n").length,
+        line_count: lineCount,
         score
       });
     });

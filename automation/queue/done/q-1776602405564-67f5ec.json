@@ -1,0 +1,15 @@
+{
+  "id": "q-1776602405564-67f5ec",
+  "fingerprint": "1bd148cffaa0a953",
+  "track": "kreator",
+  "goal": "Code quality: find dead code, duplicated logic, missing error handling, and inconsistent patterns",
+  "goalMode": "audit",
+  "priority": 4,
+  "priorityLabel": "low",
+  "source": "scout",
+  "metadata": {},
+  "createdAt": "2026-04-19T12:40:05.564Z",
+  "status": "done",
+  "startedAt": "2026-04-19T12:46:09.401Z",
+  "completedAt": "2026-04-19T12:57:55.914Z"
+}

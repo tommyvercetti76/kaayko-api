@@ -21,8 +21,30 @@ Smart links:
 - `DELETE /smartlinks/:code`
 - `POST /smartlinks/events/:type`
 
+Campaign management:
+
+- `GET /campaigns/health`
+- `POST /campaigns`
+- `GET /campaigns`
+- `GET /campaigns/:campaignId`
+- `PUT /campaigns/:campaignId`
+- `POST /campaigns/:campaignId/pause`
+- `POST /campaigns/:campaignId/resume`
+- `POST /campaigns/:campaignId/archive`
+- `GET /campaigns/:campaignId/members`
+- `POST /campaigns/:campaignId/members`
+- `DELETE /campaigns/:campaignId/members/:uid`
+- `POST /campaigns/:campaignId/links`
+- `GET /campaigns/:campaignId/links`
+- `GET /campaigns/:campaignId/links/:code`
+- `PUT /campaigns/:campaignId/links/:code`
+- `POST /campaigns/:campaignId/links/:code/pause`
+- `POST /campaigns/:campaignId/links/:code/resume`
+- `DELETE /campaigns/:campaignId/links/:code`
+
 Legacy deep-link surfaces:
 
+- `GET /:campaignSlug/:code` (campaign namespace resolver, mounted before legacy deep-links)
 - `GET /l/:id`
 - `GET /resolve`
 - `GET /health`
@@ -42,6 +64,7 @@ Auth and billing:
 Primary route files:
 
 - [`functions/api/smartLinks/smartLinks.js`](../../functions/api/smartLinks/smartLinks.js)
+- [`functions/api/campaigns/campaignRoutes.js`](../../functions/api/campaigns/campaignRoutes.js)
 - [`functions/api/deepLinks/deeplinkRoutes.js`](../../functions/api/deepLinks/deeplinkRoutes.js)
 - [`functions/api/auth/authRoutes.js`](../../functions/api/auth/authRoutes.js)
 - [`functions/api/billing/router.js`](../../functions/api/billing/router.js)
@@ -64,7 +87,9 @@ Primary frontend files:
 
 ## Security and access
 
-- Public redirect and analytics collection routes are intentionally open.
+- Public redirect routes are intentionally open.
+- Public analytics collection is constrained to known event types and known enabled links.
+- Aggregate stats require authenticated admin access and should remain tenant-scoped by default.
 - Admin CRUD requires `requireAuth` and `requireAdmin`.
 - Tenant-scoped admin flows rely on the `X-Kaayko-Tenant-Id` header from the frontend admin shell.
 - Billing routes require authenticated users except for public config and Stripe webhooks.
@@ -76,5 +101,5 @@ Primary frontend files:
 
 ## Quality and maintenance notes
 
-- No dedicated KORTEX regression suite is wired into `functions/package.json`.
+- KORTEX regression tests are available in `functions/__tests__/kortex-api.test.js`, `functions/__tests__/kortex-campaigns.test.js`, and `functions/__tests__/kortex-campaign-resolver.test.js`.
 - The minimum safe automation should verify auth, tenant scoping, CRUD, redirect behavior, billing config, and webhook signature configuration.

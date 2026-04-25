@@ -20,6 +20,18 @@ const db = admin.firestore();
 const ALUMNI_POLL_TITLE = 'What would bring you back to your school?';
 const ALUMNI_POLL_DESCRIPTION_FALLBACK = 'One tap. Anonymous. No signup. Closes in 6 days.';
 const ALUMNI_POLL_OG_IMAGE = 'https://kaayko.com/og/diya.png?v=20260420c';
+const TRACKING_KEY_MAP = {
+  source: 'utm_source',
+  medium: 'utm_medium',
+  campaign: 'utm_campaign',
+  term: 'utm_term',
+  content: 'utm_content',
+  utm_source: 'utm_source',
+  utm_medium: 'utm_medium',
+  utm_campaign: 'utm_campaign',
+  utm_term: 'utm_term',
+  utm_content: 'utm_content'
+};
 
 function isSocialCrawler(userAgent = '') {
   const ua = String(userAgent).toLowerCase();
@@ -44,6 +56,128 @@ function escapeHtml(value = '') {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+}
+
+function isPlainObject(value) {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+function normalizeTrackingValue(value) {
+  if (value === undefined || value === null) return '';
+  return String(value).trim().toLowerCase().slice(0, 100);
+}
+
+function normalizeStoredUTM(utm = {}) {
+  if (!isPlainObject(utm)) return {};
+
+  const normalized = {};
+  for (const [key, rawValue] of Object.entries(utm)) {
+    const canonicalKey = TRACKING_KEY_MAP[key];
+    const value = normalizeTrackingValue(rawValue);
+    if (canonicalKey && value) {
+      normalized[canonicalKey] = value;
+    }
+  }
+
+  return normalized;
+}
+
+function buildTrackingContext(query = {}, linkUtm = {}) {
+  const utm = normalizeStoredUTM(linkUtm);
+  const aliases = {
+    utm_source: query.utm_source || query.src || query.source || query.channel,
+    utm_medium: query.utm_medium || query.medium,
+    utm_campaign: query.utm_campaign || query.campaign,
+    utm_term: query.utm_term || query.term,
+    utm_content: query.utm_content || query.content
+  };
+
+  for (const [key, rawValue] of Object.entries(aliases)) {
+    const value = normalizeTrackingValue(rawValue);
+    if (value) utm[key] = value;
+  }
+
+  return {
+    source: utm.utm_source || null,
+    utm
+  };
+}
+
+function getSourceRule(metadata = {}, source) {
+  if (!source || !isPlainObject(metadata?.sourceRules)) return null;
+
+  if (isPlainObject(metadata.sourceRules[source])) {
+    return metadata.sourceRules[source];
+  }
+
+  for (const [key, value] of Object.entries(metadata.sourceRules)) {
+    if (normalizeTrackingValue(key) === source && isPlainObject(value)) {
+      return value;
+    }
+  }
+
+  return null;
+}
+
+function getRuleDate(rule, ...keys) {
+  for (const key of keys) {
+    const rawValue = rule?.[key];
+    if (!rawValue) continue;
+    const parsed = new Date(rawValue);
+    if (!Number.isNaN(parsed.getTime())) return parsed;
+  }
+  return null;
+}
+
+function getRuleStatusCode(rule, defaultStatus = 404) {
+  const rawStatus = Number(rule?.statusCode || rule?.responseCode);
+  return rawStatus === 410 ? 410 : defaultStatus;
+}
+
+function evaluateSourceAccess(metadata = {}, source) {
+  if (!source) return { allowed: true, source: null, rule: null };
+
+  const rule = getSourceRule(metadata, source);
+  if (!rule) return { allowed: true, source, rule: null };
+
+  const startsAt = getRuleDate(rule, 'startsAt', 'startAt', 'startsOn');
+  const endsAt = getRuleDate(rule, 'endsAt', 'endAt', 'stopAt', 'stopsAt', 'endsOn');
+  const now = new Date();
+
+  if (startsAt && startsAt > now) {
+    return {
+      allowed: false,
+      source,
+      rule,
+      statusCode: getRuleStatusCode(rule, 404),
+      title: 'Source Not Live Yet',
+      message: rule.message || `This link is not active for ${source} yet.`
+    };
+  }
+
+  if (endsAt && endsAt < now) {
+    return {
+      allowed: false,
+      source,
+      rule,
+      statusCode: getRuleStatusCode(rule, 404),
+      title: 'Source Ended',
+      message: rule.message || `This link is no longer active for ${source}.`
+    };
+  }
+
+  if (rule.enabled === false || rule.active === false) {
+    return {
+      allowed: false,
+      source,
+      rule,
+      statusCode: getRuleStatusCode(rule, 404),
+      title: 'Source Disabled',
+      message: rule.message || `This link is disabled for ${source}.`
+    };
+  }
+
+  return { allowed: true, source, rule };
 }
 
 function buildAlumniPollDescription(votingDeadline) {
@@ -269,6 +403,7 @@ async function handleRedirect(req, res, code, options = {}) {
     }
 
     const linkData = linkDoc.data();
+    const trackingContext = buildTrackingContext(req.query, linkData.utm);
 
     // Case 2: Link disabled by creator
     if (linkData.enabled === false) {
@@ -289,6 +424,15 @@ async function handleRedirect(req, res, code, options = {}) {
           'This link has expired and is no longer available.'
         ));
       }
+    }
+
+    const sourceAccess = evaluateSourceAccess(linkData.metadata, trackingContext.source);
+    if (!sourceAccess.allowed) {
+      return res.status(sourceAccess.statusCode).send(errorPage(
+        sourceAccess.statusCode,
+        sourceAccess.title,
+        sourceAccess.message
+      ));
     }
 
     // Case 4: Alumni campaign — maxUses cap + single-use visit token
@@ -358,8 +502,12 @@ async function handleRedirect(req, res, code, options = {}) {
           userAgent,
           ip: req.ip || req.connection.remoteAddress,
           referrer: req.get('referer') || null,
-          utm: extractUTMParams(req.query),
-          metadata: { linkTitle: linkData.title, linkMetadata: linkData.metadata }
+          utm: trackingContext.utm,
+          metadata: {
+            linkTitle: linkData.title,
+            linkMetadata: linkData.metadata,
+            trackingSource: trackingContext.source
+          }
         }).catch(err => console.error('[Alumni] click tracking failed:', err));
       }
 
@@ -375,6 +523,7 @@ async function handleRedirect(req, res, code, options = {}) {
           sourceBatch: linkData.metadata.sourceBatch,
           campaign:    'alumni',
           sender:      linkData.metadata.sender,
+          source:      trackingContext.source,
         });
 
         // Only count a new unique visit when we minted a fresh token
@@ -424,10 +573,11 @@ async function handleRedirect(req, res, code, options = {}) {
           userAgent,
           ip: req.ip || req.connection.remoteAddress,
           referrer: req.get('referer') || null,
-          utm: extractUTMParams(req.query),
+          utm: trackingContext.utm,
           metadata: {
             linkTitle: linkData.title,
-            linkMetadata: linkData.metadata
+            linkMetadata: linkData.metadata,
+            trackingSource: trackingContext.source
           }
         });
         clickId = clickData.clickId;
@@ -448,9 +598,12 @@ async function handleRedirect(req, res, code, options = {}) {
       })
       .catch(err => console.error('[Redirect] Click count update failed:', err));
 
-    // Append clickId to destination for attribution (if mobile deep link)
-    if (clickId && (platform === 'ios' || platform === 'android')) {
-      destination = appendClickIdToDestination(destination, clickId, req.query);
+    // Preserve tracking context across redirects. Mobile deep links also receive clickId.
+    if (clickId || Object.keys(trackingContext.utm).length) {
+      destination = appendTrackingToDestination(destination, {
+        clickId: (platform === 'ios' || platform === 'android') ? clickId : null,
+        utm: trackingContext.utm
+      });
     }
     
     // KORTEX BYPASS: Add bypass parameter for internal Kaayko pages (store, etc.)
@@ -523,42 +676,46 @@ function selectDestinationVariant(destination) {
  * @returns {Object} UTM parameters
  */
 function extractUTMParams(query) {
-  const utmParams = {};
-  const utmKeys = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content'];
-  
-  for (const key of utmKeys) {
-    if (query[key]) {
-      utmParams[key] = query[key];
-    }
-  }
-  
-  return utmParams;
+  return buildTrackingContext(query).utm;
 }
 
 /**
  * Append clickId and context to destination URL for attribution
  * @param {string} destination - Original destination URL
- * @param {string} clickId - Click ID
- * @param {Object} query - Query parameters (for UTM passthrough)
+ * @param {Object} tracking - { clickId, utm }
  * @returns {string} Modified destination with clickId
  */
-function appendClickIdToDestination(destination, clickId, query = {}) {
+function appendTrackingToDestination(destination, tracking = {}) {
+  const { clickId = null, utm = {} } = tracking;
   try {
     const url = new URL(destination);
-    url.searchParams.set('clickId', clickId);
-    
-    // Pass through UTM parameters
-    const utmParams = extractUTMParams(query);
-    for (const [key, value] of Object.entries(utmParams)) {
+    if (clickId) {
+      url.searchParams.set('clickId', clickId);
+    }
+
+    for (const [key, value] of Object.entries(utm || {})) {
       url.searchParams.set(key, value);
     }
-    
+
     return url.toString();
   } catch (error) {
     // If URL parsing fails, append manually
+    const params = [];
+    if (clickId) params.push(`clickId=${encodeURIComponent(clickId)}`);
+    for (const [key, value] of Object.entries(utm || {})) {
+      params.push(`${encodeURIComponent(key)}=${encodeURIComponent(value)}`);
+    }
+    if (!params.length) return destination;
     const separator = destination.includes('?') ? '&' : '?';
-    return `${destination}${separator}clickId=${clickId}`;
+    return `${destination}${separator}${params.join('&')}`;
   }
+}
+
+function appendClickIdToDestination(destination, clickId, query = {}) {
+  return appendTrackingToDestination(destination, {
+    clickId,
+    utm: buildTrackingContext(query).utm
+  });
 }
 
 /**
@@ -588,5 +745,8 @@ module.exports = {
   checkLinkExists,
   selectDestinationVariant,
   extractUTMParams,
-  appendClickIdToDestination
+  appendTrackingToDestination,
+  appendClickIdToDestination,
+  buildTrackingContext,
+  evaluateSourceAccess
 };

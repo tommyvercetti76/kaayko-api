@@ -355,7 +355,7 @@ router.get("/l/:id", async (req, res) => {
       
       // For Universal Links, we send a page that attempts app launch first
       const appStoreURL = getAppStoreURL(platform);
-      const universalLink = `kaayko://lake/${ctxId}?_kctx=${newCtxToken}`;
+      const universalLink = `kaayko://lake/${encodeURIComponent(context.id)}?_kctx=${encodeURIComponent(newCtxToken)}`;
       
       return res.send(`
         <html>

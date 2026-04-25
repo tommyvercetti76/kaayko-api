@@ -1,0 +1,15 @@
+{
+  "id": "q-1776563672154-1e9f90",
+  "fingerprint": "3eb1bbd9dfdc1ca6",
+  "track": "kortex",
+  "goal": "Feature ideation: Given the kortex API track, identify 1-2 specific features that would improve reliability, security, or developer experience. Name the exact file, function, and proposed change.",
+  "goalMode": "scout",
+  "priority": 5,
+  "priorityLabel": "background",
+  "source": "scout-ideate",
+  "metadata": {},
+  "createdAt": "2026-04-19T01:54:32.154Z",
+  "status": "done",
+  "startedAt": "2026-04-19T01:54:52.474Z",
+  "completedAt": "2026-04-19T01:55:03.875Z"
+}

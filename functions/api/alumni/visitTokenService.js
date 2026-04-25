@@ -11,6 +11,7 @@
  *   lc   — link code
  *   sg   — source group
  *   sb   — source batch
+ *   src  — tracking source / channel (email, qr, text, ...)
  *   ih   — SHA-256 of requester IP (privacy-safe)
  *   iat  — issued-at unix seconds
  *   exp  — expires-at unix seconds (iat + 86400)
@@ -53,6 +54,12 @@ function hashIp(ip) {
   return crypto.createHash('sha256').update(ip + (process.env.ALUMNI_TOKEN_SECRET || '')).digest('hex').slice(0, 16);
 }
 
+function normalizeSource(value) {
+  if (value === undefined || value === null) return null;
+  const normalized = String(value).trim().toLowerCase().slice(0, 100);
+  return normalized || null;
+}
+
 /**
  * Issue a single-use visit token.
  * Stores a record in `alumni_visit_tokens` and returns the token string.
@@ -65,6 +72,7 @@ function hashIp(ip) {
 async function issueVisitToken(linkCode, ip, meta = {}) {
   const ipHash = hashIp(ip);
   const nowSec = Math.floor(Date.now() / 1000);
+  const source = normalizeSource(meta.source);
 
   // If this IP already has an unused, unexpired token for this link, reuse it.
   // This prevents opening the same link in multiple tabs from yielding multiple submissions.
@@ -72,11 +80,12 @@ async function issueVisitToken(linkCode, ip, meta = {}) {
     .where('linkCode', '==', linkCode)
     .where('ip_hash', '==', ipHash)
     .where('used', '==', false)
-    .limit(1)
+    .limit(5)
     .get();
 
-  if (!existing.empty) {
-    const existingToken = existing.docs[0].data().token;
+  const matchingDoc = existing.docs.find(doc => normalizeSource(doc.data().source) === source);
+  if (matchingDoc) {
+    const existingToken = matchingDoc.data().token;
     // Verify it isn't expired before reusing
     const result = verifyVisitToken(existingToken);
     if (result.valid) {
@@ -94,6 +103,7 @@ async function issueVisitToken(linkCode, ip, meta = {}) {
     lc: linkCode,
     sg: meta.sourceGroup || null,
     sb: meta.sourceBatch || null,
+    src: source,
     ih: ipHash,
     iat,
     exp,
@@ -117,6 +127,7 @@ async function issueVisitToken(linkCode, ip, meta = {}) {
     sourceBatch: meta.sourceBatch || null,
     campaign: meta.campaign || 'alumni',
     sender: meta.sender || null,
+    source,
     ip_hash: ipHash,
     used: false,
     usedAt: null,
@@ -191,4 +202,4 @@ async function consumeVisitToken(vid) {
   return consumed;
 }
 
-module.exports = { issueVisitToken, verifyVisitToken, consumeVisitToken, hashIp };
+module.exports = { issueVisitToken, verifyVisitToken, consumeVisitToken, hashIp, normalizeSource };

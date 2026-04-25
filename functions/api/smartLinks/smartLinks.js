@@ -31,7 +31,11 @@ const LinkService = require('./smartLinkService');
 const { requireAuth, requireAdmin, optionalAuth } = require('../../middleware/authMiddleware');
 
 // Import tenant context
-const { getTenantFromRequest, createTenantScopedQuery } = require('./tenantContext');
+const {
+  getTenantFromRequest,
+  assertTenantAccess,
+  DEFAULT_TENANT_ID
+} = require('./tenantContext');
 
 // Import notification service
 const { sendLinkCreatedNotification } = require('../../services/emailNotificationService');
@@ -41,6 +45,8 @@ const { triggerWebhooks, EVENT_TYPES } = require('./webhookService');
 
 // Import security middleware
 const { rateLimiter, botProtection, secureHeaders, honeypot } = require('../../middleware/securityMiddleware');
+
+const ALLOWED_PUBLIC_EVENT_TYPES = new Set(['install', 'open', 'conversion']);
 
 // Apply security middleware to all routes
 router.use(secureHeaders);
@@ -52,6 +58,69 @@ router.use(botProtection);
 router.get('/admin/api-key', honeypot);
 router.post('/admin/bulk-import', honeypot);
 router.get('/export-all-data', honeypot);
+
+async function getTenantConfig(tenantId) {
+  if (!tenantId || tenantId === DEFAULT_TENANT_ID) {
+    return {
+      id: DEFAULT_TENANT_ID,
+      name: 'Kaayko',
+      domain: 'kaayko.com',
+      pathPrefix: '/l'
+    };
+  }
+
+  const tenantDoc = await db.collection('tenants').doc(tenantId).get();
+  if (!tenantDoc.exists) {
+    const error = new Error(`Tenant not found: ${tenantId}`);
+    error.code = 'TENANT_NOT_FOUND';
+    throw error;
+  }
+
+  const tenant = tenantDoc.data();
+  if (tenant.enabled === false) {
+    const error = new Error(`Tenant disabled: ${tenantId}`);
+    error.code = 'TENANT_DISABLED';
+    throw error;
+  }
+
+  return {
+    id: tenantDoc.id,
+    name: tenant.name || tenantDoc.id,
+    domain: tenant.domain || 'kaayko.com',
+    pathPrefix: tenant.pathPrefix || '/l'
+  };
+}
+
+function publicLinkView(link) {
+  return {
+    code: link.code,
+    shortUrl: link.shortUrl,
+    title: link.title || '',
+    description: link.description || '',
+    enabled: link.enabled !== false,
+    expiresAt: link.expiresAt || null
+  };
+}
+
+function canReadLink(user, link) {
+  if (!user || !user.role) return false;
+  if (user.role === 'super-admin') return true;
+  try {
+    assertTenantAccess(user, link.tenantId || DEFAULT_TENANT_ID);
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+function tenantAccessError(res, error) {
+  return res.status(403).json({
+    success: false,
+    error: 'Tenant access denied',
+    message: error.message,
+    code: 'TENANT_ACCESS_DENIED'
+  });
+}
 
 // ============================================================================
 // HEALTH CHECK (Must be BEFORE /:code to avoid being caught by it)
@@ -234,12 +303,24 @@ router.get('/tenants', requireAuth, rateLimiter('tenants'), async (req, res) => 
 // LINK STATISTICS (Must be BEFORE /:code)
 // ============================================================================
 
-router.get('/stats', async (req, res) => {
+router.get('/stats', requireAuth, requireAdmin, async (req, res) => {
   try {
-    const stats = await LinkService.getLinkStats();
-    res.json({ success: true, stats });
+    const tenantContext = await getTenantFromRequest(req);
+    const stats = tenantContext.isSuperAdmin && req.query.allTenants === 'true'
+      ? await LinkService.getLinkStats()
+      : await LinkService.getLinkStatsForTenant(tenantContext.tenantId);
+    res.json({
+      success: true,
+      tenant: tenantContext.isSuperAdmin && req.query.allTenants === 'true'
+        ? { id: 'all' }
+        : { id: tenantContext.tenantId, name: tenantContext.tenantName },
+      stats
+    });
   } catch (error) {
     console.error('[SmartLinks] Error fetching stats:', error);
+    if (error.message?.includes('tenant') || error.code?.startsWith('TENANT')) {
+      return tenantAccessError(res, error);
+    }
     res.status(500).json({
       success: false,
       error: 'Failed to fetch statistics'
@@ -265,14 +346,18 @@ router.get('/r/:code', async (req, res) => {
 
 router.post('/', requireAuth, requireAdmin, async (req, res) => {
   try {
-    // Add creator info with default tenant values (backward compatibility)
+    const tenantContext = await getTenantFromRequest(req);
+    const tenantConfig = await getTenantConfig(tenantContext.tenantId);
+
+    // Add creator info and tenant-owned domain settings.
+    // Client-supplied domain/pathPrefix are ignored for non-super-admin tenant safety.
     const linkData = {
       ...req.body,
       createdBy: req.user.email || req.user.uid,
-      tenantId: 'kaayko-default',
-      tenantName: 'Kaayko',
-      domain: req.body.domain || 'kaayko.com',
-      pathPrefix: req.body.pathPrefix || '/l'
+      tenantId: tenantConfig.id,
+      tenantName: tenantConfig.name,
+      domain: tenantConfig.domain,
+      pathPrefix: tenantConfig.pathPrefix
     };
     
     const link = await LinkService.createShortLink(linkData);
@@ -290,7 +375,7 @@ router.post('/', requireAuth, requireAdmin, async (req, res) => {
 
     // Trigger webhooks (async, don't block response)
     triggerWebhooks({
-      tenantId: 'kaayko-default',
+      tenantId: tenantConfig.id,
       eventType: EVENT_TYPES.LINK_CREATED,
       payload: {
         event: 'link.created',
@@ -338,20 +423,29 @@ router.post('/', requireAuth, requireAdmin, async (req, res) => {
 router.get('/', requireAuth, requireAdmin, async (req, res) => {
   try {
     const { enabled, limit } = req.query;
+    const tenantContext = await getTenantFromRequest(req);
     
-    // Build filters without tenant scoping for now (backward compatibility)
-    // TODO: Re-enable tenant scoping after migration runs
-    const filters = {};
+    const filters = {
+      tenantId: tenantContext.isSuperAdmin && req.query.allTenants === 'true'
+        ? undefined
+        : tenantContext.tenantId
+    };
     if (enabled !== undefined) filters.enabled = enabled === 'true';
     if (limit) filters.limit = parseInt(limit, 10);
     
     const result = await LinkService.listLinks(filters);
     res.json({ 
       success: true, 
+      tenant: filters.tenantId
+        ? { id: tenantContext.tenantId, name: tenantContext.tenantName }
+        : { id: 'all' },
       ...result
     });
   } catch (error) {
     console.error('[SmartLinks] Error listing links:', error);
+    if (error.message?.includes('tenant') || error.code?.startsWith('TENANT')) {
+      return tenantAccessError(res, error);
+    }
     res.status(500).json({
       success: false,
       error: 'Failed to fetch links',
@@ -364,11 +458,12 @@ router.get('/', requireAuth, requireAdmin, async (req, res) => {
 // GET LINK BY CODE (Must be AFTER specific routes like /health, /stats, /r/:code)
 // ============================================================================
 
-router.get('/:code', async (req, res) => {
+router.get('/:code', optionalAuth, async (req, res) => {
   try {
     const { code } = req.params;
     const link = await LinkService.getShortLink(code);
-    res.json({ success: true, link });
+    const safeLink = canReadLink(req.user, link) ? link : publicLinkView(link);
+    res.json({ success: true, link: safeLink });
   } catch (error) {
     console.error('[SmartLinks] Error fetching link:', error);
     
@@ -394,6 +489,11 @@ router.put('/:code', requireAuth, requireAdmin, async (req, res) => {
   try {
     const { code } = req.params;
     const updates = req.body;
+    const existingLink = await LinkService.getShortLink(code);
+    const tenantContext = await getTenantFromRequest(req);
+    if (!tenantContext.isSuperAdmin) {
+      assertTenantAccess(req.user, existingLink.tenantId || DEFAULT_TENANT_ID);
+    }
     
     const link = await LinkService.updateShortLink(code, updates);
     res.json({ success: true, link });
@@ -405,6 +505,10 @@ router.put('/:code', requireAuth, requireAdmin, async (req, res) => {
         success: false,
         error: 'Link not found'
       });
+    }
+
+    if (error.message?.includes('tenant') || error.message?.includes('Access denied') || error.code?.startsWith('TENANT')) {
+      return tenantAccessError(res, error);
     }
     
     res.status(500).json({
@@ -421,6 +525,12 @@ router.put('/:code', requireAuth, requireAdmin, async (req, res) => {
 router.delete('/:code', requireAuth, requireAdmin, async (req, res) => {
   try {
     const { code } = req.params;
+    const existingLink = await LinkService.getShortLink(code);
+    const tenantContext = await getTenantFromRequest(req);
+    if (!tenantContext.isSuperAdmin) {
+      assertTenantAccess(req.user, existingLink.tenantId || DEFAULT_TENANT_ID);
+    }
+
     const result = await LinkService.deleteShortLink(code);
     res.json({ success: true, ...result });
   } catch (error) {
@@ -431,6 +541,10 @@ router.delete('/:code', requireAuth, requireAdmin, async (req, res) => {
         success: false,
         error: 'Link not found'
       });
+    }
+
+    if (error.message?.includes('tenant') || error.message?.includes('Access denied') || error.code?.startsWith('TENANT')) {
+      return tenantAccessError(res, error);
     }
     
     res.status(500).json({
@@ -449,6 +563,14 @@ router.post('/events/:type', async (req, res) => {
     const { type } = req.params;
     const { linkId, userId, platform, metadata = {} } = req.body;
 
+    if (!ALLOWED_PUBLIC_EVENT_TYPES.has(type)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Unsupported event type',
+        code: 'INVALID_EVENT_TYPE'
+      });
+    }
+
     if (!linkId) {
       return res.status(400).json({
         success: false,
@@ -456,10 +578,20 @@ router.post('/events/:type', async (req, res) => {
       });
     }
 
+    const link = await LinkService.getShortLink(linkId);
+    if (link.enabled === false) {
+      return res.status(410).json({
+        success: false,
+        error: 'Link disabled',
+        code: 'LINK_DISABLED'
+      });
+    }
+
     // Track event in analytics collection
     const eventData = {
       type,
       linkId,
+      tenantId: link.tenantId || DEFAULT_TENANT_ID,
       userId: userId || null,
       platform: platform || 'unknown',
       metadata,
@@ -470,14 +602,9 @@ router.post('/events/:type', async (req, res) => {
 
     // Update link stats if it's an install event
     if (type === 'install') {
-      const linkRef = db.collection('short_links').doc(linkId);
-      const linkDoc = await linkRef.get();
-      
-      if (linkDoc.exists) {
-        await linkRef.update({
-          installCount: FieldValue.increment(1)
-        });
-      }
+      await db.collection('short_links').doc(linkId).update({
+        installCount: FieldValue.increment(1)
+      });
     }
 
     res.json({ 
@@ -487,6 +614,12 @@ router.post('/events/:type', async (req, res) => {
 
   } catch (error) {
     console.error('[SmartLinks] Error tracking event:', error);
+    if (error.code === 'NOT_FOUND') {
+      return res.status(404).json({
+        success: false,
+        error: 'Link not found'
+      });
+    }
     res.status(500).json({
       success: false,
       error: 'Failed to track event'

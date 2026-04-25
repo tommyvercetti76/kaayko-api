@@ -38,6 +38,8 @@ const mockQuerySnapshot = (docs = []) => ({
 });
 
 const mockCollectionRef = (path) => {
+  const filters = [];
+  let resultLimit = null;
   const ref = {
     doc: jest.fn((id) => mockDocRef(`${path}/${id || 'auto-id-' + Math.random().toString(36).slice(2)}`)),
     add: jest.fn(async (data) => {
@@ -46,12 +48,34 @@ const mockCollectionRef = (path) => {
       return { id, ...mockDocRef(`${path}/${id}`) };
     }),
     get: jest.fn(async () => {
-      const docs = mockCollectionData[path] || [];
+      let docs = mockCollectionData[path] || [];
+      if (!mockCollectionData[path]) {
+        const prefix = `${path}/`;
+        docs = Object.entries(mockDocData)
+          .filter(([docPath]) => docPath.startsWith(prefix) && !docPath.slice(prefix.length).includes('/'))
+          .map(([docPath, data]) => ({
+            id: docPath.slice(prefix.length),
+            data: () => data,
+            ref: mockDocRef(docPath)
+          }));
+      }
+      for (const filter of filters) {
+        docs = docs.filter(doc => doc.data()?.[filter.field] === filter.value);
+      }
+      if (resultLimit !== null) {
+        docs = docs.slice(0, resultLimit);
+      }
       return mockQuerySnapshot(docs);
     }),
-    where: jest.fn(() => ref),
+    where: jest.fn((field, op, value) => {
+      if (op === '==') filters.push({ field, value });
+      return ref;
+    }),
     orderBy: jest.fn(() => ref),
-    limit: jest.fn(() => ref),
+    limit: jest.fn((n) => {
+      resultLimit = n;
+      return ref;
+    }),
     offset: jest.fn(() => ref),
     startAfter: jest.fn(() => ref),
     select: jest.fn(() => ref),
@@ -72,9 +96,15 @@ const mockFirestore = {
     };
     return fn(tx);
   }),
-  batch: jest.fn(() => ({
-    set: jest.fn(), update: jest.fn(), delete: jest.fn(), commit: jest.fn(async () => {})
-  }))
+  batch: jest.fn(() => {
+    const ops = [];
+    return {
+      set: jest.fn((ref, data) => { ops.push(() => ref.set(data)); }),
+      update: jest.fn((ref, data) => { ops.push(() => ref.update(data)); }),
+      delete: jest.fn((ref) => { ops.push(() => ref.delete()); }),
+      commit: jest.fn(async () => { for (const op of ops) await op(); })
+    };
+  })
 };
 
 // ─── Auth mocks ────────────────────────────────────────────────

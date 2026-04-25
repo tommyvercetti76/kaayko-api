@@ -1,7 +1,7 @@
 # Knowledge Graph: kortex
 
 - Track: kortex
-- Generated: 2026-04-18T19:58:14.261Z
+- Generated: 2026-04-22T01:05:42.455Z
 - Files: 23
 - Exports: 9
 - Import edges: 26
@@ -26,18 +26,18 @@
 - functions/middleware/rateLimit.js (14 lines, 0 exports)
 - functions/middleware/securityMiddleware.js (232 lines, 0 exports, firebase)
 - functions/api/core/docs.js (144 lines, 0 exports, router)
-- functions/index.js (122 lines, 9 exports, firebase)
+- functions/index.js (125 lines, 9 exports, firebase)
 - functions/api/auth/authRoutes.js (109 lines, 0 exports, router, firebase)
 - functions/utils/shared/cache.js (120 lines, 0 exports, firebase)
 - functions/api/smartLinks/attributionService.js (303 lines, 0 exports, firebase)
 - functions/api/smartLinks/clickTracking.js (457 lines, 0 exports, firebase)
-- functions/api/smartLinks/publicApiRouter.js (396 lines, 0 exports, router, firebase)
+- functions/api/smartLinks/publicApiRouter.js (402 lines, 0 exports, router, firebase)
 - functions/api/smartLinks/publicRouter.js (214 lines, 0 exports, router, firebase)
 - functions/api/smartLinks/rateLimitService.js (314 lines, 0 exports, firebase)
-- functions/api/smartLinks/redirectHandler.js (401 lines, 0 exports, firebase)
+- functions/api/smartLinks/redirectHandler.js (753 lines, 0 exports, firebase)
 - functions/api/smartLinks/smartLinkDefaults.js (108 lines, 0 exports)
 - functions/api/smartLinks/smartLinkEnrichment.js (163 lines, 0 exports, firebase)
-- functions/api/smartLinks/smartLinkService.js (284 lines, 0 exports, firebase)
+- functions/api/smartLinks/smartLinkService.js (413 lines, 0 exports, firebase)
 - functions/api/smartLinks/smartLinkValidation.js (84 lines, 0 exports)
 - functions/api/smartLinks/smartLinks.js (498 lines, 0 exports, router, firebase)
 - functions/api/smartLinks/tenantContext.js (265 lines, 0 exports, firebase)

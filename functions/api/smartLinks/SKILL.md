@@ -26,6 +26,10 @@ Kortex is Kaayko's smart-linking and redirect platform. It generates short codes
 | `functions/api/smartLinks/publicApiRouter.js` | **NOT MOUNTED** — external API key access (future; see Known Issues) |
 | `functions/api/smartLinks/rateLimitService.js` | Tenant-level rate limiting (for publicApiRouter when mounted) |
 | `functions/api/smartLinks/attributionService.js` | Install attribution — click-to-install mapping |
+| `functions/api/campaigns/campaignRoutes.js` | Campaign management router mounted at `/campaigns` |
+| `functions/api/campaigns/campaignService.js` | Campaign CRUD, membership writes, audit logs |
+| `functions/api/campaigns/campaignPermissions.js` | Campaign role and permission checks |
+| `functions/api/campaigns/campaignValidation.js` | Campaign request validation and normalization |
 | `functions/api/auth/authRoutes.js` | `/auth/*` — logout, /me, token verify |
 | `functions/api/billing/router.js` | `/billing/*` — Stripe subscription management |
 | `functions/middleware/authMiddleware.js` | Shared RBAC — Firebase token + X-Admin-Key |
@@ -44,7 +48,7 @@ Kortex is Kaayko's smart-linking and redirect platform. It generates short codes
 | GET | `/smartlinks/admin/migrate` | requireAuth + requireAdmin | One-time migration — adds tenant fields to existing links |
 | POST | `/smartlinks/tenant-registration` | Public (rate-limited: 3/hr) | Creates `pending_tenant_registrations` doc |
 | GET | `/smartlinks/tenants` | requireAuth | — |
-| GET | `/smartlinks/stats` | Public | — |
+| GET | `/smartlinks/stats` | requireAuth + requireAdmin | Tenant-scoped aggregate stats |
 | GET | `/smartlinks/r/:code` | Public | Tracks click, performs redirect |
 | POST | `/smartlinks` | requireAuth + requireAdmin | Creates `short_links` doc, triggers email + webhook |
 | GET | `/smartlinks` | requireAuth + requireAdmin | — |
@@ -60,6 +64,22 @@ Kortex is Kaayko's smart-linking and redirect platform. It generates short codes
 | POST | `/auth/logout` | requireAuth |
 | GET | `/auth/me` | requireAuth |
 | POST | `/auth/verify` | Public |
+
+### Campaigns (`/campaigns`)
+
+| Method | Path | Auth | Side-effects |
+|--------|------|------|-------------|
+| GET | `/campaigns/health` | Public | — |
+| POST | `/campaigns` | requireAuth + tenant admin | Creates `campaigns`, owner membership, audit log |
+| GET | `/campaigns` | requireAuth + tenant admin | Tenant-scoped list |
+| GET | `/campaigns/:campaignId` | requireAuth + campaign read permission | — |
+| PUT | `/campaigns/:campaignId` | requireAuth + campaign update permission | Updates campaign, audit log |
+| POST | `/campaigns/:campaignId/pause` | requireAuth + pause permission | Sets status `paused`, audit log |
+| POST | `/campaigns/:campaignId/resume` | requireAuth + pause permission | Sets status `active`, audit log |
+| POST | `/campaigns/:campaignId/archive` | requireAuth + archive permission | Sets status `archived`, audit log |
+| GET | `/campaigns/:campaignId/members` | requireAuth + member management permission | — |
+| POST | `/campaigns/:campaignId/members` | requireAuth + member management permission | Upserts membership, audit log |
+| DELETE | `/campaigns/:campaignId/members/:uid` | requireAuth + member management permission | Deletes membership, audit log |
 
 ### Billing (`/billing`)
 
@@ -93,7 +113,7 @@ Tenant registration:
 **Auth methods supported:**
 - `Authorization: Bearer <Firebase ID token>` — standard user auth
 - `X-Admin-Key: <ADMIN_PASSPHRASE>` — internal tooling shortcut
-- `X-Kaayko-Tenant-Id: <tenantId>` — super-admin tenant override header
+- `X-Kaayko-Tenant-Id: <tenantId>` — super-admin tenant override, or assigned-tenant switch for admins with `tenantIds[]`
 
 **Rate limits (Firestore-backed — survives cold starts):**
 | Limit type | Max | Window |
@@ -182,7 +202,7 @@ All Kortex routes use this standard shape:
 
 ## Tenant Resolution Order
 
-1. `X-Kaayko-Tenant-Id` header (super-admins only)
+1. `X-Kaayko-Tenant-Id` header (super-admins, or admins assigned to that tenant)
 2. User's `tenantId` in `admin_users` profile
 3. API key's `tenantId`
 4. Default: `kaayko-default`
@@ -203,7 +223,7 @@ All Kortex routes use this standard shape:
 ## Known Issues & Gaps
 
 - **`publicApiRouter.js` is NOT mounted** — the file exists at `functions/api/smartLinks/publicApiRouter.js` and defines API-key-authenticated endpoints for external clients (`POST /api/public/smartlinks`, batch create, stats, attribution). It is intentionally not yet mounted in `functions/index.js`. Do not call `/api/public/*` paths — they will 404. Mount when external API access is ready to ship.
-- **No dedicated regression suite** — no Jest tests for Kortex. Minimum needed: auth gate, tenant scoping, CRUD round-trip, redirect platform detection, billing config.
+- **KORTEX regression suite exists** — run `npm run test:kortex -- --runInBand --forceExit` from `functions`. Keep adding coverage for campaign ownership, tenant scoping, CRUD, redirect behavior, billing config, and public redaction.
 - **Some frontend docs still reference `/public/smartlinks`** — should be updated when publicApiRouter is mounted.
 
 ---
@@ -214,7 +234,7 @@ All Kortex routes use this standard shape:
 - [x] Firestore-backed rate limiting on public mutation endpoints
 - [x] Tenant isolation with `X-Kaayko-Tenant-Id` override
 - [ ] Mount `publicApiRouter.js` when external API access is needed
-- [x] Add `functions/__tests__/kortex-api.test.js` (12 tests — see Testing section)
+- [x] Add `functions/__tests__/kortex-api.test.js` (tenant isolation, public redaction, event validation, redirect behavior — see Testing section)
 - [x] Wire KORTEX regression suite into `functions/package.json` (npm run test:kortex)
 
 ---
@@ -226,15 +246,17 @@ All Kortex routes use this standard shape:
 cd functions && npm run test:smoke
 ```
 
-**New tests to add** (`functions/__tests__/kortex-api.test.js`):
+**Core tests to keep passing** (`functions/__tests__/kortex-api.test.js`):
 1. `GET /smartlinks/health` → 200
-2. `POST /smartlinks` without auth → 401 with `AUTH_TOKEN_MISSING`
-3. `POST /smartlinks` with X-Admin-Key → 201 with link object
-4. `GET /smartlinks/:code` (existing code) → 200 with link
+2. `GET /smartlinks/stats` without auth → 401 with `AUTH_TOKEN_MISSING`
+3. `POST /smartlinks` without auth → 401 with `AUTH_TOKEN_MISSING`
+4. `GET /smartlinks/:code` public read → redacted link shape
 5. `GET /smartlinks/r/:code` (redirect) → 302 to correct destination
 6. Platform detection in redirect: iOS User-Agent → ios destination
 7. Expired link redirect → 410 HTML error page
 8. `DELETE /smartlinks/:code` without admin → 403
+9. Tenant admin list/create/update/delete cannot cross tenant boundary
+10. Public event endpoint rejects unsupported event types
 
 **Emulator setup:**
 ```bash

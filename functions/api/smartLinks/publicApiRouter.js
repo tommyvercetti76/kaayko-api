@@ -166,7 +166,9 @@ router.get('/smartlinks/:code', requireApiKey(['read:links']), async (req, res) 
  * 
  * Requires API key with 'update:links' scope
  */
-router.put('/smartlinks/:code', requireApiKey(['update:links']), async (req, res) => {
+const validateUpdateRequest = require('./validation/updateLinkRequest');
+
+router.put('/smartlinks/:code', requireApiKey(['update:links']), validateUpdateRequest, async (req, res) => {
   try {
     const { code } = req.params;
     
@@ -206,7 +208,9 @@ router.put('/smartlinks/:code', requireApiKey(['update:links']), async (req, res
  * 
  * Requires API key with 'delete:links' scope
  */
-router.delete('/smartlinks/:code', requireApiKey(['delete:links']), async (req, res) => {
+const validateDeleteRequest = require('./validation/deleteLinkRequest');
+
+router.delete('/smartlinks/:code', requireApiKey(['delete:links']), validateDeleteRequest, async (req, res) => {
   try {
     const { code } = req.params;
 
@@ -322,7 +326,9 @@ router.get('/smartlinks/:code/attribution', requireApiKey(['read:stats']), async
  * 
  * Requires API key with 'create:links' scope
  */
-router.post('/smartlinks/batch', requireApiKey(['create:links']), async (req, res) => {
+const validateBatchRequest = require('./validation/batchLinkRequest');
+
+router.post('/smartlinks/batch', requireApiKey(['create:links']), validateBatchRequest, async (req, res) => {
   try {
     const { links } = req.body;
 

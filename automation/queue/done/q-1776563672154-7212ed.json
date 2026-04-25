@@ -1,0 +1,15 @@
+{
+  "id": "q-1776563672154-7212ed",
+  "fingerprint": "7449ff52850859d1",
+  "track": "kortex",
+  "goal": "Code quality: find dead code, duplicated logic, missing error handling, and inconsistent patterns",
+  "goalMode": "audit",
+  "priority": 4,
+  "priorityLabel": "low",
+  "source": "scout",
+  "metadata": {},
+  "createdAt": "2026-04-19T01:54:32.154Z",
+  "status": "done",
+  "startedAt": "2026-04-19T01:55:03.876Z",
+  "completedAt": "2026-04-19T01:55:14.982Z"
+}

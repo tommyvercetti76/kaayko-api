@@ -68,16 +68,34 @@ function loadSuppressions() {
 
 /**
  * Check if a finding is suppressed.
+ * @param {object} finding
+ * @param {string} fingerprint
+ * @param {object} suppressions
+ * @param {string} [fallbackTrack] - manifest track used when finding.track is absent
  * @returns {{ suppressed: boolean, reason?: string }}
  */
-function isSuppressed(finding, fingerprint, suppressions) {
+function isSuppressed(finding, fingerprint, suppressions, fallbackTrack) {
   // Check exact fingerprint match
   if (suppressions.fingerprints.has(fingerprint)) {
     return { suppressed: true, reason: suppressions.fingerprints.get(fingerprint).reason };
   }
-  // Check title pattern match
+
+  // Also try with fallback track if finding has no track (heuristic findings)
+  if (fallbackTrack && !finding.track) {
+    const altNormalized = [
+      (finding.title || "").toLowerCase().trim(),
+      (finding.severity || "medium").toLowerCase(),
+      fallbackTrack.toLowerCase()
+    ].join("|");
+    const altFingerprint = require("crypto").createHash("sha256").update(altNormalized).digest("hex").slice(0, 12);
+    if (suppressions.fingerprints.has(altFingerprint)) {
+      return { suppressed: true, reason: suppressions.fingerprints.get(altFingerprint).reason };
+    }
+  }
+
+  // Check title pattern match — allow fallbackTrack as scope when finding.track is empty
   const title = finding.title || "";
-  const track = (finding.track || "").toLowerCase();
+  const track = ((finding.track || fallbackTrack || "")).toLowerCase();
   for (const p of suppressions.patterns) {
     if (p.regex.test(title)) {
       if (!p.scope || p.scope.toLowerCase() === track) {
@@ -271,8 +289,8 @@ function deduplicateFindings(allFindings) {
  * @param {string} repoRoot - for verification
  * @returns {Array} scored and sorted findings (highest priority first)
  */
-function scoreFindings(findings, repoRoot) {
-  const suppressions = loadSuppressions();
+function scoreFindings(findings, repoRoot, suppressions) {
+  if (!suppressions) suppressions = loadSuppressions();
 
   return findings
     .map((finding) => {
@@ -350,10 +368,10 @@ function processFindings(manifests, repoRoot) {
   const unique = deduplicateFindings(allRaw);
 
   // 3. Score and rank (includes verification)
-  const scored = scoreFindings(unique, repoRoot);
+  const suppressions = loadSuppressions();
+  const scored = scoreFindings(unique, repoRoot, suppressions);
 
   // 4. Stats
-  const suppressions = loadSuppressions();
   const suppressedCount = unique.filter((f) => {
     const fp = fingerprintFinding(f);
     return isSuppressed(f, fp, suppressions).suppressed;

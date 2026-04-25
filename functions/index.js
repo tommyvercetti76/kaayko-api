@@ -44,6 +44,10 @@ apiApp.use("/forecast", require("./api/weather/forecast").router);    // PREMIUM
 
 // 🔗 SMART LINKS - NEW!
 apiApp.use("/smartlinks", require("./api/smartLinks/smartLinks"));    // Smart link CRUD & analytics
+apiApp.use("/campaigns", require("./api/campaigns/campaignRoutes"));  // KORTEX campaign management
+
+// 🎓 ALUMNI INTEREST CAMPAIGN
+apiApp.use("/alumni", require("./api/alumni/alumniRoutes"));           // Interest form, scoring, admin dashboard
 
 // 🎨 KREATOR (CREATOR) MANAGEMENT - NEW!
 apiApp.use("/kreators", require("./api/kreators/kreatorRoutes"));     // Kreator onboarding, auth, profile
@@ -75,6 +79,10 @@ apiApp.use("/cameras", require("./api/cameras/camerasRoutes"));
 apiApp.use("/lenses", require("./api/cameras/lensesRoutes"));
 apiApp.use("/presets/smart", require("./api/cameras/smartRoutes"));
 apiApp.use("/presets", require("./api/cameras/presetsRoutes"));
+
+// Phase 3: campaign namespace resolver (/:campaignSlug/:code)
+// Must be mounted before legacy deep-links, and must fail-closed on unknown domains.
+apiApp.use("/", require("./api/campaigns/campaignPublicResolver"));
 
 // Legacy deeplink routes
 apiApp.use("/", require("./api/deepLinks/deeplinkRoutes"));

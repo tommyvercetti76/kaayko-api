@@ -249,7 +249,12 @@ function buildFindings(analyses, goalMode) {
       const lineRef = [{ file: entry.file.path, start_line: route.line, end_line: route.line }];
       const mutating = ["POST", "PUT", "PATCH", "DELETE"].includes(route.method);
 
-      if (mutating && route.auth === "none") {
+      // Auth-path routes (/verify, /login, /token, /refresh, /logout, /callback) are the
+      // credential exchange surface — they're intentionally unauthenticated by design.
+      const isAuthPathRoute = /^\/(verify|login|logout|token|refresh|callback|exchange|validate)(\/|$)/i.test(route.path)
+        || /\/(auth|authentication|session)\//i.test(entry.file.path);
+
+      if (mutating && route.auth === "none" && !isAuthPathRoute) {
         findings.push({
           severity: "high",
           title: `Write route lacks obvious auth guard: ${routeLabel}`,
@@ -529,7 +534,9 @@ function buildHeuristicInventoryResponse(inventory, goalMode) {
 function buildHeuristicAnalysis(manifest, args, selectedFiles, goalMode, options = {}) {
   const analyses = analyzeSelectedFiles(selectedFiles);
   const duplicatePatterns = buildDuplicatePatterns(analyses);
-  const findings = buildFindings(analyses, goalMode);
+  const track = (manifest.track || "").toLowerCase();
+  const rawFindings = buildFindings(analyses, goalMode);
+  const findings = rawFindings.map((f) => f.track ? f : { ...f, track });
   const endpointInventory = buildEndpointInventory(analyses);
   const authAudit = buildAuthAudit(analyses);
   const dependencyMap = analyses.map((entry) => entry.dependency);

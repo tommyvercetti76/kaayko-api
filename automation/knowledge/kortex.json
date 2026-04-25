@@ -1,7 +1,7 @@
 {
   "area": "kortex",
   "track": "kortex",
-  "generated_at": "2026-04-18T19:58:14.261Z",
+  "generated_at": "2026-04-22T01:05:42.455Z",
   "conventions": [
     "Express.js routers mounted in functions/index.js",
     "Middleware in functions/middleware/ — auth, CORS, rate limiting",
@@ -95,7 +95,7 @@
     {
       "path": "functions/index.js",
       "profile": "shared",
-      "lines": 122,
+      "lines": 125,
       "exports": [
         "api",
         "earlyMorningForecast",
@@ -118,6 +118,7 @@
         "./api/weather/fastForecast",
         "./api/weather/forecast",
         "./api/smartLinks/smartLinks",
+        "./api/alumni/alumniRoutes",
         "./api/kreators/kreatorRoutes",
         "./api/ai/gptActions",
         "./api/auth/authRoutes",
@@ -126,8 +127,7 @@
         "./middleware/authMiddleware",
         "./api/admin/updateOrderStatus",
         "./api/admin/getOrder",
-        "./api/kutz/kutzRouter",
-        "./api/cameras/camerasRoutes"
+        "./api/kutz/kutzRouter"
       ],
       "has_router": false,
       "has_middleware": false,
@@ -192,7 +192,7 @@
     {
       "path": "functions/api/smartLinks/publicApiRouter.js",
       "profile": "kortex",
-      "lines": 396,
+      "lines": 402,
       "exports": [],
       "imports": [
         "./api/smartLinks/publicApiRouter",
@@ -200,7 +200,10 @@
         "../../middleware/apiKeyMiddleware",
         "./clickTracking",
         "./attributionService",
-        "./rateLimitService"
+        "./rateLimitService",
+        "./validation/updateLinkRequest",
+        "./validation/deleteLinkRequest",
+        "./validation/batchLinkRequest"
       ],
       "has_router": true,
       "has_middleware": false,
@@ -239,16 +242,18 @@
     {
       "path": "functions/api/smartLinks/redirectHandler.js",
       "profile": "kortex",
-      "lines": 401,
+      "lines": 753,
       "exports": [],
       "imports": [
-        "./clickTracking"
+        "./clickTracking",
+        "../alumni/reportKeyService",
+        "../alumni/visitTokenService"
       ],
       "has_router": false,
       "has_middleware": false,
       "has_firebase_admin": true,
       "has_scheduled": false,
-      "has_tests": false
+      "has_tests": true
     },
     {
       "path": "functions/api/smartLinks/smartLinkDefaults.js",
@@ -277,7 +282,7 @@
     {
       "path": "functions/api/smartLinks/smartLinkService.js",
       "profile": "kortex",
-      "lines": 284,
+      "lines": 413,
       "exports": [],
       "imports": [
         "./smartLinkValidation",

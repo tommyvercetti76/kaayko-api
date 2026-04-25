@@ -19,7 +19,7 @@
     "validate:cameras": "node scripts/camera-catalog-validate.js",
     "test": "node ./node_modules/jest/bin/jest.js --runInBand __tests__/camera-api.test.js --forceExit --detectOpenHandles",
     "test:smoke": "node ./node_modules/jest/bin/jest.js --runInBand __tests__/camera-api.test.js --forceExit --detectOpenHandles",
-    "test:kortex": "node ./node_modules/jest/bin/jest.js __tests__/kortex-api.test.js",
+    "test:kortex": "node ./node_modules/jest/bin/jest.js __tests__/kortex-api.test.js __tests__/kortex-campaigns.test.js __tests__/kortex-campaign-resolver.test.js __tests__/kortex-hardening.test.js",
     "test:kreator": "node ./node_modules/jest/bin/jest.js __tests__/kreator-api.test.js",
     "test:store": "node ./node_modules/jest/bin/jest.js __tests__/store-api.test.js",
     "test:kutz": "node ./node_modules/jest/bin/jest.js --runInBand __tests__/kutz-parseFoods.test.js __tests__/kutz-suggest.test.js __tests__/kutz-fitbit.test.js --forceExit --detectOpenHandles",

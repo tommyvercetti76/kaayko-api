@@ -19,6 +19,15 @@ const db = admin.firestore();
 // Default tenant for existing Kaayko links (backward compatibility)
 const DEFAULT_TENANT_ID = 'kaayko-default';
 
+function getUserTenantIds(user) {
+  const profile = user?.profile || {};
+  const tenantIds = Array.isArray(profile.tenantIds) ? profile.tenantIds : [];
+  if (profile.tenantId && !tenantIds.includes(profile.tenantId)) {
+    tenantIds.push(profile.tenantId);
+  }
+  return tenantIds;
+}
+
 /**
  * Get tenant context from authenticated request
  * Determines which tenant the request is operating on behalf of.
@@ -45,9 +54,17 @@ async function getTenantFromRequest(req) {
         tenantName: await getTenantName(headerTenantId),
         isSuperAdmin: true
       };
-    } else {
-      throw new Error('Only super-admins can specify tenant via header');
     }
+
+    if (req.user && getUserTenantIds(req.user).includes(headerTenantId)) {
+      return {
+        tenantId: headerTenantId,
+        tenantName: req.user.profile?.tenantName || await getTenantName(headerTenantId),
+        isSuperAdmin: false
+      };
+    }
+
+    throw new Error('Access denied to requested tenant');
   }
 
   // Priority 2: User's tenant from admin_users profile
@@ -117,15 +134,11 @@ function assertTenantAccess(user, tenantId) {
   }
 
   // Check if user belongs to this tenant
-  const userProfile = user.profile;
-  if (!userProfile) {
+  if (!user.profile) {
     throw new Error('User profile not found');
   }
 
-  const userTenantId = userProfile.tenantId;
-  const userTenantIds = userProfile.tenantIds || (userTenantId ? [userTenantId] : []);
-
-  if (!userTenantIds.includes(tenantId)) {
+  if (!getUserTenantIds(user).includes(tenantId)) {
     throw new Error(`Access denied to tenant: ${tenantId}`);
   }
 }
@@ -254,6 +267,7 @@ async function createTenant(tenantData) {
 
 module.exports = {
   getTenantFromRequest,
+  getUserTenantIds,
   getTenantName,
   assertTenantAccess,
   createTenantScopedQuery,

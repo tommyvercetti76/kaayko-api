@@ -388,6 +388,11 @@ router.get('/report', rateLimiter(), async (req, res) => {
           for (const t of ints) { if (linkInterests[t] !== undefined) linkInterests[t]++; }
         }
         const submissions = linkLeads.length;
+        const sourceBreakdown = {};
+        for (const lead of linkLeads) {
+          const source = sanitize(lead.source || '').toLowerCase();
+          if (source) sourceBreakdown[source] = (sourceBreakdown[source] || 0) + 1;
+        }
         const consumedClicks = Number(ld.uniqueVisitCount ?? 0);
         return {
           code:          d.id,
@@ -398,6 +403,7 @@ router.get('/report', rateLimiter(), async (req, res) => {
           clicks: consumedClicks,
           votes: submissions,
           interests:     linkInterests,
+          sourceBreakdown,
           conversionPct: consumedClicks > 0 ? Math.round((submissions / consumedClicks) * 100) : 0,
           maxUses:       ld.metadata?.maxUses      ?? null,
           schoolName:    ld.metadata?.schoolName    ?? null,
@@ -416,6 +422,7 @@ router.get('/report', rateLimiter(), async (req, res) => {
     const breakdown  = Object.fromEntries(INTEREST_TYPES.map(t => [t, 0]));
     const buckets    = { verified: 0, medium: 0, low: 0, flagged: 0 };
     const batchDist  = {};
+    const sourceDist = {};
     const ACTION_READY = new Set(['mentor', 'volunteer', 'donate_later', 'advisory']);
     let actionReadyCount = 0;
     const signals = { fromTrustedLink: 0, hasBatch: 0, hasLocation: 0, hasComment: 0, emailVerified: 0 };
@@ -432,6 +439,8 @@ router.get('/report', rateLimiter(), async (req, res) => {
       if (doc.fraudPenalty > 0)                    buckets.flagged++;
       const b = (doc.batch || '').trim();
       if (b) batchDist[b] = (batchDist[b] || 0) + 1;
+      const source = sanitize(doc.source || '').toLowerCase();
+      if (source) sourceDist[source] = (sourceDist[source] || 0) + 1;
       if (doc.linkCode)                                          signals.fromTrustedLink++;
       if (b)                                                     signals.hasBatch++;
       if (doc.city || doc.country)                               signals.hasLocation++;
@@ -463,7 +472,7 @@ router.get('/report', rateLimiter(), async (req, res) => {
         expiresAt:   keyData.expiresAt,
         viewCount:   keyData.viewCount,
       },
-      stats: { total, breakdown, buckets, batchDist, actionReadyCount, signals },
+      stats: { total, breakdown, buckets, batchDist, sourceDist, actionReadyCount, signals },
       links: alumniLinks,
       leads,
       hasMore: startIdx + PAGE_SIZE < total,

@@ -1,0 +1,15 @@
+{
+  "id": "q-1776563672151-76511e",
+  "fingerprint": "31477a2ea224b592",
+  "track": "kortex",
+  "goal": "Security audit: check for unvalidated inputs, missing auth, injection risks, and exposed secrets",
+  "goalMode": "audit",
+  "priority": 3,
+  "priorityLabel": "normal",
+  "source": "scout",
+  "metadata": {},
+  "createdAt": "2026-04-19T01:54:32.151Z",
+  "status": "done",
+  "startedAt": "2026-04-19T01:54:40.617Z",
+  "completedAt": "2026-04-19T01:54:52.474Z"
+}

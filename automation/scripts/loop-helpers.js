@@ -591,7 +591,12 @@ function severityRank(severity) {
 function isVulnerabilityFinding(finding) {
   const severity = String(finding?.severity || "").toLowerCase();
   const category = String(finding?.category || "").toLowerCase();
-  return ["critical", "high"].includes(severity) || ["quality", "security", "auth", "billing", "tenant"].includes(category);
+  // Only high/critical severity are hard blockers regardless of category.
+  // Medium/low security findings are tracked debt — they don't block auto-approval.
+  if (["critical", "high"].includes(severity)) return true;
+  // Category-based blocker only applies to non-suppressed critical categories at any severity
+  if (severity === "medium" || severity === "low") return false;
+  return ["quality", "security", "auth", "billing", "tenant"].includes(category);
 }
 
 function isSuggestionFinding(finding) {

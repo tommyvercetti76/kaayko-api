@@ -5,12 +5,12 @@
   },
   "local_model_runtime": {
     "provider": "ollama",
-    "model": "qwen2.5-coder:7b",
+    "model": "qwen2.5-coder:14b",
     "base_url": "http://127.0.0.1:11434",
     "allow_cli_fallback": true,
     "temperature": 0.1,
     "max_tokens": 4096,
-    "timeout_ms": 300000
+    "timeout_ms": 8000
   },
   "operator_console": {
     "theme": "retro-green",

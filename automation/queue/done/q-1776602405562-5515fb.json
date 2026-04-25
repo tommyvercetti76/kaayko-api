@@ -1,0 +1,15 @@
+{
+  "id": "q-1776602405562-5515fb",
+  "fingerprint": "430f5bd0b8543198",
+  "track": "kreator",
+  "goal": "Security audit: check for unvalidated inputs, missing auth, injection risks, and exposed secrets",
+  "goalMode": "audit",
+  "priority": 3,
+  "priorityLabel": "normal",
+  "source": "scout",
+  "metadata": {},
+  "createdAt": "2026-04-19T12:40:05.562Z",
+  "status": "done",
+  "startedAt": "2026-04-19T12:40:14.950Z",
+  "completedAt": "2026-04-19T12:46:09.400Z"
+}

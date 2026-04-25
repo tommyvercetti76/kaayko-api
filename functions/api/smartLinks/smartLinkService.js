@@ -32,6 +32,56 @@ const ALUMNI_METADATA_KEYS = new Set([
   'votingDeadline'
 ]);
 
+const UTM_KEY_MAP = {
+  source: 'utm_source',
+  medium: 'utm_medium',
+  campaign: 'utm_campaign',
+  term: 'utm_term',
+  content: 'utm_content',
+  utm_source: 'utm_source',
+  utm_medium: 'utm_medium',
+  utm_campaign: 'utm_campaign',
+  utm_term: 'utm_term',
+  utm_content: 'utm_content'
+};
+
+function isPlainObject(value) {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+function deepMergeObjects(base = {}, patch = {}) {
+  const merged = { ...(isPlainObject(base) ? base : {}) };
+
+  for (const [key, value] of Object.entries(isPlainObject(patch) ? patch : {})) {
+    if (isPlainObject(value) && isPlainObject(merged[key])) {
+      merged[key] = deepMergeObjects(merged[key], value);
+    } else {
+      merged[key] = value;
+    }
+  }
+
+  return merged;
+}
+
+function normalizeUTM(utm) {
+  if (!isPlainObject(utm)) return {};
+
+  const normalized = {};
+  for (const [key, rawValue] of Object.entries(utm)) {
+    if (rawValue === undefined || rawValue === null) continue;
+
+    const value = String(rawValue).trim();
+    if (!value) continue;
+
+    const canonicalKey = UTM_KEY_MAP[key];
+    if (canonicalKey) {
+      normalized[canonicalKey] = value.toLowerCase().slice(0, 100);
+    }
+  }
+
+  return normalized;
+}
+
 function isAlumniDestination(url) {
   const raw = String(url || '').trim().toLowerCase();
   if (!raw) return false;
@@ -138,6 +188,7 @@ async function createShortLink(data) {
   const qrCodeUrl = `${shortDomain}/qr/${shortCode}.png`;
 
   const sanitizedMetadata = sanitizeMetadataForDestination(metadata, webDestination);
+  const normalizedUtm = normalizeUTM(utm);
 
   // Create ENRICHED short link document with ALL metadata + multi-tenant fields
   const linkDoc = {
@@ -160,7 +211,7 @@ async function createShortLink(data) {
     title,
     description,
     metadata: sanitizedMetadata, // Custom key-value data
-    utm, // UTM tracking params
+    utm: normalizedUtm, // UTM tracking params
     expiresAt: expiresAt ? admin.firestore.Timestamp.fromDate(new Date(expiresAt)) : null,
     clickCount: 0,
     installCount: 0,
@@ -190,7 +241,7 @@ async function createShortLink(data) {
     title,
     description,
     metadata: sanitizedMetadata,
-    utm,
+    utm: normalizedUtm,
     expiresAt,
     clickCount: 0,
     installCount: 0,
@@ -209,24 +260,51 @@ async function createShortLink(data) {
  * MULTI-TENANT: Now filters by tenantId
  */
 async function listLinks(filters = {}) {
-  const { enabled, limit = 100, tenantId } = filters;
+  const { enabled, limit = 200, tenantId } = filters;
+  const safeLimit = Math.max(1, Math.min(Number(limit) || 200, 500));
 
   let query = db.collection('short_links');
+
+  if (tenantId) {
+    query = query.where('tenantId', '==', tenantId);
+  }
   
   // Filter by enabled status if specified
   if (enabled !== undefined) {
     query = query.where('enabled', '==', enabled);
   }
   
-  // Order by creation date (newest first)
-  query = query.orderBy('createdAt', 'desc');
-  
-  const snapshot = await query.limit(limit).get();
+  // Preferred: server-side ordering by creation date (requires composite index with tenantId)
+  let snapshot;
+  try {
+    snapshot = await query.orderBy('createdAt', 'desc').limit(safeLimit).get();
+  } catch (error) {
+    const missingIndex = error?.code === 9 || String(error?.message || '').includes('FAILED_PRECONDITION');
+    if (!missingIndex) {
+      throw error;
+    }
+
+    // Fallback: query without orderBy so admin UI remains functional while index is being created.
+    console.warn('[SmartLinks] Missing index for ordered listLinks query, using fallback path');
+    snapshot = await query.limit(safeLimit).get();
+  }
 
   const links = snapshot.docs.map(doc => ({
     id: doc.id,
     ...doc.data()
-  }));
+  }))
+    .map(link => {
+      // uniqueUsers can become very large and is not needed for list/table views.
+      if (Array.isArray(link.uniqueUsers)) {
+        delete link.uniqueUsers;
+      }
+      return link;
+    })
+    .sort((a, b) => {
+    const aMs = a?.createdAt?._seconds ? a.createdAt._seconds * 1000 : Date.parse(a?.createdAt || 0) || 0;
+    const bMs = b?.createdAt?._seconds ? b.createdAt._seconds * 1000 : Date.parse(b?.createdAt || 0) || 0;
+    return bMs - aMs;
+  });
 
   return {
     links,
@@ -256,7 +334,7 @@ async function getShortLink(code) {
  * Update a short link
  */
 async function updateShortLink(code, updates) {
-  const { metadata, utm, destinations, enabled, title, description, expiresAt } = updates;
+  const { metadata, metadataPatch, sourceRules, utm, destinations, enabled, title, description, expiresAt } = updates;
 
   const linkRef = db.collection('short_links').doc(code);
   const linkDoc = await linkRef.get();
@@ -271,14 +349,31 @@ async function updateShortLink(code, updates) {
     updatedAt: FieldValue.serverTimestamp()
   };
 
+  const currentData = linkDoc.data() || {};
   if (metadata !== undefined) {
-    const currentDestinations = linkDoc.data()?.destinations || {};
+    const currentDestinations = currentData.destinations || {};
     const nextWebDestination = destinations?.web !== undefined
       ? destinations.web
       : currentDestinations.web;
-    updateData.metadata = sanitizeMetadataForDestination(metadata, nextWebDestination);
+    const nextMetadata = sourceRules !== undefined && isPlainObject(metadata)
+      ? deepMergeObjects(metadata, { sourceRules })
+      : metadata;
+    updateData.metadata = sanitizeMetadataForDestination(nextMetadata, nextWebDestination);
+  } else if (metadataPatch !== undefined || sourceRules !== undefined) {
+    const currentDestinations = currentData.destinations || {};
+    const nextWebDestination = destinations?.web !== undefined
+      ? destinations.web
+      : currentDestinations.web;
+    const mergedPatch = deepMergeObjects(
+      isPlainObject(metadataPatch) ? metadataPatch : {},
+      sourceRules !== undefined ? { sourceRules } : {}
+    );
+    updateData.metadata = sanitizeMetadataForDestination(
+      deepMergeObjects(currentData.metadata || {}, mergedPatch),
+      nextWebDestination
+    );
   }
-  if (utm !== undefined) updateData.utm = utm;
+  if (utm !== undefined) updateData.utm = normalizeUTM(utm);
   if (destinations !== undefined) updateData.destinations = destinations;
   if (enabled !== undefined) updateData.enabled = enabled;
   if (title !== undefined) updateData.title = title;
@@ -334,11 +429,34 @@ async function getLinkStats() {
   };
 }
 
+/**
+ * Get link statistics scoped to a tenant when provided.
+ */
+async function getLinkStatsForTenant(tenantId) {
+  let query = db.collection('short_links');
+  if (tenantId) {
+    query = query.where('tenantId', '==', tenantId);
+  }
+
+  const snapshot = await query.select('clickCount', 'enabled').get();
+  const totalCount = snapshot.docs.length;
+  const totalClicks = snapshot.docs.reduce((sum, doc) => sum + (doc.data().clickCount || 0), 0);
+  const enabledCount = snapshot.docs.filter(doc => doc.data().enabled !== false).length;
+
+  return {
+    totalLinks: totalCount,
+    totalClicks,
+    enabledLinks: enabledCount,
+    disabledLinks: totalCount - enabledCount
+  };
+}
+
 module.exports = {
   createShortLink,    // Create new short link
   listLinks,          // List all links
   getShortLink,       // Get single link
   updateShortLink,    // Update link
   deleteShortLink,    // Delete link
-  getLinkStats        // Get statistics
+  getLinkStats,       // Get global statistics
+  getLinkStatsForTenant
 };

@@ -1,0 +1,53 @@
+{
+  "id": "fixall-1776570993391",
+  "status": "complete",
+  "startedAt": "2026-04-19T03:56:33.391Z",
+  "plan": [
+    {
+      "track": "weather",
+      "goal": "Fix the following 1 issue (verified by code analysis, sorted by priority):\\n1. [high] Write route lacks obvious auth guard: POST /batch: The inspected route in api:functions/api/weather/forecast.js appears to mutate state but no auth-like middleware name was detected before the handler.",
+      "findingCount": 1,
+      "severity": "high"
+    },
+    {
+      "track": "kortex",
+      "goal": "Fix the following 4 issues (verified by code analysis, sorted by priority):\\n1. [medium] Write route lacks visible request validation: PUT /smartlinks/:code: The inspected route in api:functions/api/smartLinks/publicApiRouter.js appears to accept request input, but no validation middleware or schema signal \\n2. [medium] Write route lacks visible request validation: DELETE /smartlinks/:code: The inspected route in api:functions/api/smartLinks/publicApiRouter.js appears to accept request input, but no validation middleware or schema signal \\n3. [medium] Write route lacks visible request validation: POST /smartlinks/batch: The inspected route in api:functions/api/smartLinks/publicApiRouter.js appears to accept request input, but no validation middleware or schema signal \\n4. [medium] Large route module is carrying multiple concerns: api:functions/api/smartLinks/publicApiRouter.js: api:functions/api/smartLinks/publicApiRouter.js is 396 lines long and exposes 7 detected routes. Splitting route handlers, validation, and shared serv",
+      "findingCount": 4,
+      "severity": "medium"
+    }
+  ],
+  "stats": {
+    "total_raw": 71,
+    "unique": 41,
+    "verified": 8,
+    "hallucinations": 2,
+    "suppressed": 4,
+    "actionable": 5,
+    "by_severity": {
+      "critical": 0,
+      "high": 1,
+      "medium": 4,
+      "low": 30
+    }
+  },
+  "progress": {
+    "completed": 2,
+    "total": 2,
+    "current": null,
+    "results": [
+      {
+        "track": "weather",
+        "findingCount": 1,
+        "exitCode": 0,
+        "success": true
+      },
+      {
+        "track": "kortex",
+        "findingCount": 4,
+        "exitCode": 0,
+        "success": true
+      }
+    ]
+  },
+  "completedAt": "2026-04-19T04:01:38.742Z"
+}

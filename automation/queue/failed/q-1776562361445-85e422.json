@@ -1,0 +1,15 @@
+{
+  "id": "q-1776562361445-85e422",
+  "fingerprint": "0ac297895993ef39",
+  "track": "shared",
+  "goal": "Security audit: check for unvalidated inputs, missing auth, injection risks, and exposed secrets",
+  "goalMode": "audit",
+  "priority": 3,
+  "priorityLabel": "normal",
+  "source": "scout",
+  "metadata": {},
+  "createdAt": "2026-04-19T01:32:41.446Z",
+  "status": "pending",
+  "error": "This command requires --idea.",
+  "failed_at": "2026-04-19T01:32:58.587Z"
+}

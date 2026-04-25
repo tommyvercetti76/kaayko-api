@@ -149,6 +149,7 @@ async function createLead(formData, tokenData, ip_hash) {
     linkCode:    tokenData.lc || null,
     sourceGroup: tokenData.sg || null,
     sourceBatch: tokenData.sb || null,
+    source:      tokenData.src || null,
     campaign:    'alumni',
     visitId:     tokenData.vid || null,
 
@@ -383,6 +384,7 @@ async function adminListLeads({ bucket, limit = 50, startAfter } = {}) {
       relationship:  data.relationship,
       interestType:  data.interestType,
       comment:       data.comment,
+      source:        data.source,
       sourceGroup:   data.sourceGroup,
       sourceBatch:   data.sourceBatch,
       score:         data.score,

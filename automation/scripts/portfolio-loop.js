@@ -1009,36 +1009,65 @@ function moveWorkerTask(task, taskPath, fromState, toState, updates = {}) {
 }
 
 async function runWorker(config, runtimeConfig, args) {
-  const limit = Number(args.limit || 10);
-  const tasks = h.listJsonFiles(h.QUEUE_DIRS.pending).slice(0, limit);
+  const continuous = args.continuous === true;
+  const intervalSec = Math.max(30, Number(args.interval || 60));
+  const limit = Number(args.limit || 0); // 0 = no limit per batch
 
-  if (!tasks.length) {
-    console.log("Queue is empty.");
-    return;
-  }
+  // Process one item from the queue using the atomic dequeue lock.
+  // Returns true if an item was processed, false if queue is empty or lock is contended.
+  async function processOne() {
+    const item = pipelineQueue.dequeue(); // atomic — null if empty or lock held
+    if (!item) return false;
 
-  console.log(`Processing ${tasks.length} queued tasks...`);
-
-  for (const taskPath of tasks) {
-    const task = h.loadJson(taskPath);
-    const workerTask = normalizeWorkerTask(task, taskPath);
-    moveWorkerTask(task, taskPath, "pending", "processing", { startedAt: new Date().toISOString() });
-
+    const workerTask = normalizeWorkerTask(item, item.id);
+    console.log(`\n\u25b6 ${workerTask.label}`);
     try {
-      console.log(`\n\u25b6 ${workerTask.label}`);
       if (workerTask.strategy === "agent") {
         await runAgent(config, runtimeConfig, workerTask.args);
       } else {
         await pipelineRun(config, runtimeConfig, workerTask.args);
       }
-      moveWorkerTask(task, taskPath, "processing", "done", { completedAt: new Date().toISOString() });
+      pipelineQueue.moveItem(item.id, "processing", "done", { completedAt: new Date().toISOString() });
     } catch (error) {
       console.error(`  Task failed: ${error.message}`);
-      moveWorkerTask(task, taskPath, "processing", "failed", { error: error.message, failedAt: new Date().toISOString() });
+      pipelineQueue.moveItem(item.id, "processing", "failed", { error: error.message, failedAt: new Date().toISOString() });
     }
+    return true;
   }
 
-  console.log(`\nWorker complete. ${h.queueStatusCounts().done} done, ${h.queueStatusCounts().failed} failed.`);
+  // Drain all available items (up to optional limit).
+  async function drainQueue() {
+    let count = 0;
+    while (limit === 0 || count < limit) {
+      if (!await processOne()) break;
+      count++;
+    }
+    return count;
+  }
+
+  if (!continuous) {
+    const count = await drainQueue();
+    if (!count) console.log("Queue is empty.");
+    else {
+      const counts = h.queueStatusCounts();
+      console.log(`\nWorker complete. ${counts.done} done, ${counts.failed} failed.`);
+    }
+    return;
+  }
+
+  // Continuous mode: drain queue, sleep, repeat until SIGINT.
+  console.log(`[worker] Continuous — polling every ${intervalSec}s. Ctrl+C to stop.\n`);
+  process.on("SIGINT", () => process.exit(0));
+  setInterval(() => {}, 60000); // keep process alive between polls
+
+  while (true) {
+    const count = await drainQueue();
+    if (count > 0) {
+      const counts = h.queueStatusCounts();
+      console.log(`\n[worker] Processed ${count} — pending: ${counts.pending}, done: ${counts.done}, failed: ${counts.failed}`);
+    }
+    await new Promise((r) => setTimeout(r, intervalSec * 1000));
+  }
 }
 
 // ── Auto Review ─────────────────────────────────────────────────
@@ -1113,11 +1142,22 @@ function buildAutoReview(config, manifest, metrics, coaching, agentAnalysis) {
   const followups = [];
   let unsafeEditCount = 0;
 
+  const suppressions = findingIntelligence.loadSuppressions();
+  const manifestTrack = (manifest.track || "").toLowerCase();
+
   if (agentAnalysis) {
     (agentAnalysis.findings || []).forEach((finding) => {
-      findings.push(finding);
-      if (h.isVulnerabilityFinding(finding)) securityFindings.push(finding);
-      if (h.isSuggestionFinding(finding)) debtFindings.push(finding);
+      // Stamp track if the heuristic agent omitted it (fingerprint stability)
+      const enriched = finding.track ? finding : { ...finding, track: manifestTrack };
+      const fp = findingIntelligence.fingerprintFinding(enriched);
+      const suppression = findingIntelligence.isSuppressed(enriched, fp, suppressions, manifestTrack);
+      if (suppression.suppressed) {
+        findings.push({ ...enriched, status: "suppressed", suppression_reason: suppression.reason });
+        return;
+      }
+      findings.push({ ...enriched, status: enriched.status || "open" });
+      if (h.isVulnerabilityFinding(enriched)) securityFindings.push(enriched);
+      if (h.isSuggestionFinding(enriched)) debtFindings.push(enriched);
     });
     (agentAnalysis.followups || []).forEach((followup) => followups.push(followup));
 
@@ -2150,7 +2190,7 @@ function handleServeCommand(config, runtimeConfig, args) {
             return;
           }
 
-          const { track, title, detail, severity, line_refs, file_paths } = JSON.parse(body);
+          const { track, title, detail, severity, line_refs, file_paths, fingerprint } = JSON.parse(body);
           if (!track || !title) {
             res.writeHead(400);
             res.end(JSON.stringify({ ok: false, error: "track and title required" }));
@@ -2159,17 +2199,21 @@ function handleServeCommand(config, runtimeConfig, args) {
           const lineRefText = Array.isArray(line_refs) && line_refs.length
             ? " Locations: " + line_refs.map((r) => `${r.file}:${r.start_line}${r.end_line && r.end_line !== r.start_line ? "-" + r.end_line : ""}`).join(", ")
             : "";
-          const filePathText = Array.isArray(file_paths) && file_paths.length && !lineRefText
+          // Always include file_paths — they give the model direct context even when line_refs are present
+          const filePathText = Array.isArray(file_paths) && file_paths.length
             ? " Files: " + file_paths.join(", ")
             : "";
-          const goal = `Fix the following ${severity || "medium"} severity issue: ${title}. Detail: ${(detail || "").slice(0, 500)}${lineRefText}${filePathText}`;
+          const goal = `Fix the following ${severity || "medium"} severity issue: ${title}. Detail: ${(detail || "").slice(0, 1000)}${lineRefText}${filePathText}`;
           const logFile = `implement-${Date.now()}.log`;
           const logPath = path.join(h.AUTOMATION_ROOT, "logs", logFile);
           h.ensureDir(path.dirname(logPath));
 
+          const agentArgs = [path.join(h.SCRIPT_DIR, "portfolio-loop.js"), "agent", "--area", track, "--goal", goal, "--apply", "safe", "--goal-mode", "edit"];
+          if (fingerprint) agentArgs.push("--finding-fingerprint", fingerprint);
+
           const child = spawn(
             "node",
-            [path.join(h.SCRIPT_DIR, "portfolio-loop.js"), "agent", "--area", track, "--goal", goal, "--apply", "safe", "--goal-mode", "edit"],
+            agentArgs,
             { cwd: h.REPO_ROOT, env: process.env, stdio: ["ignore", "pipe", "pipe"], detached: true }
           );
 
@@ -2465,7 +2509,7 @@ function handleServeCommand(config, runtimeConfig, args) {
           // Create branch, stage changes, commit, push
           const cmds = [
             `git checkout -b "${branchName}"`,
-            `git add -A`,
+            `git add -u`,  // stage only already-tracked modified files — never picks up .env, logs, or automation cache
             `git diff --cached --quiet && echo "NO_CHANGES" || git commit -m "${commitMsg}"`,
             `git push origin "${branchName}" 2>&1`
           ];
@@ -2563,6 +2607,90 @@ function handleServeCommand(config, runtimeConfig, args) {
         }
         res.writeHead(200);
         res.end(JSON.stringify({ ok: true, cleaned }));
+      } catch (error) {
+        res.writeHead(500);
+        res.end(JSON.stringify({ ok: false, error: error.message }));
+      }
+      return;
+    }
+
+    if (pathname === "/api/approve" && req.method === "POST") {
+      let body = "";
+      req.on("data", (c) => { body += c; });
+      req.on("end", () => {
+        try {
+          const { run } = JSON.parse(body);
+          const { runDir, manifest } = h.loadRun(run);
+          if (!["changes_requested", "captured", "agent_applied"].includes(manifest.status)) {
+            res.writeHead(400);
+            res.end(JSON.stringify({ ok: false, error: `Cannot approve run with status: ${manifest.status}` }));
+            return;
+          }
+          const reviewPath = path.join(runDir, "review", "review.json");
+          if (fs.existsSync(reviewPath)) {
+            const review = h.loadJson(reviewPath);
+            review.decision = "approved";
+            review.training_labels = { ...review.training_labels, approved_for_training: true, label_type: "manual" };
+            h.writeJson(reviewPath, review);
+          }
+          h.updateRunManifest(runDir, (m) => {
+            m.status = "reviewed";
+            m.reviewed_at = new Date().toISOString();
+          });
+          res.writeHead(200);
+          res.end(JSON.stringify({ ok: true, run: manifest.run_id, status: "reviewed" }));
+          setImmediate(() => { try { dashboard.generateDashboard(config, {}, true); } catch(_) {} });
+        } catch (error) {
+          res.writeHead(500);
+          res.end(JSON.stringify({ ok: false, error: error.message }));
+        }
+      });
+      return;
+    }
+
+    if (pathname === "/api/reject" && req.method === "POST") {
+      let body = "";
+      req.on("data", (c) => { body += c; });
+      req.on("end", () => {
+        try {
+          const { run, reason } = JSON.parse(body);
+          const { runDir, manifest } = h.loadRun(run);
+          const reviewPath = path.join(runDir, "review", "review.json");
+          if (fs.existsSync(reviewPath)) {
+            const review = h.loadJson(reviewPath);
+            review.decision = "changes_requested";
+            review.training_labels = { ...review.training_labels, approved_for_training: false, label_type: "manual" };
+            if (reason) review.required_followups = [reason, ...(review.required_followups || [])];
+            h.writeJson(reviewPath, review);
+          }
+          h.updateRunManifest(runDir, (m) => {
+            m.status = "changes_requested";
+            m.reviewed_at = new Date().toISOString();
+          });
+          res.writeHead(200);
+          res.end(JSON.stringify({ ok: true, run: manifest.run_id, status: "changes_requested" }));
+          setImmediate(() => { try { dashboard.generateDashboard(config, {}, true); } catch(_) {} });
+        } catch (error) {
+          res.writeHead(500);
+          res.end(JSON.stringify({ ok: false, error: error.message }));
+        }
+      });
+      return;
+    }
+
+    if (pathname.startsWith("/api/diff/") && req.method === "GET") {
+      const runId = pathname.replace("/api/diff/", "").replace(/[^a-zA-Z0-9._-]/g, "");
+      try {
+        const { manifest } = h.loadRun(runId);
+        const snapshots = manifest.git_snapshots || [];
+        const snap = snapshots[0];
+        if (!snap) { res.writeHead(200); res.end(JSON.stringify({ ok: true, diff: "", stat: "No changes captured." })); return; }
+        const repoObj = h.resolveRepo("api", h.REPO_ROOT);
+        const repoPath = typeof repoObj === "string" ? repoObj : (repoObj.absolute_path || repoObj.path || h.REPO_ROOT);
+        const stat = snap.diff_stat || "";
+        const diff = h.runShell("git diff HEAD", repoPath) || h.runShell("git diff", repoPath) || "";
+        res.writeHead(200);
+        res.end(JSON.stringify({ ok: true, diff: diff.slice(0, 20000), stat, changed_files: snap.repo_relative_changed_files || [] }));
       } catch (error) {
         res.writeHead(500);
         res.end(JSON.stringify({ ok: false, error: error.message }));

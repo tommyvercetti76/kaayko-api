@@ -596,6 +596,16 @@ function buildDashboardHtml(summary) {
       } else if (inspected.length) {
         detailHtml += `<div class="tl-detail-files"><b>Inspected:</b> ${inspected.slice(0, 6).map((f) => `<code>${esc(typeof f === "string" ? f : f.path || f.relative_path || String(f))}</code>`).join(" ")}${inspected.length > 6 ? ` <code>+${inspected.length - 6}</code>` : ""}</div>`;
       }
+      // ── Run action controls ──────────────────────────────────────
+      const canApprove = ["changes_requested", "captured", "agent_applied"].includes(r.status);
+      const canReject  = ["reviewed", "approved"].includes(r.status) || r.review_decision === "approved";
+      detailHtml += `<div class="run-ctrl" id="ctrl-${esc(r.run_id)}">
+        <button class="rctl-btn rctl-diff"   onclick="event.stopPropagation();runDiff('${esc(r.run_id)}',this)">⟳ diff</button>
+        ${canApprove ? `<button class="rctl-btn rctl-approve" onclick="event.stopPropagation();approveRun('${esc(r.run_id)}',this)">✓ approve</button>` : ""}
+        ${canReject  ? `<button class="rctl-btn rctl-reject"  onclick="event.stopPropagation();rejectRun('${esc(r.run_id)}',this)">✗ reject</button>`  : ""}
+        <span class="rctl-status" id="rctl-s-${esc(r.run_id)}"></span>
+      </div>
+      <div class="run-diff-out" id="diff-${esc(r.run_id)}" style="display:none"></div>`;
     });
 
     // Metrics line
@@ -905,6 +915,21 @@ function buildDashboardHtml(summary) {
   .finding-status.done{background:rgba(52,211,153,0.15);color:var(--green)}
   .finding-status.error{background:rgba(239,68,68,0.15);color:var(--red)}
   .footer{text-align:center;padding:10px;color:var(--text-dim);font-family:var(--mono);font-size:.56rem;border-top:1px solid var(--border);margin-top:12px}
+  /* ── Run controls ── */
+  .run-ctrl{display:flex;align-items:center;gap:5px;margin-top:8px;padding-top:7px;border-top:1px solid var(--border)}
+  .rctl-btn{appearance:none;font-family:var(--mono);font-size:.6rem;font-weight:700;padding:3px 9px;border-radius:4px;cursor:pointer;transition:all .15s;border:1px solid}
+  .rctl-diff{background:rgba(34,211,238,0.08);border-color:rgba(34,211,238,0.25);color:var(--cyan)}
+  .rctl-diff:hover{background:rgba(34,211,238,0.18)}
+  .rctl-approve{background:rgba(52,211,153,0.1);border-color:rgba(52,211,153,0.35);color:var(--green)}
+  .rctl-approve:hover{background:rgba(52,211,153,0.22)}
+  .rctl-reject{background:rgba(239,68,68,0.08);border-color:rgba(239,68,68,0.25);color:var(--red)}
+  .rctl-reject:hover{background:rgba(239,68,68,0.18)}
+  .rctl-btn:disabled{opacity:.35;cursor:not-allowed}
+  .rctl-status{font-family:var(--mono);font-size:.58rem;color:var(--text-dim);margin-left:4px}
+  .rctl-status.ok{color:var(--green)}.rctl-status.err{color:var(--red)}
+  /* ── Diff output ── */
+  .run-diff-out{margin-top:6px;background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:8px 10px;font-family:var(--mono);font-size:.62rem;max-height:260px;overflow-y:auto;white-space:pre;scrollbar-width:thin;scrollbar-color:var(--border) transparent}
+  .run-diff-out .d-add{color:var(--green)}.run-diff-out .d-del{color:var(--red)}.run-diff-out .d-hdr{color:var(--cyan);opacity:.7}.run-diff-out .d-meta{color:var(--text-dim)}
   @media(max-width:960px){.score-bar{flex-wrap:wrap}.sb-cell{min-width:25%}}
 
   /* ── Mission Control ── */
@@ -1316,6 +1341,56 @@ if(info){info.textContent='Fixing '+(prog.current||'...')+' ('+(prog.completed||
 setTimeout(()=>pollFixAll(id,total,attempts),3000)}
 
 function toggleDetail(id){const r=document.getElementById(id);if(!r)return;r.style.display=r.style.display==='none'?'block':'none'}
+
+async function approveRun(runId,btn){
+  if(!confirm('Approve run '+runId+'? This marks it as reviewed and training-eligible.'))return;
+  btn.disabled=true;btn.textContent='✓ ...';
+  const st=document.getElementById('rctl-s-'+runId);
+  try{
+    const r=await fetch(BASE+'/api/approve',{method:'POST',headers:postHeaders(),body:JSON.stringify({run:runId})});
+    const d=await r.json();
+    if(d.ok){btn.textContent='✓ approved';if(st){st.textContent='approved';st.className='rctl-status ok'}setTimeout(()=>location.reload(),1800)}
+    else{btn.textContent='✓ approve';btn.disabled=false;if(st){st.textContent=d.error||'failed';st.className='rctl-status err'}}
+  }catch(e){btn.textContent='✓ approve';btn.disabled=false;if(st){st.textContent=e.message;st.className='rctl-status err'}}
+}
+
+async function rejectRun(runId,btn){
+  const reason=prompt('Reason for rejection (optional):');
+  if(reason===null)return;
+  btn.disabled=true;btn.textContent='✗ ...';
+  const st=document.getElementById('rctl-s-'+runId);
+  try{
+    const r=await fetch(BASE+'/api/reject',{method:'POST',headers:postHeaders(),body:JSON.stringify({run:runId,reason:reason||''})});
+    const d=await r.json();
+    if(d.ok){btn.textContent='✗ rejected';if(st){st.textContent='rejected';st.className='rctl-status err'}setTimeout(()=>location.reload(),1800)}
+    else{btn.textContent='✗ reject';btn.disabled=false;if(st){st.textContent=d.error||'failed';st.className='rctl-status err'}}
+  }catch(e){btn.textContent='✗ reject';btn.disabled=false;if(st){st.textContent=e.message;st.className='rctl-status err'}}
+}
+
+async function runDiff(runId,btn){
+  const out=document.getElementById('diff-'+runId);
+  if(!out)return;
+  if(out.style.display==='block'){out.style.display='none';btn.textContent='⟳ diff';return}
+  btn.disabled=true;btn.textContent='⟳ ...';
+  try{
+    const r=await fetch(BASE+'/api/diff/'+encodeURIComponent(runId));
+    const d=await r.json();
+    btn.disabled=false;btn.textContent='⟳ diff';
+    if(!d.ok){out.innerHTML='<span style="color:var(--red)">'+esc(d.error)+'</span>';out.style.display='block';return}
+    if(!d.diff&&!d.stat){out.innerHTML='<span style="color:var(--text-dim)">No changes captured for this run.</span>';out.style.display='block';return}
+    const statHtml=d.stat?'<div class="d-meta">'+esc(d.stat)+'</div>':'';
+    const diffHtml=d.diff.split(/\\n/).map(line=>{
+      if(line.startsWith('+++')) return '<span class="d-hdr">'+esc(line)+'</span>';
+      if(line.startsWith('---')) return '<span class="d-hdr">'+esc(line)+'</span>';
+      if(line.startsWith('@@')) return '<span class="d-meta">'+esc(line)+'</span>';
+      if(line.startsWith('+')) return '<span class="d-add">'+esc(line)+'</span>';
+      if(line.startsWith('-')) return '<span class="d-del">'+esc(line)+'</span>';
+      return esc(line);
+    }).join('<br>');
+    out.innerHTML=statHtml+diffHtml;
+    out.style.display='block';
+  }catch(e){btn.disabled=false;btn.textContent='⟳ diff';out.innerHTML='<span style="color:var(--red)">'+esc(e.message)+'</span>';out.style.display='block'}
+}
 
 // ── Wire events ──
 document.querySelectorAll('.mc-mod').forEach(c=>c.addEventListener('click',()=>selectTarget(c.dataset.area,c.dataset.icon,c.dataset.name)));
