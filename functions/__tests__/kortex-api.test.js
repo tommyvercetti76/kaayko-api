@@ -17,7 +17,7 @@ const { buildTestApp } = require('./helpers/testApp');
 let smartLinksApp;
 let deepLinksApp;
 beforeAll(() => {
-  smartLinksApp = buildTestApp('/smartlinks', require('../api/smartLinks/smartLinks'));
+  smartLinksApp = buildTestApp('/smartlinks', require('../api/kortex/smartLinks'));
   deepLinksApp = buildTestApp('/', require('../api/deepLinks/deeplinkRoutes'));
 });
 

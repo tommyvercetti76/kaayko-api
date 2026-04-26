@@ -42,8 +42,12 @@ apiApp.use("/paddleScore", require("./api/weather/paddleScore"));     // ML-POWE
 apiApp.use("/fastForecast", require("./api/weather/fastForecast"));   // PUBLIC: Fast cached forecasts for frontend
 apiApp.use("/forecast", require("./api/weather/forecast").router);    // PREMIUM: On-demand forecasts (requires $$ token)
 
-// 🔗 SMART LINKS - NEW!
-apiApp.use("/smartlinks", require("./api/smartLinks/smartLinks"));    // Smart link CRUD & analytics
+// 🔗 KORTEX LINKS API
+// Canonical namespace: /kortex
+// Compatibility namespace: /smartlinks (kept to avoid breaking older clients)
+const kortexRouter = require("./api/kortex/smartLinks");
+apiApp.use("/kortex", kortexRouter);
+apiApp.use("/smartlinks", kortexRouter);
 apiApp.use("/campaigns", require("./api/campaigns/campaignRoutes"));  // KORTEX campaign management
 
 // 🎓 ALUMNI INTEREST CAMPAIGN
