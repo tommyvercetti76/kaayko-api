@@ -2,12 +2,33 @@
 
 ## Scope
 
-KORTEX is Kaayko's smart-linking and redirect platform. In `main`, it spans CRUD for smart links, tenant onboarding, analytics, public redirect resolution, auth, and subscription billing.
+KORTEX is Kaayko's smart-linking, tenant-link, campaign, and redirect platform. In `main`, it spans CRUD for smart links, tenant alias links, tenant onboarding, analytics, public redirect resolution, auth, campaigns, and subscription billing.
+
+Canonical architecture and `kortex.kaayko.com` plan: [`../../kaayko/docs/products/KORTEX_TENANT_ARCHITECTURE_PLAN.md`](../../../kaayko/docs/products/KORTEX_TENANT_ARCHITECTURE_PLAN.md) from the sibling frontend repo.
 
 ## Mounted routes on `main`
 
-Smart links:
+KORTEX smart links and tenant links:
 
+- `GET /kortex/health`
+- `GET /kortex/tenants/resolve`
+- `GET /kortex/tenants/:tenantSlug/bootstrap`
+- `GET /kortex/links/:code/resolve`
+- `POST /kortex/events`
+- `POST /kortex/tenant-links`
+- `GET /kortex/tenants/:tenantId/analytics`
+- `POST /kortex/tenant-registration`
+- `GET /kortex/stats`
+- `GET /kortex/r/:code`
+- `POST /kortex`
+- `GET /kortex`
+- `GET /kortex/:code`
+- `PUT /kortex/:code`
+- `DELETE /kortex/:code`
+
+Smartlinks compatibility:
+
+- `/smartlinks/*` is mounted to the same router as `/kortex/*`.
 - `GET /smartlinks/health`
 - `GET /smartlinks/admin/migrate`
 - `POST /smartlinks/tenant-registration`
@@ -63,7 +84,10 @@ Auth and billing:
 
 Primary route files:
 
-- [`functions/api/smartLinks/smartLinks.js`](../../functions/api/smartLinks/smartLinks.js)
+- [`functions/api/kortex/smartLinks.js`](../../functions/api/kortex/smartLinks.js)
+- [`functions/api/kortex/v2LinkIntents.js`](../../functions/api/kortex/v2LinkIntents.js)
+- [`functions/api/kortex/smartLinkService.js`](../../functions/api/kortex/smartLinkService.js)
+- [`functions/api/kortex/redirectHandler.js`](../../functions/api/kortex/redirectHandler.js)
 - [`functions/api/campaigns/campaignRoutes.js`](../../functions/api/campaigns/campaignRoutes.js)
 - [`functions/api/deepLinks/deeplinkRoutes.js`](../../functions/api/deepLinks/deeplinkRoutes.js)
 - [`functions/api/auth/authRoutes.js`](../../functions/api/auth/authRoutes.js)
@@ -76,6 +100,7 @@ Primary frontend files:
 - `src/kortex.html`
 - `src/create-kortex-link.html`
 - `src/admin/kortex.html`
+- `src/tenant.html`
 - `src/admin/login.html`
 - `src/admin/js/config.js`
 - `src/admin/js/kortex-core.js`
@@ -84,6 +109,7 @@ Primary frontend files:
 - `src/admin/views/billing/*`
 - `src/admin/views/tenant-onboarding/*`
 - `src/redirect.html`
+- `src/js/tenant-portal.js`
 
 ## Security and access
 
@@ -92,12 +118,13 @@ Primary frontend files:
 - Aggregate stats require authenticated admin access and should remain tenant-scoped by default.
 - Admin CRUD requires `requireAuth` and `requireAdmin`.
 - Tenant-scoped admin flows rely on the `X-Kaayko-Tenant-Id` header from the frontend admin shell.
+- KORTEX V2 tenant aliases resolve tenant context server-side and store events in `kortex_events`.
 - Billing routes require authenticated users except for public config and Stripe webhooks.
 
 ## Current mismatches on `main`
 
 - [`functions/api/smartLinks/publicApiRouter.js`](../../functions/api/smartLinks/publicApiRouter.js) exists but is **intentionally not mounted** from [`functions/index.js`](../../functions/index.js). It defines API-key-authenticated external client endpoints (`POST /api/public/smartlinks`, batch create, stats, attribution) intended for future use. Do not call `/api/public/*` paths — they will 404. Mount this router when external API access is ready to ship.
-- Some admin onboarding docs in the frontend still describe `/public/smartlinks` flows even though `main` only mounts `/smartlinks`.
+- Some admin onboarding docs in the frontend still describe `/public/smartlinks` flows even though `main` only mounts `/kortex` and compatibility `/smartlinks`.
 
 ## Quality and maintenance notes
 

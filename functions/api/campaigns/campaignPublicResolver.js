@@ -2,8 +2,8 @@
 
 const express = require('express');
 const admin = require('firebase-admin');
-const { handleRedirect } = require('../smartLinks/redirectHandler');
-const { DEFAULT_TENANT_ID } = require('../smartLinks/tenantContext');
+const { handleRedirect } = require('../kortex/redirectHandler');
+const { DEFAULT_TENANT_ID } = require('../kortex/tenantContext');
 
 const router = express.Router();
 const db = admin.firestore();

@@ -181,7 +181,7 @@ async function logDeeplinkEvent(eventType, data) {
 router.get("/l/:id", async (req, res) => {
   try {
     const linkId = req.params.id;
-    const { handleRedirect, checkLinkExists } = require('../smartLinks/redirectHandler');
+    const { handleRedirect, checkLinkExists } = require('../kortex/redirectHandler');
     
     // PRIORITY 1: Check if this is a smart link (fast existence check)
     const linkCheck = await checkLinkExists(linkId);

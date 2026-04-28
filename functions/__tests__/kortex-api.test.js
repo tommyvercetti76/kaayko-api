@@ -67,6 +67,107 @@ describe('Kortex API — Health & Public Endpoints', () => {
     expect(res.body.link.tenantId).toBeUndefined();
   });
 
+  test('GET /smartlinks/tenants/:tenantSlug/bootstrap returns tenant portal routes', async () => {
+    admin._mocks.docData['tenants/parishram'] = {
+      name: 'Parishram Alumni',
+      slug: 'parishram',
+      domain: 'kaayko.com',
+      alumniDomain: 'parishram.alumni.kaayko.com',
+      enabled: true
+    };
+
+    const res = await request(smartLinksApp)
+      .get('/smartlinks/tenants/parishram/bootstrap?host=kaayko.com&path=/a/parishram/admin');
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.tenant.slug).toBe('parishram');
+    expect(res.body.routes.login).toBe('https://parishram.alumni.kaayko.com/login');
+    expect(res.body.routes.register).toBe('/a/parishram/register');
+  });
+
+  test('GET /smartlinks/links/:code/resolve resolves namespace tenant admin aliases', async () => {
+    admin._mocks.docData['tenants/parishram'] = {
+      name: 'Parishram Alumni',
+      slug: 'parishram',
+      domain: 'kaayko.com',
+      alumniDomain: 'parishram.alumni.kaayko.com',
+      enabled: true
+    };
+    admin._mocks.docData['short_links/a_adminp12'] = {
+      code: 'a_adminp12',
+      title: 'Parishram Admin',
+      tenantId: 'parishram',
+      tenantName: 'Parishram Alumni',
+      destinations: { web: 'https://parishram.alumni.kaayko.com/admin' },
+      enabled: true,
+      destinationType: 'tenant_admin_login',
+      audience: 'admin',
+      intent: 'login',
+      source: 'manual',
+      metadata: {
+        destinationType: 'tenant_admin_login',
+        audience: 'admin',
+        intent: 'login'
+      }
+    };
+
+    const res = await request(smartLinksApp)
+      .get('/smartlinks/links/adminP12/resolve?namespace=a&host=kaayko.com&path=/a/adminP12');
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.link.destinationType).toBe('tenant_admin_login');
+    expect(res.body.destination).toContain('https://parishram.alumni.kaayko.com/login');
+    expect(res.body.destination).toContain('kt_link=a_adminp12');
+  });
+
+  test('POST /smartlinks/events accepts KORTEX V2 conversion events', async () => {
+    const res = await request(smartLinksApp)
+      .post('/smartlinks/events')
+      .send({
+        type: 'registration_submitted',
+        tenantId: 'parishram',
+        linkCode: 'a_adminp12',
+        source: 'qr',
+        audience: 'alumni',
+        intent: 'register'
+      });
+
+    expect(res.status).toBe(201);
+    expect(res.body.success).toBe(true);
+    expect(res.body.eventId).toBeDefined();
+  });
+
+  test('POST /smartlinks/tenant-links creates namespace aliases with public /a/:code URLs', async () => {
+    admin._mocks.docData['admin_users/admin-uid'] = {
+      role: 'admin',
+      email: 'admin@kaayko.com',
+      tenantId: 'kaayko-default'
+    };
+
+    const res = await request(smartLinksApp)
+      .post('/smartlinks/tenant-links')
+      .set('Authorization', 'Bearer VALID_ADMIN_TOKEN')
+      .send({
+        namespace: 'a',
+        code: 'adminP12',
+        tenantSlug: 'parishram',
+        alumniDomain: 'parishram.alumni.kaayko.com',
+        destinationType: 'tenant_admin_login',
+        audience: 'admin',
+        intent: 'login',
+        title: 'Parishram Admin'
+      });
+
+    expect(res.status).toBe(201);
+    expect(res.body.success).toBe(true);
+    expect(res.body.link.code).toBe('a_adminp12');
+    expect(res.body.link.publicCode).toBe('adminP12');
+    expect(res.body.link.shortUrl).toBe('https://kaayko.com/a/adminP12');
+    expect(admin._mocks.docData['short_links/a_adminp12']).toBeDefined();
+  });
+
   test('GET /smartlinks/:code returns full link data to an admin in the same tenant', async () => {
     admin._mocks.docData['admin_users/admin-uid'] = {
       role: 'admin',

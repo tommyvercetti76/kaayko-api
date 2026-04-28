@@ -12,7 +12,8 @@ Quick links:
 - **Admin Management:** [ADMIN_MANAGEMENT_GUIDE.md](./docs/admin/ADMIN_MANAGEMENT_GUIDE.md)
 
 ### API Documentation
-- **Smart Links API:** [`api/smartLinks/README.md`](./api/smartLinks/README.md)
+- **KORTEX API:** [`api/kortex/README.md`](./api/kortex/README.md)
+- **SmartLinks compatibility:** [`api/smartLinks/README.md`](./api/smartLinks/README.md)
 - **Main API Docs:** `/api/README.md`
 
 ---
@@ -68,7 +69,9 @@ functions/
 │       └── TESTING_GUIDE.md
 │
 ├── api/                    # API endpoints
-│   ├── smartLinks/         # Smart Links CRUD API
+│   ├── kortex/             # Canonical KORTEX links, tenant aliases, redirects
+│   ├── smartLinks/         # Compatibility shims for old SmartLinks imports
+│   ├── campaigns/          # KORTEX campaign management and link mirrors
 │   ├── admin/              # Admin management API
 │   └── ...                 # Other API modules
 │
@@ -110,6 +113,8 @@ POST   /api/smartlinks          - Create smart link
 GET    /api/smartlinks          - List all links
 PUT    /api/smartlinks/:code    - Update link
 DELETE /api/smartlinks/:code    - Delete link (admin only)
+POST   /api/kortex/tenant-links - Create tenant alias links such as /a/adminP12
+GET    /api/kortex/links/:code/resolve - Resolve KORTEX V2 tenant aliases
 GET    /api/admin/users         - List admin users (super-admin only)
 POST   /api/admin/users         - Create admin user (super-admin only)
 ```
@@ -117,6 +122,8 @@ POST   /api/admin/users         - Create admin user (super-admin only)
 ### Public
 ```
 GET    /api/l/:code             - Redirect to destination (public)
+GET    /api/kortex/tenants/:tenantSlug/bootstrap - Public tenant shell bootstrap
+POST   /api/kortex/events       - Public KORTEX V2 event tracking
 POST   /api/analytics           - Track link clicks (anonymous)
 ```
 

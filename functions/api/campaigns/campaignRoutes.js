@@ -1,7 +1,7 @@
 const express = require('express');
 const admin = require('firebase-admin');
 const { requireAuth } = require('../../middleware/authMiddleware');
-const { getTenantFromRequest, DEFAULT_TENANT_ID } = require('../smartLinks/tenantContext');
+const { getTenantFromRequest, DEFAULT_TENANT_ID } = require('../kortex/tenantContext');
 const campaignService = require('./campaignService');
 const campaignLinkService = require('./campaignLinkService');
 const { isTenantAdmin, loadCampaign, requireCampaignPermission } = require('./campaignPermissions');

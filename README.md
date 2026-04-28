@@ -8,7 +8,7 @@ Production backend for the Kaayko product portfolio. The `main` branch in this r
 | --- | --- | --- | --- | --- |
 | Store / Commerce | Product catalog, image delivery, checkout, order ops | `/products`, `/images`, `/createPaymentIntent`, `/admin/*` | `kaayko/src/index.html`, `store.html`, `cart.html`, `order-success.html` | [`docs/products/STORE.md`](./docs/products/STORE.md) |
 | Paddling Out | Weather, scoring, nearby water discovery, forecast caching | `/paddlingOut`, `/nearbyWater`, `/paddleScore`, `/fastForecast`, `/forecast`, `/gptActions` | `kaayko/src/paddlingout.html` and weather JS modules | [`docs/products/PADDLING_OUT.md`](./docs/products/PADDLING_OUT.md) |
-| KORTEX | Smart links, redirects, tenant onboarding, billing, auth | `/smartlinks`, `/billing`, `/auth`, `/l/:id`, `/resolve` | `kaayko/src/kortex.html`, `create-kortex-link.html`, `src/admin/*` | [`docs/products/KORTEX.md`](./docs/products/KORTEX.md) |
+| KORTEX | Smart links, tenant aliases, redirects, campaigns, tenant onboarding, billing, auth | `/kortex`, `/smartlinks`, `/campaigns`, `/:campaignSlug/:code`, `/l/:id`, `/resolve`, `/billing`, `/auth` | `kaayko/src/kortex.html`, `create-kortex-link.html`, `src/admin/*`, `src/tenant.html` | [`docs/products/KORTEX.md`](./docs/products/KORTEX.md), [`../kaayko/docs/products/KORTEX_TENANT_ARCHITECTURE_PLAN.md`](../kaayko/docs/products/KORTEX_TENANT_ARCHITECTURE_PLAN.md) |
 | Kreator | Creator applications, onboarding, profile, admin review | `/kreators` | `kaayko/src/kreator/*` | [`docs/products/KREATOR.md`](./docs/products/KREATOR.md) |
 | Kamera Quest | Camera catalog, lenses, presets, session optimization | `/cameras`, `/lenses`, `/presets`, `/presets/smart` | `kaayko/src/karma/kameras/*` | [`docs/products/KAMERA_QUEST.md`](./docs/products/KAMERA_QUEST.md) |
 | Shared Platform | Auth middleware, API docs, admin controls, deployment rails | `/docs`, `/auth`, `/admin/*`, scheduled functions | Shared site shell and product ops flows | [`docs/products/PLATFORM_SHARED.md`](./docs/products/PLATFORM_SHARED.md) |
@@ -22,7 +22,7 @@ Production backend for the Kaayko product portfolio. The `main` branch in this r
 - Camera intelligence: catalog maintenance, audit, validation packet, and session-advice engine in [`functions/api/cameras`](./functions/api/cameras).
 - Scheduled jobs: forecast warming and health jobs exported from [`functions/scheduled/forecastScheduler.js`](./functions/scheduled/forecastScheduler.js).
 
-The live API function is mounted in [`functions/index.js`](./functions/index.js). Treat that file as the source of truth for what is actually shipped from `main`.
+The live API function is mounted in [`functions/index.js`](./functions/index.js). Treat that file as the source of truth for what is actually shipped from `main`. KORTEX is canonical under `/kortex`; `/smartlinks` remains mounted as compatibility for older clients.
 
 ## Repository layout
 

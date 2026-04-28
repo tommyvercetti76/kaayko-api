@@ -139,11 +139,20 @@ async function createShortLink(data) {
     tenantName = 'Kaayko',
     domain = 'kaayko.com',
     pathPrefix = '/l',
-    apiKeyId = null
+    apiKeyId = null,
+    destinationType = metadata.destinationType || 'external_url',
+    campaignId = metadata.campaignId || null,
+    requiresAuth = metadata.requiresAuth === true,
+    audience = metadata.audience || 'public',
+    source = metadata.source || 'manual',
+    intent = metadata.intent || 'view',
+    returnTo = metadata.returnTo || null,
+    conversionGoal = metadata.conversionGoal || null
   } = data;
 
   // If caller provided a custom short code (alias), validate and use it
   let providedCode = data.code || data.shortCode || null;
+  const publicCode = data.publicCode || providedCode || null;
   if (providedCode) {
     if (!isValidShortCode(providedCode)) {
       const err = new Error('Invalid short code format');
@@ -184,7 +193,7 @@ async function createShortLink(data) {
 
   // Construct short URL with tenant's domain
   const shortDomain = domain.startsWith('http') ? domain : `https://${domain}`;
-  const shortUrl = `${shortDomain}${pathPrefix}/${shortCode}`;
+  const shortUrl = `${shortDomain}${pathPrefix}/${publicCode || shortCode}`;
   const qrCodeUrl = `${shortDomain}/qr/${shortCode}.png`;
 
   const sanitizedMetadata = sanitizeMetadataForDestination(metadata, webDestination);
@@ -201,7 +210,16 @@ async function createShortLink(data) {
     tenantName,
     domain,
     pathPrefix,
+    publicCode: publicCode || shortCode,
     apiKeyId, // Track which API key created this
+    destinationType,
+    campaignId,
+    requiresAuth,
+    audience,
+    source,
+    intent,
+    returnTo,
+    conversionGoal,
     
     destinations: {
       ios: iosDestination || null,
@@ -237,6 +255,15 @@ async function createShortLink(data) {
     tenantName,
     domain,
     pathPrefix,
+    publicCode: publicCode || shortCode,
+    destinationType,
+    campaignId,
+    requiresAuth,
+    audience,
+    source,
+    intent,
+    returnTo,
+    conversionGoal,
     destinations: linkDoc.destinations,
     title,
     description,
@@ -334,7 +361,25 @@ async function getShortLink(code) {
  * Update a short link
  */
 async function updateShortLink(code, updates) {
-  const { metadata, metadataPatch, sourceRules, utm, destinations, enabled, title, description, expiresAt } = updates;
+  const {
+    metadata,
+    metadataPatch,
+    sourceRules,
+    utm,
+    destinations,
+    enabled,
+    title,
+    description,
+    expiresAt,
+    destinationType,
+    campaignId,
+    requiresAuth,
+    audience,
+    source,
+    intent,
+    returnTo,
+    conversionGoal
+  } = updates;
 
   const linkRef = db.collection('short_links').doc(code);
   const linkDoc = await linkRef.get();
@@ -378,6 +423,14 @@ async function updateShortLink(code, updates) {
   if (enabled !== undefined) updateData.enabled = enabled;
   if (title !== undefined) updateData.title = title;
   if (description !== undefined) updateData.description = description;
+  if (destinationType !== undefined) updateData.destinationType = destinationType;
+  if (campaignId !== undefined) updateData.campaignId = campaignId || null;
+  if (requiresAuth !== undefined) updateData.requiresAuth = requiresAuth === true;
+  if (audience !== undefined) updateData.audience = audience;
+  if (source !== undefined) updateData.source = source;
+  if (intent !== undefined) updateData.intent = intent;
+  if (returnTo !== undefined) updateData.returnTo = returnTo || null;
+  if (conversionGoal !== undefined) updateData.conversionGoal = conversionGoal || null;
   if (expiresAt !== undefined) {
     updateData.expiresAt = expiresAt ? admin.firestore.Timestamp.fromDate(new Date(expiresAt)) : null;
   }

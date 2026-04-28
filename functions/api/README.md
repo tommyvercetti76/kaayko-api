@@ -18,16 +18,20 @@ Note: the list below is derived from the current code in `functions/index.js` an
 └── core/          📚 Documentation & OpenAPI specs
 ```
 
-### Smart Links API (mounted)
-1. **Smart Links CRUD** - Create, read, update, delete short links (mounted at /smartlinks)
-2. **Short Codes** - Short links (lkXXXX) and redirect handlers (some public redirect routes are handled by `deepLinks` module mounted at `/l/*`)
-3. **Analytics** - Click tracking and stats
+### KORTEX API (mounted)
+1. **KORTEX CRUD** - Create, read, update, delete short links (canonical `/kortex`; compatibility `/smartlinks`)
+2. **Tenant aliases** - Create and resolve links like `kaayko.com/a/adminP12`
+3. **Short codes** - Universal `/l/:code` links delegated through deep links and KORTEX redirect handling
+4. **Campaign links** - Campaign CRUD under `/campaigns` and public `/:campaignSlug/:code`
+5. **Analytics** - Click tracking, KORTEX V2 events, and tenant analytics
 **README:** [weather/README.md](weather/README.md)
 ### Modules mapped to runtime:
 | Module | Mounted? | Path | Notes |
 |---|---:|---|---|
 | weather (paddlingOut) | ✅ | /paddlingOut | Listed in index.js
-| smartLinks | ✅ | /smartlinks | Admin + public actions (see smartLinks README)
+| kortex | ✅ | /kortex | Canonical smart links, tenant aliases, V2 events (see kortex README) |
+| smartLinks | ✅ compatibility | /smartlinks | Same router as /kortex |
+| campaigns | ✅ | /campaigns and /:campaignSlug/:code | Campaign management plus public campaign namespace links |
 | ai (gptActions) | ✅ | /gptActions | Mounted in index.js
 | admin | ⚠️ partially mounted | /admin/* | Some admin endpoints are mounted directly (getOrder/listOrders/updateOrderStatus). adminUsers router exists but is not registered in index.js by default.
 | auth | ✅ | /auth/* | Mounted in index.js (logout, me, verify)
@@ -58,35 +62,42 @@ GET /api/nearbyWater?lat=32.8309&lng=-96.7176&radius=5000
 
 ---
 
-## 🔗 Smart Links APIs
+## 🔗 KORTEX APIs
 
-**Location:** `smartLinks/`  
-**README:** [smartLinks/README.md](smartLinks/README.md)
+**Location:** `kortex/`
+**README:** [kortex/README.md](kortex/README.md)
 
 ### APIs:
-1. **Smart Links CRUD** - Create, read, update, delete links
-2. **Short Codes** - Branch-style short links (lk1ngp)
-3. **Redirect Handler** - Universal redirect system
-4. **Analytics** - Click tracking and stats
+1. **KORTEX Link CRUD** - Create, read, update, delete links
+2. **Tenant Alias Links** - Namespace links such as `/a/adminP12`
+3. **Short Codes** - Branch-style short links (`/l/lk1ngp`)
+4. **Redirect Handler** - Universal redirect system
+5. **Campaign Links** - Campaign and philanthropy link mirrors
+6. **Analytics** - Click tracking, events, and tenant stats
 
 ### Key Features:
-- ✅ Two link formats (structured + short codes)
-- ✅ Auto-enrichment with metadata
+- ✅ Canonical `/kortex` namespace
+- ✅ `/smartlinks` compatibility
+- ✅ Tenant-aware V2 intent fields
+- ✅ Alias URLs like `kaayko.com/a/adminP12`
 - ✅ UTM parameter management
 - ✅ Real-time analytics
 - ✅ Custom expiration
 
 ### Endpoints:
 ```
-GET    /api/smartlinks/r/:code          # Redirect
-POST   /api/smartlinks                   # Create structured link
-POST   /api/smartlinks/short             # Create short code
-GET    /api/smartlinks                   # List all
-GET    /api/smartlinks/:space/:id        # Get one
-PUT    /api/smartlinks/:space/:id        # Update
-DELETE /api/smartlinks/:space/:id        # Delete
-POST   /api/smartlinks/events/:type      # Track event
-GET    /api/smartlinks/stats              # Analytics
+GET    /api/kortex/health
+POST   /api/kortex
+GET    /api/kortex
+GET    /api/kortex/:code
+PUT    /api/kortex/:code
+DELETE /api/kortex/:code
+GET    /api/kortex/r/:code
+GET    /api/kortex/links/:code/resolve
+POST   /api/kortex/tenant-links
+POST   /api/kortex/events
+GET    /api/kortex/tenants/:tenantId/analytics
+POST   /api/kortex/tenant-registration
 ```
 
 ---

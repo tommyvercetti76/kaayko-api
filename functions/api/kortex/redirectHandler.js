@@ -15,6 +15,7 @@
 const admin = require('firebase-admin');
 const { FieldValue } = require('firebase-admin/firestore');
 const { trackClick, updateClickRedirect } = require('./clickTracking');
+const KortexV2 = require('./v2LinkIntents');
 
 const db = admin.firestore();
 const ALUMNI_POLL_TITLE = 'What would bring you back to your school?';
@@ -546,6 +547,28 @@ async function handleRedirect(req, res, code, options = {}) {
       } catch (alumniErr) {
         console.error('[Alumni] Visit token issuance failed:', alumniErr);
         return res.status(500).send(errorPage(500, 'Something Went Wrong', 'Please try the link again.'));
+      }
+    }
+
+    const v2DestinationType = linkData.destinationType || linkData.metadata?.destinationType || 'external_url';
+    const v2RequiresAuth = linkData.requiresAuth === true || linkData.metadata?.requiresAuth === true;
+    if (v2RequiresAuth || v2DestinationType !== 'external_url') {
+      try {
+        const resolved = await KortexV2.resolveLink({
+          code,
+          host: req.headers.host || req.hostname,
+          path: req.path || req.originalUrl || '',
+          query: req.query,
+          req
+        });
+        return res.redirect(302, resolved.destination);
+      } catch (intentErr) {
+        console.error('[KortexV2] Intent redirect failed:', intentErr);
+        return res.status(500).send(errorPage(
+          500,
+          'Redirect Error',
+          'Something went wrong while resolving this KORTEX link.'
+        ));
       }
     }
 

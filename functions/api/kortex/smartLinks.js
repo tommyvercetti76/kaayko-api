@@ -26,6 +26,7 @@ const db = admin.firestore();
 // Import modular utilities and services
 const { handleRedirect } = require('./redirectHandler');
 const LinkService = require('./smartLinkService');
+const KortexV2 = require('./v2LinkIntents');
 
 // Import authentication middleware
 const { requireAuth, requireAdmin, optionalAuth } = require('../../middleware/authMiddleware');
@@ -133,6 +134,177 @@ router.get('/health', (req, res) => {
     status: 'healthy',
     timestamp: new Date().toISOString()
   });
+});
+
+// ============================================================================
+// KORTEX V2 TENANT BOOTSTRAP + UNIVERSAL RESOLVE
+// ============================================================================
+
+router.get('/tenants/resolve', async (req, res) => {
+  try {
+    const tenant = await KortexV2.findTenant({
+      tenantSlug: req.query.tenantSlug || req.query.slug,
+      host: req.query.host || req.headers.host || req.hostname,
+      path: req.query.path || ''
+    });
+
+    if (!tenant) {
+      return res.status(404).json({
+        success: false,
+        error: 'Tenant not found',
+        code: 'TENANT_NOT_FOUND'
+      });
+    }
+
+    return res.json({
+      success: true,
+      tenant: KortexV2.publicTenantView({ id: tenant.id, data: () => tenant })
+    });
+  } catch (error) {
+    console.error('[KortexV2] Tenant resolve error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to resolve tenant',
+      message: error.message
+    });
+  }
+});
+
+router.get('/tenants/:tenantSlug/bootstrap', async (req, res) => {
+  try {
+    const tenant = await KortexV2.findTenant({
+      tenantSlug: req.params.tenantSlug,
+      host: req.query.host || req.headers.host || req.hostname,
+      path: req.query.path || ''
+    });
+
+    if (!tenant) {
+      return res.status(404).json({
+        success: false,
+        error: 'Tenant not found',
+        code: 'TENANT_NOT_FOUND'
+      });
+    }
+
+    return res.json({
+      success: true,
+      tenant: KortexV2.publicTenantView({ id: tenant.id, data: () => tenant }),
+      routes: {
+        login: `https://${tenant.alumniDomain || `${tenant.slug || tenant.id}.alumni.kaayko.com`}/login`,
+        admin: `/a/${encodeURIComponent(tenant.slug || tenant.id)}/admin`,
+        register: `/a/${encodeURIComponent(tenant.slug || tenant.id)}/register`,
+        campaigns: `/a/${encodeURIComponent(tenant.slug || tenant.id)}/campaigns`
+      }
+    });
+  } catch (error) {
+    console.error('[KortexV2] Tenant bootstrap error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to bootstrap tenant',
+      message: error.message
+    });
+  }
+});
+
+router.get('/links/:code/resolve', async (req, res) => {
+  try {
+    const resolved = await KortexV2.resolveLink({
+      code: req.params.code,
+      namespace: req.query.namespace || req.query.ns || null,
+      host: req.query.host || req.headers.host || req.hostname,
+      path: req.query.path || '',
+      query: req.query,
+      req
+    });
+
+    return res.json({ success: true, ...resolved });
+  } catch (error) {
+    console.error('[KortexV2] Link resolve error:', error);
+    const status = error.code === 'NOT_FOUND' ? 404 : error.code === 'TENANT_NOT_FOUND' ? 404 : 500;
+    return res.status(status).json({
+      success: false,
+      error: status === 404 ? 'Link not found' : 'Failed to resolve link',
+      code: error.code || 'RESOLVE_FAILED',
+      message: error.message
+    });
+  }
+});
+
+router.post('/events', async (req, res) => {
+  try {
+    const event = await KortexV2.recordEvent(req.body.type, req.body, req);
+    return res.status(201).json({
+      success: true,
+      eventId: event.id
+    });
+  } catch (error) {
+    console.error('[KortexV2] Event tracking error:', error);
+    const status = error.code === 'INVALID_EVENT_TYPE' ? 400 : 500;
+    return res.status(status).json({
+      success: false,
+      error: error.message || 'Failed to track event',
+      code: error.code || 'EVENT_TRACKING_FAILED'
+    });
+  }
+});
+
+router.post('/tenant-links', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const tenantContext = await getTenantFromRequest(req);
+    const tenantConfig = await getTenantConfig(tenantContext.tenantId);
+    const link = await KortexV2.createTenantLink({
+      tenant: {
+        id: tenantConfig.id,
+        name: tenantConfig.name,
+        domain: tenantConfig.domain,
+        pathPrefix: tenantConfig.pathPrefix,
+        slug: req.body.tenantSlug || tenantConfig.id,
+        alumniDomain: req.body.alumniDomain
+      },
+      actor: req.user,
+      data: req.body
+    });
+
+    return res.status(201).json({
+      success: true,
+      link
+    });
+  } catch (error) {
+    console.error('[KortexV2] Tenant link create error:', error);
+    const status = error.code === 'ALREADY_EXISTS' ? 409 : error.code === 'VALIDATION_ERROR' ? 400 : 500;
+    return res.status(status).json({
+      success: false,
+      error: error.message || 'Failed to create tenant link',
+      code: error.code || 'TENANT_LINK_CREATE_FAILED'
+    });
+  }
+});
+
+router.get('/tenants/:tenantId/analytics', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const tenantId = req.params.tenantId;
+    const tenantContext = await getTenantFromRequest(req);
+    if (!tenantContext.isSuperAdmin) {
+      assertTenantAccess(req.user, tenantId);
+    }
+
+    const analytics = await KortexV2.getTenantAnalytics(tenantId, req.query.limit);
+    return res.json({
+      success: true,
+      tenant: { id: tenantId },
+      analytics
+    });
+  } catch (error) {
+    console.error('[KortexV2] Tenant analytics error:', error);
+    if (error.message?.includes('tenant') || error.message?.includes('Access denied') || error.code?.startsWith('TENANT')) {
+      return tenantAccessError(res, error);
+    }
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to fetch tenant analytics',
+      message: error.message
+    });
+  }
 });
 
 // ============================================================================

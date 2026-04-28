@@ -1,5 +1,5 @@
 const admin = require('firebase-admin');
-const { assertTenantAccess, DEFAULT_TENANT_ID } = require('../smartLinks/tenantContext');
+const { assertTenantAccess, DEFAULT_TENANT_ID } = require('../kortex/tenantContext');
 
 const db = admin.firestore();
 

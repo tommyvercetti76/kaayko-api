@@ -20,6 +20,12 @@ This folder contains **technical implementation documentation** - architectural 
   Warning generation system, 6 warning types, condition thresholds
 
 ### System Design
+- **[products/KORTEX.md](products/KORTEX.md)**
+  KORTEX backend routes, tenant aliases, campaigns, auth, and billing
+
+- **[../kaayko/docs/products/KORTEX_TENANT_ARCHITECTURE_PLAN.md](../../kaayko/docs/products/KORTEX_TENANT_ARCHITECTURE_PLAN.md)**
+  End-to-end KORTEX tenant architecture and `kortex.kaayko.com` rollout plan
+
 - **[HOW_SCHEDULED_FUNCTIONS_WORK.md](HOW_SCHEDULED_FUNCTIONS_WORK.md)**  
   Cron job architecture, cache warming (4x daily), scheduled pre-computation
 
@@ -75,7 +81,8 @@ api/
 └── functions/api/                     ← API ENDPOINT DOCS
     ├── README.md                      ← API overview
     ├── weather/README.md              ← Weather APIs (5 endpoints)
-    ├── smartLinks/README.md           ← Smart Links (12 endpoints)
+    ├── kortex/README.md               ← KORTEX links, tenant aliases, events
+    ├── smartLinks/README.md           ← SmartLinks compatibility
     ├── ai/README.md                   ← PaddleBot + GPT (7 endpoints)
     ├── products/README.md             ← Products (3 endpoints)
     ├── deepLinks/README.md            ← Universal Links (3 endpoints)
@@ -117,6 +124,7 @@ api/
 | **FIREBASE_API.md** | Firebase optimization | Architects |
 | **WHY_OVERPASS_IS_PERFECT.md** | Overpass API rationale | Product/Dev |
 | **SMART_WARNING_SYSTEM_API_DOCS.md** | Warning system | Product/Dev |
+| **products/KORTEX.md** | KORTEX backend architecture | Product/Dev |
 | **API-QUICK-REFERENCE-v2.1.0.md** | API reference guide | All |
 | **kaayko-paddling-api-swagger.yaml** | OpenAPI 3.0.3 spec | All |
 | **MASTER_TEST_INDEX.md** | Test organization | QA/Dev |
