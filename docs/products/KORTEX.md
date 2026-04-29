@@ -6,6 +6,8 @@ KORTEX is Kaayko's smart-linking, tenant-link, campaign, and redirect platform. 
 
 Canonical architecture and `kortex.kaayko.com` plan: [`../../kaayko/docs/products/KORTEX_TENANT_ARCHITECTURE_PLAN.md`](../../../kaayko/docs/products/KORTEX_TENANT_ARCHITECTURE_PLAN.md) from the sibling frontend repo.
 
+Button-only execution plan and definition of done: [`../../kaayko/docs/products/KORTEX_DELIVERY_PLAN_AND_DOD.md`](../../../kaayko/docs/products/KORTEX_DELIVERY_PLAN_AND_DOD.md) from the sibling frontend repo.
+
 ## Mounted routes on `main`
 
 KORTEX smart links and tenant links:
