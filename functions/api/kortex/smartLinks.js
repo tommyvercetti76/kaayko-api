@@ -623,26 +623,49 @@ router.get('/:code/clicks', requireAuth, requireAdmin, async (req, res) => {
     if (!linkDoc.exists) {
       return res.status(404).json({ success: false, error: 'Link not found' });
     }
+    const linkData = linkDoc.data();
     if (!tenantContext.isSuperAdmin) {
-      assertTenantAccess(req.user, linkDoc.data().tenantId || DEFAULT_TENANT_ID);
+      assertTenantAccess(req.user, linkData.tenantId || DEFAULT_TENANT_ID);
     }
 
-    const clicksSnap = await db.collection('click_events')
-      .where('linkCode', '==', code)
-      .orderBy('timestamp', 'desc')
-      .limit(limit)
-      .get();
+    let clickDocs = [];
 
-    const clicks = clicksSnap.docs.map(doc => {
+    // Try click_events first (unified collection), fall back to smartLinkClicks (legacy)
+    try {
+      const snap = await db.collection('click_events')
+        .where('linkCode', '==', code)
+        .orderBy('timestamp', 'desc')
+        .limit(limit)
+        .get();
+      clickDocs = snap.docs;
+    } catch (indexErr) {
+      // Index may not exist yet — try without ordering
+      try {
+        const snap = await db.collection('click_events')
+          .where('linkCode', '==', code)
+          .limit(limit)
+          .get();
+        clickDocs = snap.docs;
+      } catch (_) {
+        // Fall back to legacy smartLinkClicks
+        const snap = await db.collection('smartLinkClicks')
+          .where('code', '==', code)
+          .limit(limit)
+          .get();
+        clickDocs = snap.docs;
+      }
+    }
+
+    const clicks = clickDocs.map(doc => {
       const d = doc.data();
       return {
         clickId: d.clickId || doc.id,
         platform: d.platform || 'web',
         deviceInfo: d.deviceInfo || {},
         utm: d.utm || {},
-        referrer: d.referrer || '',
+        referrer: d.referrer || d.referer || '',
         redirectedTo: d.redirectedTo || '',
-        timestamp: d.timestamp?.toDate?.()?.toISOString() || d.timestampMs || null
+        timestamp: d.timestamp?.toDate?.()?.toISOString() || (d.timestampMs ? new Date(d.timestampMs).toISOString() : null)
       };
     });
 
@@ -661,18 +684,25 @@ router.get('/:code/clicks', requireAuth, requireAdmin, async (req, res) => {
       devices[device] = (devices[device] || 0) + 1;
       const src = c.utm?.utm_source || 'direct';
       utmSources[src] = (utmSources[src] || 0) + 1;
-      const ref = c.referrer ? new URL(c.referrer).hostname : 'direct';
-      referrers[ref] = (referrers[ref] || 0) + 1;
+      try {
+        const ref = c.referrer ? new URL(c.referrer).hostname : 'direct';
+        referrers[ref] = (referrers[ref] || 0) + 1;
+      } catch (_) {
+        referrers['direct'] = (referrers['direct'] || 0) + 1;
+      }
       if (c.timestamp) {
         const day = c.timestamp.substring(0, 10);
         daily[day] = (daily[day] || 0) + 1;
       }
     });
 
+    // Include the link's own clickCount even if click_events is empty
+    const reportedTotal = Math.max(clicks.length, linkData.clickCount || 0);
+
     res.json({
       success: true,
       code,
-      totalClicks: clicks.length,
+      totalClicks: reportedTotal,
       clicks: clicks.slice(0, 20),
       breakdown: { platforms, browsers, devices, utmSources, referrers },
       daily

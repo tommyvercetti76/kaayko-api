@@ -59,6 +59,14 @@
       ]
     },
     {
+      "collectionGroup": "click_events",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "linkCode", "order": "ASCENDING" },
+        { "fieldPath": "timestamp", "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "link_analytics",
       "queryScope": "COLLECTION",
       "fields": [
