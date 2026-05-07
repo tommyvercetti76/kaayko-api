@@ -26,7 +26,8 @@ functions/api/
 ├── checkout/         ← POST /api/createPaymentIntent (Stripe)
 ├── weather/          ← GET /api/paddlingOut, /paddleScore, /forecast
 ├── kutz/             ← POST /api/kutz/* (nutrition, Claude AI, Fitbit)
-├── smartLinks/       ← CRUD /api/smartlinks
+├── kortex/           ← /api/kortex/* (smart links, tenants, analytics, security)
+├── smartLinks/       ← CRUD /api/smartlinks (legacy alias)
 ├── kreators/         ← /api/kreators/* (application pipeline)
 ├── admin/            ← /api/admin/* (orders, restricted)
 ├── billing/          ← /api/billing/subscriptions
@@ -54,8 +55,11 @@ decoded.kreator === true  // kreator operations
 | `kaaykoproducts` | products | Product catalog |
 | `orders` | checkout, admin | Customer orders |
 | `paddlingSpots` | weather | Paddle spot definitions |
-| `smartlinks` | smartLinks | Smart link definitions |
-| `smartLinkClicks` | smartLinks | Click event log |
+| `short_links` | kortex | Short link definitions (enriched with intent, audience, etc.) |
+| `click_events` | kortex | Unified click analytics (device, platform, utm, referrer) |
+| `smartLinkClicks` | kortex | Legacy click log (kept for backwards compat) |
+| `tenants` | kortex | Tenant configuration (slug, name, enabled, domains) |
+| `security_alerts` | kortex | Bot/abuse/canary security events |
 | `subscriptions` | billing | Kortex subscriptions |
 | `kreatorApplications` | kreators | Pending applications |
 | `kreators` | kreators | Active creator accounts |

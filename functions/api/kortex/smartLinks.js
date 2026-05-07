@@ -610,6 +610,83 @@ router.get('/stats', requireAuth, requireAdmin, async (req, res) => {
 });
 
 // ============================================================================
+// PER-LINK CLICK ANALYTICS (Must be BEFORE /:code)
+// ============================================================================
+
+router.get('/:code/clicks', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { code } = req.params;
+    const limit = Math.min(parseInt(req.query.limit) || 50, 200);
+    const tenantContext = await getTenantFromRequest(req);
+
+    const linkDoc = await db.collection('short_links').doc(code).get();
+    if (!linkDoc.exists) {
+      return res.status(404).json({ success: false, error: 'Link not found' });
+    }
+    if (!tenantContext.isSuperAdmin) {
+      assertTenantAccess(req.user, linkDoc.data().tenantId || DEFAULT_TENANT_ID);
+    }
+
+    const clicksSnap = await db.collection('click_events')
+      .where('linkCode', '==', code)
+      .orderBy('timestamp', 'desc')
+      .limit(limit)
+      .get();
+
+    const clicks = clicksSnap.docs.map(doc => {
+      const d = doc.data();
+      return {
+        clickId: d.clickId || doc.id,
+        platform: d.platform || 'web',
+        deviceInfo: d.deviceInfo || {},
+        utm: d.utm || {},
+        referrer: d.referrer || '',
+        redirectedTo: d.redirectedTo || '',
+        timestamp: d.timestamp?.toDate?.()?.toISOString() || d.timestampMs || null
+      };
+    });
+
+    const platforms = { web: 0, ios: 0, android: 0 };
+    const browsers = {};
+    const devices = {};
+    const utmSources = {};
+    const referrers = {};
+    const daily = {};
+
+    clicks.forEach(c => {
+      platforms[c.platform] = (platforms[c.platform] || 0) + 1;
+      const browser = c.deviceInfo?.browser || 'Unknown';
+      browsers[browser] = (browsers[browser] || 0) + 1;
+      const device = c.deviceInfo?.deviceType || 'unknown';
+      devices[device] = (devices[device] || 0) + 1;
+      const src = c.utm?.utm_source || 'direct';
+      utmSources[src] = (utmSources[src] || 0) + 1;
+      const ref = c.referrer ? new URL(c.referrer).hostname : 'direct';
+      referrers[ref] = (referrers[ref] || 0) + 1;
+      if (c.timestamp) {
+        const day = c.timestamp.substring(0, 10);
+        daily[day] = (daily[day] || 0) + 1;
+      }
+    });
+
+    res.json({
+      success: true,
+      code,
+      totalClicks: clicks.length,
+      clicks: clicks.slice(0, 20),
+      breakdown: { platforms, browsers, devices, utmSources, referrers },
+      daily
+    });
+  } catch (error) {
+    console.error('[SmartLinks] Click analytics error:', error);
+    if (error.message?.includes('tenant') || error.code?.startsWith('TENANT')) {
+      return tenantAccessError(res, error);
+    }
+    res.status(500).json({ success: false, error: 'Failed to fetch click analytics' });
+  }
+});
+
+// ============================================================================
 // REDIRECT ROUTE (Must be BEFORE /:code)
 // ============================================================================
 
@@ -618,7 +695,7 @@ router.get('/stats', requireAuth, requireAdmin, async (req, res) => {
  */
 router.get('/r/:code', async (req, res) => {
   const code = req.params.code;
-  await handleRedirect(req, res, code, { trackAnalytics: false });
+  await handleRedirect(req, res, code, { trackAnalytics: true });
 });
 
 // ============================================================================
