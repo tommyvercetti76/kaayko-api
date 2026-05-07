@@ -175,36 +175,56 @@ async function createShortLink(data) {
     throw new Error('At least one destination (iOS, Android, or Web) is required');
   }
 
-  // Determine short code: use provided one or generate
+  // Determine short code: use provided or generate secure tenant-prefixed code
   let shortCode = providedCode;
   if (!shortCode) {
+    const { generateSecureCode } = require('./tenantLinkResolver');
+    const useSecureCode = tenantId !== DEFAULT_TENANT_ID;
     let attempts = 0;
     do {
-      shortCode = generateShortCode();
+      shortCode = useSecureCode ? generateSecureCode(tenantId) : generateShortCode();
       const existingLink = await db.collection('short_links').doc(shortCode).get();
       if (!existingLink.exists) break;
       attempts++;
     } while (attempts < 5);
-    
+
     if (attempts >= 5) {
       throw new Error('Failed to generate unique short code after 5 attempts');
     }
   }
 
-  // Construct short URL with tenant's domain
-  const shortDomain = domain.startsWith('http') ? domain : `https://${domain}`;
-  const shortUrl = `${shortDomain}${pathPrefix}/${publicCode || shortCode}`;
-  const qrCodeUrl = `${shortDomain}/qr/${shortCode}.png`;
+  // Construct short URL — tenant links use alumni.kaayko.com namespace
+  let shortUrl, qrCodeUrl;
+  if (tenantId !== DEFAULT_TENANT_ID) {
+    // Tenant-namespaced: alumni.kaayko.com/<slug>/<code>
+    const tenantDoc = await db.collection('tenants').doc(tenantId).get();
+    const tenantSlug = tenantDoc.exists ? (tenantDoc.data().slug || tenantId) : tenantId;
+    shortUrl = `https://alumni.kaayko.com/${tenantSlug}/${publicCode || shortCode}`;
+    qrCodeUrl = `https://alumni.kaayko.com/${tenantSlug}/qr/${shortCode}.png`;
+  } else {
+    // Default Kaayko links: kaayko.com/l/<code>
+    const shortDomain = domain.startsWith('http') ? domain : `https://${domain}`;
+    shortUrl = `${shortDomain}${pathPrefix}/${publicCode || shortCode}`;
+    qrCodeUrl = `${shortDomain}/qr/${shortCode}.png`;
+  }
 
   const sanitizedMetadata = sanitizeMetadataForDestination(metadata, webDestination);
   const normalizedUtm = normalizeUTM(utm);
+
+  // Generate HMAC signature for tenant links (enables tamper detection)
+  let linkSignature = null;
+  if (tenantId !== DEFAULT_TENANT_ID) {
+    const { signCode } = require('./linkSecurityService');
+    linkSignature = signCode(shortCode, tenantId);
+  }
 
   // Create ENRICHED short link document with ALL metadata + multi-tenant fields
   const linkDoc = {
     code: shortCode,
     shortUrl,
     qrCodeUrl,
-    
+    linkSignature,
+
     // Multi-tenant fields
     tenantId,
     tenantName,

@@ -152,13 +152,13 @@ async function triggerWebhooks(params) {
     const results = await Promise.allSettled(
       subscriptionsSnapshot.docs.map(async (doc) => {
         const subscription = doc.data();
-        
-        const result = await sendWebhook({
+
+        const result = await sendWithRetry({
           targetUrl: subscription.targetUrl,
           secret: subscription.secret,
           eventType,
           payload
-        });
+        }, doc.id, tenantId);
 
         // Log webhook delivery
         await db.collection('webhook_deliveries').add({
@@ -169,6 +169,7 @@ async function triggerWebhooks(params) {
           success: result.success,
           statusCode: result.statusCode,
           error: result.error,
+          sentToDLQ: result.sentToDLQ || false,
           timestamp: admin.firestore.FieldValue.serverTimestamp()
         });
 
@@ -378,9 +379,118 @@ async function retryWebhookDelivery(deliveryId) {
   return result;
 }
 
+// ============================================================================
+// DEAD LETTER QUEUE + AUTOMATIC RETRY
+// ============================================================================
+
+const MAX_AUTO_RETRIES = 12;
+const DLQ_RETENTION_DAYS = 7;
+
+function getRetryDelay(attempt) {
+  // Exponential backoff: 1s, 2s, 4s, 8s, 16s, 32s, 64s, 128s, 256s, 512s, 1024s, 2048s
+  return Math.min(Math.pow(2, attempt - 1) * 1000, 2048000);
+}
+
+/**
+ * Send webhook with automatic retry and DLQ
+ * Stores failed deliveries to dead_letter_webhooks after MAX_AUTO_RETRIES
+ */
+async function sendWithRetry(params, subscriptionId, tenantId) {
+  const { targetUrl, secret, eventType, payload } = params;
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= MAX_AUTO_RETRIES; attempt++) {
+    const result = await sendWebhook({ targetUrl, secret, eventType, payload, attempt });
+
+    if (result.success) {
+      return { success: true, attempts: attempt };
+    }
+
+    lastError = result.error || `HTTP ${result.statusCode}`;
+
+    // Don't retry 4xx errors (client error, won't resolve with retry)
+    if (result.statusCode && result.statusCode >= 400 && result.statusCode < 500) {
+      break;
+    }
+
+    if (attempt < MAX_AUTO_RETRIES) {
+      const delay = getRetryDelay(attempt);
+      await new Promise(resolve => setTimeout(resolve, Math.min(delay, 5000)));
+    }
+  }
+
+  // All retries exhausted — write to dead letter queue
+  await db.collection('dead_letter_webhooks').add({
+    subscriptionId,
+    tenantId,
+    eventType,
+    payload,
+    targetUrl,
+    lastError,
+    attempts: MAX_AUTO_RETRIES,
+    failedAt: admin.firestore.FieldValue.serverTimestamp(),
+    expiresAt: new Date(Date.now() + DLQ_RETENTION_DAYS * 24 * 60 * 60 * 1000)
+  });
+
+  // Increment failure count on subscription
+  if (subscriptionId) {
+    await db.collection('webhook_subscriptions').doc(subscriptionId).update({
+      failureCount: admin.firestore.FieldValue.increment(1),
+      lastFailedAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+  }
+
+  console.log(`[Webhook DLQ] Permanently failed: ${targetUrl} (${eventType}) — ${lastError}`);
+  return { success: false, error: lastError, sentToDLQ: true };
+}
+
+/**
+ * Get dead letter queue entries for a tenant
+ */
+async function getDeadLetterQueue(tenantId, limit = 50) {
+  const snapshot = await db.collection('dead_letter_webhooks')
+    .where('tenantId', '==', tenantId)
+    .orderBy('failedAt', 'desc')
+    .limit(limit)
+    .get();
+
+  return snapshot.docs.map(doc => ({
+    id: doc.id,
+    ...doc.data()
+  }));
+}
+
+/**
+ * Replay a dead letter entry (manual retry from DLQ)
+ */
+async function replayDeadLetter(deadLetterId) {
+  const doc = await db.collection('dead_letter_webhooks').doc(deadLetterId).get();
+  if (!doc.exists) throw new Error('Dead letter entry not found');
+
+  const entry = doc.data();
+  const subDoc = await db.collection('webhook_subscriptions').doc(entry.subscriptionId).get();
+  if (!subDoc.exists) throw new Error('Subscription no longer exists');
+
+  const subscription = subDoc.data();
+  const result = await sendWebhook({
+    targetUrl: entry.targetUrl,
+    secret: subscription.secret,
+    eventType: entry.eventType,
+    payload: entry.payload,
+    attempt: entry.attempts + 1
+  });
+
+  if (result.success) {
+    await db.collection('dead_letter_webhooks').doc(deadLetterId).delete();
+  }
+
+  return result;
+}
+
 module.exports = {
   EVENT_TYPES,
   sendWebhook,
+  sendWithRetry,
   triggerWebhooks,
   createWebhookSubscription,
   updateWebhookSubscription,
@@ -388,5 +498,7 @@ module.exports = {
   listWebhookSubscriptions,
   getWebhookDeliveries,
   retryWebhookDelivery,
+  getDeadLetterQueue,
+  replayDeadLetter,
   generateSignature
 };

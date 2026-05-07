@@ -394,6 +394,49 @@ router.post('/tenant-registration', rateLimiter('tenantRegistration'), async (re
 });
 
 // ============================================================================
+// SELF-SERVICE REGISTRATION (simplified landing page form)
+// ============================================================================
+
+router.post('/tenants/register', rateLimiter('tenantRegistration'), async (req, res) => {
+  try {
+    const { name, email, organization, useCase } = req.body;
+
+    if (!name || !email || !organization) {
+      return res.status(400).json({ success: false, error: 'Name, email, and organization are required' });
+    }
+
+    const emailLower = email.toLowerCase().trim();
+    const existing = await db.collection('pending_tenant_registrations')
+      .where('contact.email', '==', emailLower)
+      .limit(1)
+      .get();
+
+    if (!existing.empty) {
+      return res.json({ success: true, message: 'Registration already submitted' });
+    }
+
+    await db.collection('pending_tenant_registrations').add({
+      organization: { name: organization.trim(), domain: emailLower.split('@')[1] || '' },
+      contact: { name: name.trim(), email: emailLower },
+      useCase: useCase || 'Not specified',
+      source: 'landing_page',
+      plan: 'starter',
+      status: 'pending',
+      submittedAt: FieldValue.serverTimestamp(),
+      reviewedAt: null,
+      tenantId: null
+    });
+
+    console.log(`[TenantReg] Landing page signup: ${organization.trim()} (${emailLower})`);
+    return res.json({ success: true, message: 'Account request submitted' });
+
+  } catch (error) {
+    console.error('[TenantReg] Landing register error:', error);
+    return res.status(500).json({ success: false, error: 'Registration failed. Please try again.' });
+  }
+});
+
+// ============================================================================
 // GET TENANTS FOR MULTI-TENANT LOGIN (Must be BEFORE /:code)
 // ============================================================================
 
@@ -472,6 +515,71 @@ router.get('/tenants', requireAuth, rateLimiter('tenants'), async (req, res) => 
 });
 
 // ============================================================================
+// WEEKLY DIGEST MANUAL TRIGGER (admin only)
+// ============================================================================
+
+router.post('/digest/trigger', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { generateTenantDigest } = require('./analyticsAlertService');
+    const tenantId = req.headers['x-tenant-id'] || 'kaayko-default';
+    const tenantDoc = await db.collection('tenants').doc(tenantId).get();
+    const tenantName = tenantDoc.exists ? tenantDoc.data().name : tenantId;
+
+    const digest = await generateTenantDigest(tenantId, tenantName);
+    return res.json({ success: true, drops: digest.drops, topLinks: digest.topLinks });
+  } catch (error) {
+    console.error('[Digest] Manual trigger error:', error);
+    return res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============================================================================
+// BRANDED QR CODE GENERATION (Pro+ feature)
+// ============================================================================
+
+router.post('/qr/generate', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { url, code, format, foreground, background, logoUrl, size } = req.body;
+    const tenantId = req.headers['x-tenant-id'] || 'kaayko-default';
+
+    if (!url && !code) {
+      return res.status(400).json({ success: false, error: 'url or code is required' });
+    }
+
+    const targetUrl = url || `https://kaayko.com/l/${code}`;
+    const options = { foreground, background, logoUrl, size: size || 400 };
+
+    // Check if branded options require Pro
+    const isBranded = foreground || background || logoUrl;
+    if (isBranded) {
+      const { canUseBrandedQR } = require('./qrService');
+      const allowed = await canUseBrandedQR(tenantId);
+      if (!allowed) {
+        return res.status(403).json({
+          success: false,
+          error: 'Branded QR codes require a Pro plan or higher',
+          code: 'PLAN_UPGRADE_REQUIRED'
+        });
+      }
+    }
+
+    const { generateQR, generateQRSvg } = require('./qrService');
+
+    if (format === 'svg') {
+      const svg = await generateQRSvg(targetUrl, options);
+      return res.json({ success: true, format: 'svg', data: svg });
+    }
+
+    const dataUrl = await generateQR(targetUrl, options);
+    return res.json({ success: true, format: 'png', data: dataUrl });
+
+  } catch (error) {
+    console.error('[QR] Generation error:', error);
+    return res.status(500).json({ success: false, error: 'QR generation failed' });
+  }
+});
+
+// ============================================================================
 // LINK STATISTICS (Must be BEFORE /:code)
 // ============================================================================
 
@@ -520,6 +628,28 @@ router.post('/', requireAuth, requireAdmin, async (req, res) => {
   try {
     const tenantContext = await getTenantFromRequest(req);
     const tenantConfig = await getTenantConfig(tenantContext.tenantId);
+
+    // Enforce destination domain restrictions for non-super-admin tenant users
+    if (!tenantContext.isSuperAdmin && tenantContext.tenantId !== DEFAULT_TENANT_ID) {
+      const tenantDoc = await db.collection('tenants').doc(tenantContext.tenantId).get();
+      const allowedDomains = tenantDoc.exists && tenantDoc.data().settings?.allowedDomains;
+      if (allowedDomains && allowedDomains.length > 0) {
+        const dest = req.body.webDestination || req.body.destinations?.web || '';
+        try {
+          const destHost = new URL(dest).hostname.replace(/^www\./, '');
+          const isAllowed = allowedDomains.some(d => destHost === d || destHost.endsWith('.' + d));
+          if (!isAllowed) {
+            return res.status(403).json({
+              success: false,
+              error: `Destination domain not allowed for this tenant. Allowed: ${allowedDomains.join(', ')}`,
+              code: 'DOMAIN_NOT_ALLOWED'
+            });
+          }
+        } catch (urlErr) {
+          // Invalid URL — let downstream validation handle it
+        }
+      }
+    }
 
     // Add creator info and tenant-owned domain settings.
     // Client-supplied domain/pathPrefix are ignored for non-super-admin tenant safety.
@@ -796,6 +926,49 @@ router.post('/events/:type', async (req, res) => {
       success: false,
       error: 'Failed to track event'
     });
+  }
+});
+
+// ============================================================================
+// SECURITY: Canary/Honeypot Link Management (Super-admin only)
+// ============================================================================
+
+router.post('/security/canary', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const tenantContext = await getTenantFromRequest(req);
+    if (!tenantContext.isSuperAdmin) {
+      return res.status(403).json({ success: false, error: 'Super-admin only' });
+    }
+
+    const { tenantId, tenantSlug } = req.body;
+    if (!tenantId || !tenantSlug) {
+      return res.status(400).json({ success: false, error: 'tenantId and tenantSlug required' });
+    }
+
+    const { createCanaryLink } = require('./linkSecurityService');
+    const canary = await createCanaryLink(tenantId, tenantSlug);
+    return res.status(201).json({ success: true, canary });
+  } catch (error) {
+    console.error('[Security] Canary creation error:', error);
+    return res.status(500).json({ success: false, error: 'Failed to create canary link' });
+  }
+});
+
+router.get('/security/alerts', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const tenantContext = await getTenantFromRequest(req);
+    let query = db.collection('security_alerts').orderBy('timestamp', 'desc').limit(50);
+
+    if (!tenantContext.isSuperAdmin) {
+      query = query.where('tenantId', '==', tenantContext.tenantId);
+    }
+
+    const snapshot = await query.get();
+    const alerts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    return res.json({ success: true, alerts, total: alerts.length });
+  } catch (error) {
+    console.error('[Security] Alerts fetch error:', error);
+    return res.status(500).json({ success: false, error: 'Failed to fetch security alerts' });
   }
 });
 

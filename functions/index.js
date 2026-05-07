@@ -49,6 +49,7 @@ const kortexRouter = require("./api/kortex/smartLinks");
 apiApp.use("/kortex", kortexRouter);
 apiApp.use("/smartlinks", kortexRouter);
 apiApp.use("/campaigns", require("./api/campaigns/campaignRoutes"));  // KORTEX campaign management
+apiApp.use("/api/public", require("./api/kortex/publicApiRouter"));   // KORTEX public developer API (API-key auth)
 
 // 🎓 ALUMNI INTEREST CAMPAIGN
 apiApp.use("/alumni", require("./api/alumni/alumniRoutes"));           // Interest form, scoring, admin dashboard
@@ -83,6 +84,10 @@ apiApp.use("/cameras", require("./api/cameras/camerasRoutes"));
 apiApp.use("/lenses", require("./api/cameras/lensesRoutes"));
 apiApp.use("/presets/smart", require("./api/cameras/smartRoutes"));
 apiApp.use("/presets", require("./api/cameras/presetsRoutes"));
+
+// KORTEX: Tenant-namespaced links at alumni.kaayko.com/<tenant-slug>/<code>
+// Host-aware — only activates for alumni.kaayko.com requests
+apiApp.use("/", require("./api/kortex/tenantLinkResolver"));
 
 // Phase 3: campaign namespace resolver (/:campaignSlug/:code)
 // Must be mounted before legacy deep-links, and must fail-closed on unknown domains.
@@ -129,5 +134,20 @@ const {
 
 exports.warmPaddleScoreCache    = warmPaddleScoreCache;
 exports.aggregatePaddleFeedback = aggregatePaddleFeedback;
+
+// KORTEX: Weekly analytics digest — every Monday 9am IST (3:30am UTC)
+const { onSchedule } = require("firebase-functions/v2/scheduler");
+const { runWeeklyDigest } = require("./api/kortex/analyticsAlertService");
+
+exports.kortexWeeklyDigest = onSchedule({
+  schedule: "30 3 * * 1",
+  timeZone: "Asia/Kolkata",
+  memory: "512MiB",
+  timeoutSeconds: 300
+}, async () => {
+  console.log("[KortexDigest] Running weekly analytics digest...");
+  const results = await runWeeklyDigest();
+  console.log(`[KortexDigest] Done. Processed ${results.length} tenants.`);
+});
 
 console.log("✅ Kaayko API v2 - PUBLIC: fastForecast + paddlingOut | PREMIUM: forecast ($$) | SMARTLINKS: admin portal");

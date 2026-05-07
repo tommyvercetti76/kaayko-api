@@ -5,7 +5,34 @@ const campaignLinkService = require('./campaignLinkService');
 
 const db = admin.firestore();
 
+const CAMPAIGN_LIMITS = { starter: 3, pro: 25, business: Infinity, enterprise: Infinity };
+
+async function getTenantPlan(tenantId) {
+  if (!tenantId) return 'starter';
+  const snap = await db.collection('tenants').doc(tenantId).get();
+  return snap.exists ? (snap.data().plan || 'starter') : 'starter';
+}
+
+async function countActiveCampaigns(tenantId) {
+  const snap = await db.collection('campaigns')
+    .where('tenantId', '==', tenantId)
+    .where('status', 'in', ['active', 'paused'])
+    .count()
+    .get();
+  return snap.data().count;
+}
+
 async function createCampaign({ tenant, actor, data }) {
+  const plan = await getTenantPlan(tenant.id);
+  const limit = CAMPAIGN_LIMITS[plan] ?? 3;
+  const current = await countActiveCampaigns(tenant.id);
+  if (current >= limit) {
+    const error = new Error(`Campaign limit reached (${limit} on ${plan} plan). Upgrade to create more campaigns.`);
+    error.code = 'CAMPAIGN_LIMIT_REACHED';
+    error.status = 403;
+    throw error;
+  }
+
   const campaign = validateCampaignCreate(data);
   const ref = db.collection('campaigns').doc(campaign.campaignId);
   const existing = await ref.get();

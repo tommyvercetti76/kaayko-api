@@ -240,6 +240,31 @@ function renderSocialPreviewPage({ code, title, description, imageUrl }) {
  * @param {string} userAgent - Request User-Agent header
  * @returns {'ios'|'android'|'web'} Platform identifier
  */
+async function isStarterLink(tenantId) {
+  if (!tenantId || tenantId === 'kaayko-default') return true;
+  try {
+    const snap = await db.collection('tenants').doc(tenantId).get();
+    if (!snap.exists) return true;
+    const plan = snap.data().plan || 'starter';
+    return plan === 'starter';
+  } catch { return false; }
+}
+
+function poweredByPage(destination, linkTitle) {
+  const safeDestination = escapeHtml(destination);
+  const safeTitle = escapeHtml(linkTitle);
+  return `<!DOCTYPE html><html><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="refresh" content="0;url=${safeDestination}">
+<title>Redirecting — ${safeTitle}</title>
+<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#080808;color:#f0f0f0;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center}.wrap{text-align:center;padding:40px 20px}p{color:#666;font-size:14px;margin-bottom:24px}a{color:#D4A84B;text-decoration:none;font-weight:600}.bar{position:fixed;bottom:0;left:0;right:0;background:#111;border-top:1px solid #222;padding:10px 20px;text-align:center;font-size:12px;color:#555}.bar a{color:#D4A84B;font-size:12px}</style>
+</head><body>
+<div class="wrap"><p>Redirecting...</p><a href="${safeDestination}">Click here if not redirected</a></div>
+<div class="bar">Powered by <a href="https://kaayko.com/kortex?ref=powered-by">Kortex</a> — Smart links for institutions</div>
+<script>window.location.href="${destination.replace(/"/g, '\\"')}";</script>
+</body></html>`;
+}
+
 function detectPlatform(userAgent = '') {
   const ua = userAgent.toLowerCase();
   if (ua.includes('iphone') || ua.includes('ipad') || ua.includes('ios')) return 'ios';
@@ -390,7 +415,21 @@ async function handleRedirect(req, res, code, options = {}) {
   try {
     const userAgent = req.get('user-agent') || '';
     const platform = detectPlatform(userAgent);
-    
+
+    // Bot detection — block headless browsers and automation tools
+    const { detectBot, isCanaryCode } = require('./linkSecurityService');
+    const botCheck = detectBot(req);
+    if (botCheck.isBot && !isSocialCrawler(userAgent)) {
+      return res.status(404).send(errorPage(404, 'Not Found', 'This page does not exist.'));
+    }
+
+    // Canary trap — any access to honeypot codes triggers alert
+    if (isCanaryCode(code)) {
+      const { triggerCanaryAlert } = require('./linkSecurityService');
+      triggerCanaryAlert(code, req).catch(() => {});
+      return res.status(404).send(errorPage(404, 'Link Not Found', 'This link does not exist.'));
+    }
+
     // Look up short code in short_links collection
     const linkDoc = await db.collection('short_links').doc(code).get();
 
@@ -413,6 +452,21 @@ async function handleRedirect(req, res, code, options = {}) {
         'Link Disabled',
         'This link has been disabled by its creator.'
       ));
+    }
+
+    // Case 2b: Tenant churned — 30-day grace period then deactivation
+    const churnedAt = linkData.tenantChurnedAt || null;
+    if (churnedAt) {
+      const churnDate = churnedAt.toDate ? churnedAt.toDate() : new Date(churnedAt);
+      const graceDays = 30;
+      const deactivateAt = new Date(churnDate.getTime() + graceDays * 24 * 60 * 60 * 1000);
+      if (new Date() > deactivateAt) {
+        return res.status(410).send(errorPage(
+          410,
+          'Link No Longer Active',
+          'The account managing this link is no longer active. Contact the link creator for an updated link.'
+        ));
+      }
     }
 
     // Case 3: Link expired
@@ -635,6 +689,15 @@ async function handleRedirect(req, res, code, options = {}) {
       const separator = destination.includes('?') ? '&' : '?';
       destination = `${destination}${separator}bypass=kortex&ref=${code}`;
       console.log('[Kortex] Added auth bypass for store link:', code);
+    }
+
+    // "Powered by Kortex" interstitial for Starter-tier links (PLG viral loop)
+    const tenantId = linkData.tenantId || 'kaayko-default';
+    const isStarterTier = await isStarterLink(tenantId);
+    if (isStarterTier && !isSocialCrawler(userAgent)) {
+      return res.status(200).set('Content-Type', 'text/html; charset=utf-8').send(
+        poweredByPage(destination, linkData.title || code)
+      );
     }
 
     // Perform redirect (302 = temporary, preserves POST data if needed)
