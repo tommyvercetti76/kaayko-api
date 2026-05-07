@@ -46,38 +46,51 @@ async function seedSomalwarTenant() {
 
   console.log(`  ✅ Tenant 'somalwar' created`);
 
-  // 2. Find user UID by email (or create placeholder)
+  // 2. Find user UID by email — SAFELY add tenant access without overwriting existing role
   let uid;
   try {
     const userRecord = await admin.auth().getUserByEmail(ADMIN_EMAIL);
     uid = userRecord.uid;
     console.log(`  Found existing user: ${uid}`);
 
-    // Set custom claims for login flow (role must be in auth token)
-    await admin.auth().setCustomUserClaims(uid, {
-      role: 'admin',
-      tenantId: TENANT_ID
-    });
-    console.log(`  ✅ Custom claims set: { role: 'admin', tenantId: '${TENANT_ID}' }`);
+    // Check existing claims/role — NEVER downgrade a super-admin
+    const existingDoc = await db.collection('admin_users').doc(uid).get();
+    const existingRole = existingDoc.exists ? existingDoc.data().role : null;
+
+    if (existingRole === 'super-admin') {
+      console.log(`  ⚠️  User is super-admin — preserving role, only adding tenant access`);
+      // Just add somalwar to their tenantIds
+      await db.collection('admin_users').doc(uid).update({
+        tenantIds: admin.firestore.FieldValue.arrayUnion(TENANT_ID),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+      console.log(`  ✅ Added '${TENANT_ID}' to super-admin tenantIds (role unchanged)`);
+    } else {
+      // Set custom claims for login flow
+      await admin.auth().setCustomUserClaims(uid, {
+        role: 'admin',
+        tenantId: TENANT_ID
+      });
+      console.log(`  ✅ Custom claims set: { role: 'admin', tenantId: '${TENANT_ID}' }`);
+
+      // Create/update admin_users document
+      await db.collection('admin_users').doc(uid).set({
+        email: ADMIN_EMAIL,
+        role: 'admin',
+        tenantId: TENANT_ID,
+        tenantIds: [TENANT_ID],
+        tenantName: 'Somalwar Academy',
+        permissions: ['links:create', 'links:read', 'links:update', 'links:delete', 'campaigns:manage', 'analytics:read', 'qr:generate'],
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+      console.log(`  ✅ Admin user '${ADMIN_EMAIL}' assigned to tenant 'somalwar' with role: admin`);
+    }
   } catch (err) {
     console.log(`  User not found in Firebase Auth. Creating admin_users entry with email as placeholder UID.`);
     console.log(`  ⚠️  You must create this user in Firebase Auth first, then re-run this script to set claims.`);
     uid = ADMIN_EMAIL.replace(/[^a-zA-Z0-9]/g, '_');
   }
-
-  // 3. Create/update admin_users document
-  await db.collection('admin_users').doc(uid).set({
-    email: ADMIN_EMAIL,
-    role: 'admin',
-    tenantId: TENANT_ID,
-    tenantIds: [TENANT_ID],
-    tenantName: 'Somalwar Academy',
-    permissions: ['links:create', 'links:read', 'links:update', 'links:delete', 'campaigns:manage', 'analytics:read', 'qr:generate'],
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    updatedAt: admin.firestore.FieldValue.serverTimestamp()
-  }, { merge: true });
-
-  console.log(`  ✅ Admin user '${ADMIN_EMAIL}' assigned to tenant 'somalwar' with role: admin`);
 
   // 4. Create a sample link for the tenant to verify scoping
   const sampleCode = 'swl-alumni-2024';

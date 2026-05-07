@@ -69,7 +69,10 @@ async function createCampaign({ tenant, actor, data }) {
 }
 
 async function listCampaigns({ tenantId, includeArchived = false, limit = 100 }) {
-  const query = db.collection('campaigns').where('tenantId', '==', tenantId);
+  let query = db.collection('campaigns');
+  if (tenantId) {
+    query = query.where('tenantId', '==', tenantId);
+  }
   const snapshot = await query.limit(limit).get();
   return snapshot.docs
     .map(doc => ({ id: doc.id, ...doc.data() }))

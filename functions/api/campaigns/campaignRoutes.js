@@ -47,7 +47,7 @@ router.get('/', async (req, res) => {
     }
 
     const campaigns = await campaignService.listCampaigns({
-      tenantId: tenantContext.tenantId,
+      tenantId: tenantContext.isSuperAdmin && tenantContext.tenantId === DEFAULT_TENANT_ID ? null : tenantContext.tenantId,
       includeArchived: req.query.includeArchived === 'true',
       limit: req.query.limit ? parseInt(req.query.limit, 10) : 100
     });

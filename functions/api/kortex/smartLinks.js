@@ -457,25 +457,27 @@ router.get('/tenants', requireAuth, rateLimiter('tenants'), async (req, res) => 
     const profile = profileDoc.data();
     const role = profile.role;
     
-    // Super-admins can see all tenants
+    // Super-admins can see all tenants (always includes kaayko-default first)
     if (role === 'super-admin') {
       const tenantsSnapshot = await db.collection('tenants')
         .where('enabled', '==', true)
         .orderBy('name')
         .get();
-      
-      const tenants = tenantsSnapshot.docs.map(doc => ({
-        id: doc.id,
-        name: doc.data().name,
-        domain: doc.data().domain,
-        pathPrefix: doc.data().pathPrefix
-      }));
-      
+
+      const tenants = [
+        { id: 'kaayko-default', name: 'Kaayko (All Links)', domain: 'kaayko.com', pathPrefix: '/l' },
+        ...tenantsSnapshot.docs.map(doc => ({
+          id: doc.id,
+          name: doc.data().name,
+          domain: doc.data().domain,
+          pathPrefix: doc.data().pathPrefix
+        }))
+      ];
+
       return res.json({
         success: true,
-        tenants: tenants.length > 0 ? tenants : [
-          { id: 'kaayko-default', name: 'Kaayko (Default)', domain: 'kaayko.com', pathPrefix: '/l' }
-        ]
+        role: 'super-admin',
+        tenants
       });
     }
     
@@ -586,14 +588,13 @@ router.post('/qr/generate', requireAuth, requireAdmin, async (req, res) => {
 router.get('/stats', requireAuth, requireAdmin, async (req, res) => {
   try {
     const tenantContext = await getTenantFromRequest(req);
-    const stats = tenantContext.isSuperAdmin && req.query.allTenants === 'true'
+    const showAll = tenantContext.isSuperAdmin && (req.query.allTenants === 'true' || tenantContext.tenantId === DEFAULT_TENANT_ID);
+    const stats = showAll
       ? await LinkService.getLinkStats()
       : await LinkService.getLinkStatsForTenant(tenantContext.tenantId);
     res.json({
       success: true,
-      tenant: tenantContext.isSuperAdmin && req.query.allTenants === 'true'
-        ? { id: 'all' }
-        : { id: tenantContext.tenantId, name: tenantContext.tenantName },
+      tenant: showAll ? { id: 'all' } : { id: tenantContext.tenantId, name: tenantContext.tenantName },
       stats
     });
   } catch (error) {
@@ -728,7 +729,7 @@ router.get('/', requireAuth, requireAdmin, async (req, res) => {
     const tenantContext = await getTenantFromRequest(req);
     
     const filters = {
-      tenantId: tenantContext.isSuperAdmin && req.query.allTenants === 'true'
+      tenantId: tenantContext.isSuperAdmin && (req.query.allTenants === 'true' || tenantContext.tenantId === DEFAULT_TENANT_ID)
         ? undefined
         : tenantContext.tenantId
     };
