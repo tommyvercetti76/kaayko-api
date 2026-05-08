@@ -172,9 +172,39 @@ async function createShortLink(data) {
     }
   }
 
+  // Validate: title is required
+  if (!title || !title.trim()) {
+    const err = new Error('Link title is required');
+    err.code = 'VALIDATION_ERROR';
+    throw err;
+  }
+
   // Validate: must have at least one destination
   if (!iosDestination && !androidDestination && !webDestination) {
     throw new Error('At least one destination (iOS, Android, or Web) is required');
+  }
+
+  // Validate: all destination URLs must use http/https protocol
+  const urlsToCheck = [
+    { val: webDestination, label: 'Web' },
+    { val: iosDestination, label: 'iOS' },
+    { val: androidDestination, label: 'Android' },
+  ];
+  for (const { val, label } of urlsToCheck) {
+    if (!val) continue;
+    try {
+      const parsed = new URL(val);
+      if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+        const err = new Error(`${label} destination must use https:// or http:// protocol`);
+        err.code = 'INVALID_URL';
+        throw err;
+      }
+    } catch (e) {
+      if (e.code === 'INVALID_URL') throw e;
+      const err = new Error(`${label} destination is not a valid URL`);
+      err.code = 'INVALID_URL';
+      throw err;
+    }
   }
 
   // Determine short code: use provided or generate secure tenant-prefixed code
@@ -416,6 +446,31 @@ async function updateShortLink(code, updates) {
     const error = new Error('Short code not found');
     error.code = 'NOT_FOUND';
     throw error;
+  }
+
+  // Validate destination URLs on update (if destinations are being changed)
+  if (destinations) {
+    const urlsToCheck = [
+      { val: destinations.web, label: 'Web' },
+      { val: destinations.ios, label: 'iOS' },
+      { val: destinations.android, label: 'Android' },
+    ];
+    for (const { val, label } of urlsToCheck) {
+      if (!val) continue;
+      try {
+        const parsed = new URL(val);
+        if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+          const err = new Error(`${label} destination must use https:// or http:// protocol`);
+          err.code = 'INVALID_URL';
+          throw err;
+        }
+      } catch (e) {
+        if (e.code === 'INVALID_URL') throw e;
+        const err = new Error(`${label} destination is not a valid URL`);
+        err.code = 'INVALID_URL';
+        throw err;
+      }
+    }
   }
 
   const updateData = {

@@ -874,10 +874,19 @@ router.post('/', requireAuth, requireAdmin, async (req, res) => {
       return res.status(409).json({
         success: false,
         error: error.message,
+        code: 'ALREADY_EXISTS',
         existing: error.existing
       });
     }
-    
+
+    if (error.code === 'INVALID_URL' || error.code === 'VALIDATION_ERROR' || error.code === 'INVALID_CODE') {
+      return res.status(422).json({
+        success: false,
+        error: error.message,
+        code: error.code
+      });
+    }
+
     res.status(400).json({
       success: false,
       error: error.message || 'Failed to create link'
@@ -985,17 +994,26 @@ router.put('/:code', requireAuth, requireAdmin, async (req, res) => {
     if (error.code === 'NOT_FOUND') {
       return res.status(404).json({
         success: false,
-        error: 'Link not found'
+        error: 'Link not found',
+        code: 'NOT_FOUND'
+      });
+    }
+
+    if (error.code === 'INVALID_URL' || error.code === 'VALIDATION_ERROR') {
+      return res.status(422).json({
+        success: false,
+        error: error.message,
+        code: error.code
       });
     }
 
     if (error.message?.includes('tenant') || error.message?.includes('Access denied') || error.code?.startsWith('TENANT')) {
       return tenantAccessError(res, error);
     }
-    
+
     res.status(500).json({
       success: false,
-      error: 'Failed to update link'
+      error: error.message || 'Failed to update link'
     });
   }
 });
