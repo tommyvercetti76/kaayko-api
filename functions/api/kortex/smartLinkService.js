@@ -147,7 +147,9 @@ async function createShortLink(data) {
     source = metadata.source || 'manual',
     intent = metadata.intent || 'view',
     returnTo = metadata.returnTo || null,
-    conversionGoal = metadata.conversionGoal || null
+    conversionGoal = metadata.conversionGoal || null,
+    destinationCategory = null,
+    destinationTemplate = null
   } = data;
 
   // If caller provided a custom short code (alias), validate and use it
@@ -240,7 +242,9 @@ async function createShortLink(data) {
     intent,
     returnTo,
     conversionGoal,
-    
+    destinationCategory,
+    destinationTemplate,
+
     destinations: {
       ios: iosDestination || null,
       android: androidDestination || null,
@@ -284,6 +288,8 @@ async function createShortLink(data) {
     intent,
     returnTo,
     conversionGoal,
+    destinationCategory,
+    destinationTemplate,
     destinations: linkDoc.destinations,
     title,
     description,
@@ -398,7 +404,9 @@ async function updateShortLink(code, updates) {
     source,
     intent,
     returnTo,
-    conversionGoal
+    conversionGoal,
+    destinationCategory,
+    destinationTemplate
   } = updates;
 
   const linkRef = db.collection('short_links').doc(code);
@@ -451,6 +459,8 @@ async function updateShortLink(code, updates) {
   if (intent !== undefined) updateData.intent = intent;
   if (returnTo !== undefined) updateData.returnTo = returnTo || null;
   if (conversionGoal !== undefined) updateData.conversionGoal = conversionGoal || null;
+  if (destinationCategory !== undefined) updateData.destinationCategory = destinationCategory || null;
+  if (destinationTemplate !== undefined) updateData.destinationTemplate = destinationTemplate || null;
   if (expiresAt !== undefined) {
     updateData.expiresAt = expiresAt ? admin.firestore.Timestamp.fromDate(new Date(expiresAt)) : null;
   }

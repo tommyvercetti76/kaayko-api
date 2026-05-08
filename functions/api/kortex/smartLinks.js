@@ -49,6 +49,25 @@ const { rateLimiter, botProtection, secureHeaders, honeypot } = require('../../m
 
 const ALLOWED_PUBLIC_EVENT_TYPES = new Set(['install', 'open', 'conversion']);
 
+// Global Kaayko domain whitelist — only these domains (and subdomains) are allowed as destinations.
+// Super-admins with destinationCategory==='custom' bypass this check.
+const KAAYKO_DOMAIN_WHITELIST = [
+  'kaayko.com',
+  'roots.kaayko.com',
+  'coolschools.kaayko.com',
+  'alumni.kaayko.com',
+  'blog.kaayko.com',
+];
+
+function isWhitelistedDomain(url) {
+  try {
+    const host = new URL(url).hostname.replace(/^www\./, '').toLowerCase();
+    return KAAYKO_DOMAIN_WHITELIST.some(d => host === d || host.endsWith('.' + d));
+  } catch {
+    return false;
+  }
+}
+
 // Apply security middleware to all routes
 router.use(secureHeaders);
 router.use(botProtection);
@@ -582,6 +601,36 @@ router.post('/qr/generate', requireAuth, requireAdmin, async (req, res) => {
 });
 
 // ============================================================================
+// ROOTS SYNC PROXY (keeps KORTEX_SYNC_KEY server-side, never in browser)
+// ============================================================================
+
+const ROOTS_API_BASE = 'https://cool-schools-api-420407869747.us-central1.run.app/api/v1/roots';
+
+router.post('/roots-sync', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const syncKey = process.env.KORTEX_SYNC_KEY;
+    if (!syncKey) {
+      return res.status(500).json({ success: false, error: 'KORTEX_SYNC_KEY not configured' });
+    }
+
+    const response = await fetch(`${ROOTS_API_BASE}/invites/kortex-sync`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Kortex-Sync-Key': syncKey,
+      },
+      body: JSON.stringify(req.body),
+    });
+
+    const data = await response.json().catch(() => ({}));
+    return res.status(response.status).json(data);
+  } catch (err) {
+    console.error('[roots-sync] proxy error:', err.message);
+    return res.status(502).json({ success: false, error: 'ROOTS sync proxy failed' });
+  }
+});
+
+// ============================================================================
 // LINK STATISTICS (Must be BEFORE /:code)
 // ============================================================================
 
@@ -736,6 +785,17 @@ router.post('/', requireAuth, requireAdmin, async (req, res) => {
   try {
     const tenantContext = await getTenantFromRequest(req);
     const tenantConfig = await getTenantConfig(tenantContext.tenantId);
+
+    // Global domain whitelist — super-admins with custom category bypass
+    const destUrl = req.body.webDestination || req.body.destinations?.web || '';
+    const isCustomBypass = tenantContext.isSuperAdmin && req.body.destinationCategory === 'custom';
+    if (destUrl && !isCustomBypass && !isWhitelistedDomain(destUrl)) {
+      return res.status(403).json({
+        success: false,
+        error: 'Destination domain is not on the Kaayko whitelist. Only approved Kaayko domains are allowed.',
+        code: 'DOMAIN_NOT_WHITELISTED'
+      });
+    }
 
     // Enforce destination domain restrictions for non-super-admin tenant users
     if (!tenantContext.isSuperAdmin && tenantContext.tenantId !== DEFAULT_TENANT_ID) {
@@ -904,7 +964,20 @@ router.put('/:code', requireAuth, requireAdmin, async (req, res) => {
     if (!tenantContext.isSuperAdmin) {
       assertTenantAccess(req.user, existingLink.tenantId || DEFAULT_TENANT_ID);
     }
-    
+
+    // Global domain whitelist on update — super-admins with custom category bypass
+    const updatedWeb = updates.destinations?.web || updates.webDestination || '';
+    if (updatedWeb) {
+      const isCustomBypass = tenantContext.isSuperAdmin && updates.destinationCategory === 'custom';
+      if (!isCustomBypass && !isWhitelistedDomain(updatedWeb)) {
+        return res.status(403).json({
+          success: false,
+          error: 'Destination domain is not on the Kaayko whitelist. Only approved Kaayko domains are allowed.',
+          code: 'DOMAIN_NOT_WHITELISTED'
+        });
+      }
+    }
+
     const link = await LinkService.updateShortLink(code, updates);
     res.json({ success: true, link });
   } catch (error) {
