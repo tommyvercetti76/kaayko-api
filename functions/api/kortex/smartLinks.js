@@ -53,7 +53,6 @@ const ALLOWED_PUBLIC_EVENT_TYPES = new Set(['install', 'open', 'conversion']);
 // Super-admins with destinationCategory==='custom' bypass this check.
 const KAAYKO_DOMAIN_WHITELIST = [
   'kaayko.com',
-  'roots.kaayko.com',
   'coolschools.kaayko.com',
   'alumni.kaayko.com',
   'blog.kaayko.com',
