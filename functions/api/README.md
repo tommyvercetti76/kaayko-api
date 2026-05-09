@@ -14,7 +14,6 @@ Note: the list below is derived from the current code in `functions/index.js` an
 4. **paddlingOut** - Curated paddling locations (17+ spots) (mounted at /paddlingOut)
 5. **nearbyWater** - OpenStreetMap water discovery (mounted at /nearbyWater)
 ├── products/      🛍️  Product catalog & images
-├── deepLinks/     📱 Universal links (iOS integration)
 └── core/          📚 Documentation & OpenAPI specs
 ```
 
@@ -36,7 +35,7 @@ Note: the list below is derived from the current code in `functions/index.js` an
 | admin | ⚠️ partially mounted | /admin/* | Some admin endpoints are mounted directly (getOrder/listOrders/updateOrderStatus). adminUsers router exists but is not registered in index.js by default.
 | auth | ✅ | /auth/* | Mounted in index.js (logout, me, verify)
 | products | ✅ | /products and /images | Mounted
-| deepLinks | ✅ | /l/* and /resolve via root router | Mounted at root '/'
+| kortex (deeplinkRoutes) | ✅ | /l/* and /resolve via root router | Universal deep link resolver in kortex/ |
 | core (docs) | ✅ | /docs | Swagger UI and spec
 **Endpoint coverage:** several modules are implemented (some mounted, some not). Full, code-derived docs are in each module README inside `functions/api/`.
 Additional runtime helpers:
@@ -152,8 +151,8 @@ GET /api/images?url=...          # Proxy image
 
 ## 📱 Deep Links APIs
 
-**Location:** `deepLinks/`  
-**README:** [deepLinks/README.md](deepLinks/README.md)
+**Location:** `kortex/deeplinkRoutes.js`  
+**README:** [kortex/README.md](kortex/README.md)
 
 ### APIs:
 1. **Universal Links** - iOS app integration
@@ -283,17 +282,14 @@ curl "http://127.0.0.1:5001/kaaykostore/us-central1/api/gptActions/paddleScore?l
 ├── 🌦️  api/functions/api/weather/README.md
 │   └── Complete weather APIs documentation
 │
-├── 🔗 api/functions/api/smartLinks/README.md
-│   └── Complete Smart Links documentation
+├── 🔗 api/functions/api/kortex/README.md
+│   └── Complete KORTEX (smart links, deep links, tenants) documentation
 │
 ├── 🤖 api/functions/api/ai/README.md
 │   └── Complete GPT Actions documentation
 │
 ├── 🛍️  api/functions/api/products/README.md
 │   └── Complete products & images documentation
-│
-├── 📱 api/functions/api/deepLinks/README.md
-│   └── Complete deep links documentation
 │
 └── 📚 api/functions/api/core/README.md
     └── Complete core APIs documentation
@@ -319,7 +315,7 @@ cd api/deployment
 ```bash
 # Check health endpoints
 curl https://us-central1-kaaykostore.cloudfunctions.net/api/smartlinks/health
-curl https://us-central1-kaaykostore.cloudfunctions.net/api/deepLinks/health
+curl https://us-central1-kaaykostore.cloudfunctions.net/api/health
 ```
 
 ---
@@ -333,11 +329,10 @@ fastForecast:      192ms (cached) / 3s (fresh)
 forecast:          2-5s
 paddlingout:       150ms
 nearbyWater:       800ms-2s
-smartLinks/create: 200ms (800ms with enrichment)
-smartLinks/get:    50ms
+kortex/create:     200ms (800ms with enrichment)
+kortex/get:        50ms
 gptActions:        500ms
 products:          150ms
-deepLinks:         100ms
 docs:              50ms
 ```
 
@@ -394,7 +389,7 @@ docs:              50ms
 → `weather/README.md` → paddleScore, fastForecast
 
 **Create marketing links:**
-→ `smartLinks/README.md` → POST /smartlinks
+→ `kortex/README.md` → POST /kortex
 
 **ChatGPT integration:**
 → `ai/README.md` → GET /gptActions/paddleScore
@@ -402,8 +397,8 @@ docs:              50ms
 **Display products:**
 → `products/README.md` → GET /products
 
-**iOS app integration:**
-→ `deepLinks/README.md` → GET /l/:id
+**Universal link redirect:**
+→ `kortex/README.md` → GET /l/:id
 
 **API documentation:**
 → `core/README.md` → GET /docs

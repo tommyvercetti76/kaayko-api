@@ -30,7 +30,7 @@ Main products:
 ```text
 Store / Commerce      /products /images /createPaymentIntent /admin/*
 Paddling Out          /paddlingOut /nearbyWater /paddleScore /fastForecast /forecast
-KORTEX                /smartlinks /auth /billing /l/:id /resolve
+KORTEX                /kortex /smartlinks /campaigns /auth /billing /api/public /l/:id /resolve
 Kreator               /kreators
 Kamera Quest          /cameras /lenses /presets /presets/smart
 ```
@@ -39,9 +39,9 @@ Do not assume a router is live just because a file exists. Check `functions/inde
 
 ## KORTEX Direction
 
-KORTEX is moving toward a secure, multi-tenant campaign platform.
+KORTEX is the revenue engine. Multi-tenant smart link platform with campaign attribution.
 
-**Status: Phases 1-3 complete. Phase 3.5 hardening finished (all 77 tests passing). Ready for Phase 4.**
+**Status: Revenue Phase 1 complete. Public API mounted. Plan limits enforced. Pricing gates live. Phase 2 (revenue hooks) in progress.**
 
 Implemented foundation:
 
@@ -66,7 +66,7 @@ Before Phase 4 work, read:
 ```text
 PLAN.md (Phase 4 section)
 SKILL.md
-functions/api/smartLinks/SKILL.md
+functions/api/kortex/SKILL.md
 docs/products/KORTEX.md
 ```
 
@@ -149,7 +149,7 @@ Good parallel splits:
 
 Bad parallel splits:
 
-- Multiple agents editing `functions/api/smartLinks/smartLinks.js`.
+- Multiple agents editing `functions/api/kortex/smartLinks.js`.
 - Multiple agents editing the same test file.
 - One agent changing auth while another changes campaign permissions without coordination.
 - One agent mounting routes while another renames the router.

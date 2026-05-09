@@ -9,7 +9,7 @@
  * 
  * Uses time-bucketed counters in Firestore for distributed rate limiting.
  * 
- * @module api/smartLinks/rateLimitService
+ * @module api/kortex/rateLimitService
  */
 
 const admin = require('firebase-admin');

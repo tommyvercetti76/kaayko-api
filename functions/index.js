@@ -93,8 +93,8 @@ apiApp.use("/", require("./api/kortex/tenantLinkResolver"));
 // Must be mounted before legacy deep-links, and must fail-closed on unknown domains.
 apiApp.use("/", require("./api/campaigns/campaignPublicResolver"));
 
-// Legacy deeplink routes
-apiApp.use("/", require("./api/deepLinks/deeplinkRoutes"));
+// Universal deep-link resolver (now lives in kortex/)
+apiApp.use("/", require("./api/kortex/deeplinkRoutes"));
 
 // Export main API function
 exports.api = onRequest({

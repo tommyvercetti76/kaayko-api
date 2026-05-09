@@ -32,7 +32,7 @@ const requiredMounts = [
   'apiApp.use("/lenses"',
   'apiApp.use("/presets/smart"',
   'apiApp.use("/presets"',
-  'apiApp.use("/", require("./api/deepLinks/deeplinkRoutes"))',
+  'apiApp.use("/", require("./api/kortex/deeplinkRoutes"))',
 ];
 
 const forbiddenMounts = [

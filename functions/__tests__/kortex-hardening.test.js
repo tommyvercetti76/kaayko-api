@@ -4,7 +4,7 @@ const request = require('supertest');
 const admin = require('firebase-admin');
 const { buildTestApp } = require('./helpers/testApp');
 const campaignPublicResolver = require('../api/campaigns/campaignPublicResolver');
-const deepLinksRouter = require('../api/deepLinks/deeplinkRoutes');
+const deepLinksRouter = require('../api/kortex/deeplinkRoutes');
 
 let campaignApp;
 let resolverApp;

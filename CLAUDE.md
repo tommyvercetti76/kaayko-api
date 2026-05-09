@@ -27,15 +27,13 @@ functions/api/
 ├── weather/          ← GET /api/paddlingOut, /paddleScore, /forecast
 ├── kutz/             ← POST /api/kutz/* (nutrition, Claude AI, Fitbit)
 ├── kortex/           ← /api/kortex/* (smart links, tenants, analytics, security)
-├── smartLinks/       ← CRUD /api/smartlinks (legacy alias)
 ├── kreators/         ← /api/kreators/* (application pipeline)
 ├── admin/            ← /api/admin/* (orders, restricted)
 ├── billing/          ← /api/billing/subscriptions
 ├── cameras/          ← GET /api/cameras, /lenses, /presets
 ├── auth/             ← POST /api/auth/logout
 ├── ai/               ← POST /api/gptActions (ChatGPT plugin)
-├── email/            ← email utilities
-└── deepLinks/        ← /api/l/** deep link resolution
+└── email/            ← email utilities
 ```
 
 ## Auth pattern

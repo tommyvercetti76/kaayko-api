@@ -4,9 +4,8 @@
 
 KORTEX is Kaayko's smart-linking, tenant-link, campaign, and redirect platform. In `main`, it spans CRUD for smart links, tenant alias links, tenant onboarding, analytics, public redirect resolution, auth, campaigns, and subscription billing.
 
-Canonical architecture and `kortex.kaayko.com` plan: [`../../kaayko/docs/products/KORTEX_TENANT_ARCHITECTURE_PLAN.md`](../../../kaayko/docs/products/KORTEX_TENANT_ARCHITECTURE_PLAN.md) from the sibling frontend repo.
-
-Button-only execution plan and definition of done: [`../../kaayko/docs/products/KORTEX_DELIVERY_PLAN_AND_DOD.md`](../../../kaayko/docs/products/KORTEX_DELIVERY_PLAN_AND_DOD.md) from the sibling frontend repo.
+Comprehensive agent (file map, routes, collections, change patterns): `kaayko/.claude/commands/kortex.md`
+API runbook: [`functions/api/kortex/SKILL.md`](../../functions/api/kortex/SKILL.md)
 
 ## Mounted routes on `main`
 
@@ -91,7 +90,7 @@ Primary route files:
 - [`functions/api/kortex/smartLinkService.js`](../../functions/api/kortex/smartLinkService.js)
 - [`functions/api/kortex/redirectHandler.js`](../../functions/api/kortex/redirectHandler.js)
 - [`functions/api/campaigns/campaignRoutes.js`](../../functions/api/campaigns/campaignRoutes.js)
-- [`functions/api/deepLinks/deeplinkRoutes.js`](../../functions/api/deepLinks/deeplinkRoutes.js)
+- [`functions/api/kortex/deeplinkRoutes.js`](../../functions/api/kortex/deeplinkRoutes.js)
 - [`functions/api/auth/authRoutes.js`](../../functions/api/auth/authRoutes.js)
 - [`functions/api/billing/router.js`](../../functions/api/billing/router.js)
 
@@ -125,7 +124,7 @@ Primary frontend files:
 
 ## Current mismatches on `main`
 
-- [`functions/api/smartLinks/publicApiRouter.js`](../../functions/api/smartLinks/publicApiRouter.js) exists but is **intentionally not mounted** from [`functions/index.js`](../../functions/index.js). It defines API-key-authenticated external client endpoints (`POST /api/public/smartlinks`, batch create, stats, attribution) intended for future use. Do not call `/api/public/*` paths — they will 404. Mount this router when external API access is ready to ship.
+- [`functions/api/kortex/publicApiRouter.js`](../../functions/api/kortex/publicApiRouter.js) is mounted at `/api/public` for API-key-authenticated external client endpoints (`POST /api/public/smartlinks`, batch create, stats, attribution).
 - Some admin onboarding docs in the frontend still describe `/public/smartlinks` flows even though `main` only mounts `/kortex` and compatibility `/smartlinks`.
 
 ## Quality and maintenance notes

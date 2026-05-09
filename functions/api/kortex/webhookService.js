@@ -11,7 +11,7 @@
  * - Per-tenant webhook subscriptions
  * - Event filtering and batching options
  * 
- * @module api/smartLinks/webhookService
+ * @module api/kortex/webhookService
  */
 
 const admin = require('firebase-admin');

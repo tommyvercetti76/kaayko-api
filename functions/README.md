@@ -13,7 +13,6 @@ Quick links:
 
 ### API Documentation
 - **KORTEX API:** [`api/kortex/README.md`](./api/kortex/README.md)
-- **SmartLinks compatibility:** [`api/smartLinks/README.md`](./api/smartLinks/README.md)
 - **Main API Docs:** `/api/README.md`
 
 ---

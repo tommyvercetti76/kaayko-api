@@ -2,11 +2,8 @@
 
 KORTEX is the canonical smart-link, tenant-link, campaign-link, and redirect module.
 
-Canonical product architecture lives in the frontend repo at:
-
-```text
-kaayko/docs/products/KORTEX_TENANT_ARCHITECTURE_PLAN.md
-```
+Comprehensive agent command: `kaayko/.claude/commands/kortex.md`
+API developer runbook: [`SKILL.md`](./SKILL.md)
 
 ## Runtime Mounts
 
@@ -17,7 +14,7 @@ apiApp.use("/kortex", kortexRouter);
 apiApp.use("/smartlinks", kortexRouter);
 apiApp.use("/campaigns", require("./api/campaigns/campaignRoutes"));
 apiApp.use("/", require("./api/campaigns/campaignPublicResolver"));
-apiApp.use("/", require("./api/deepLinks/deeplinkRoutes"));
+apiApp.use("/", require("./api/kortex/deeplinkRoutes"));
 ```
 
 Rules:
@@ -39,6 +36,7 @@ Rules:
 | `tenantContext.js` | Authenticated tenant context and access checks |
 | `clickTracking.js` | Detailed click analytics |
 | `webhookService.js` | Webhook event delivery |
+| `deeplinkRoutes.js` | Universal deep link resolver (`/l/:id`, `/resolve`) |
 | `attributionService.js` | Click-to-install attribution helpers |
 
 ## Canonical Endpoints

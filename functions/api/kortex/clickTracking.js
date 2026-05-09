@@ -12,7 +12,7 @@
  * - Platform detection and routing
  * - UTM parameter preservation
  * 
- * @module api/smartLinks/clickTracking
+ * @module api/kortex/clickTracking
  */
 
 const admin = require('firebase-admin');

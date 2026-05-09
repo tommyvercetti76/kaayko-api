@@ -2,7 +2,7 @@
  * @fileoverview Public Smart Link Router - Entry Point for /l/:id
  * @description Handles Smart Links (lkXXXX) only. Clean, minimal router that delegates to redirectHandler.
  * 
- * @module api/smartLinks/publicRouter
+ * @module api/kortex/publicRouter
  * 
  * @routes
  * - GET /l/:id   → Smart link redirect (lkXXXX format from short_links collection)

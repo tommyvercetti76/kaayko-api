@@ -683,6 +683,19 @@ async function handleRedirect(req, res, code, options = {}) {
       });
     }
     
+    // ROOTS: Append ?invite=CODE so the assessment page pre-fills the invite field
+    const isROOTSDestination = destination.includes('/roots/parent-assessment') ||
+      destination.includes('/roots/teacher-assessment') ||
+      destination.includes('/knowledge') ||
+      destination.includes('roots.kaayko.com');
+    if (isROOTSDestination) {
+      const destUrl = new URL(destination);
+      if (!destUrl.searchParams.has('invite')) {
+        destUrl.searchParams.set('invite', code);
+        destination = destUrl.toString();
+      }
+    }
+
     // KORTEX BYPASS: Add bypass parameter for internal Kaayko pages (store, etc.)
     // This allows smart links to bypass authentication on protected pages
     if (destination.includes('kaayko.com/store') || destination.includes('/store.html')) {

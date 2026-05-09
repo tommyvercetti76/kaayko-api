@@ -8,7 +8,7 @@ Production backend for the Kaayko product portfolio. The `main` branch in this r
 | --- | --- | --- | --- | --- |
 | Store / Commerce | Product catalog, image delivery, checkout, order ops | `/products`, `/images`, `/createPaymentIntent`, `/admin/*` | `kaayko/src/index.html`, `store.html`, `cart.html`, `order-success.html` | [`docs/products/STORE.md`](./docs/products/STORE.md) |
 | Paddling Out | Weather, scoring, nearby water discovery, forecast caching | `/paddlingOut`, `/nearbyWater`, `/paddleScore`, `/fastForecast`, `/forecast`, `/gptActions` | `kaayko/src/paddlingout.html` and weather JS modules | [`docs/products/PADDLING_OUT.md`](./docs/products/PADDLING_OUT.md) |
-| KORTEX | Smart links, tenant aliases, redirects, campaigns, tenant onboarding, billing, auth | `/kortex`, `/smartlinks`, `/campaigns`, `/:campaignSlug/:code`, `/l/:id`, `/resolve`, `/billing`, `/auth` | `kaayko/src/kortex.html`, `create-kortex-link.html`, `src/admin/*`, `src/tenant.html` | [`docs/products/KORTEX.md`](./docs/products/KORTEX.md), [`../kaayko/docs/products/KORTEX_TENANT_ARCHITECTURE_PLAN.md`](../kaayko/docs/products/KORTEX_TENANT_ARCHITECTURE_PLAN.md), [`../kaayko/docs/products/KORTEX_DELIVERY_PLAN_AND_DOD.md`](../kaayko/docs/products/KORTEX_DELIVERY_PLAN_AND_DOD.md) |
+| KORTEX | Smart links, tenant aliases, redirects, campaigns, tenant onboarding, billing, auth | `/kortex`, `/smartlinks`, `/campaigns`, `/:campaignSlug/:code`, `/l/:id`, `/resolve`, `/billing`, `/auth` | `kaayko/src/kortex.html`, `create-kortex-link.html`, `src/admin/*`, `src/tenant.html` | [`docs/products/KORTEX.md`](./docs/products/KORTEX.md), [`functions/api/kortex/SKILL.md`](./functions/api/kortex/SKILL.md) |
 | Kreator | Creator applications, onboarding, profile, admin review | `/kreators` | `kaayko/src/kreator/*` | [`docs/products/KREATOR.md`](./docs/products/KREATOR.md) |
 | Kamera Quest | Camera catalog, lenses, presets, session optimization | `/cameras`, `/lenses`, `/presets`, `/presets/smart` | `kaayko/src/karma/kameras/*` | [`docs/products/KAMERA_QUEST.md`](./docs/products/KAMERA_QUEST.md) |
 | Shared Platform | Auth middleware, API docs, admin controls, deployment rails | `/docs`, `/auth`, `/admin/*`, scheduled functions | Shared site shell and product ops flows | [`docs/products/PLATFORM_SHARED.md`](./docs/products/PLATFORM_SHARED.md) |
@@ -100,7 +100,7 @@ The deploy surface is defined in [`functions/package.json`](./functions/package.
 ## Known gaps to keep visible
 
 - [`functions/api/kreators/kreatorProductRoutes.js`](./functions/api/kreators/kreatorProductRoutes.js) exists, but it is not mounted from [`functions/index.js`](./functions/index.js) on `main`.
-- [`functions/api/smartLinks/publicApiRouter.js`](./functions/api/smartLinks/publicApiRouter.js) and [`functions/api/smartLinks/publicRouter.js`](./functions/api/smartLinks/publicRouter.js) exist, but they are not mounted from `main`.
+- [`functions/api/kortex/publicApiRouter.js`](./functions/api/kortex/publicApiRouter.js) is mounted at `/api/public` for API-key-authenticated external access. [`functions/api/kortex/publicRouter.js`](./functions/api/kortex/publicRouter.js) is not currently mounted.
 - Some frontend experiences in the companion `kaayko` repo still reference capabilities that depend on those unmounted routes. Call that out during integration work instead of assuming parity.
 
 ## Documentation map

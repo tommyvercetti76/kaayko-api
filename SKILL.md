@@ -46,21 +46,22 @@ Mounted runtime is defined in `functions/index.js`.
 
 Current KORTEX surfaces:
 
-- `/smartlinks` from `functions/api/smartLinks/smartLinks.js`
-- `/l/:id` and `/resolve` from `functions/api/deepLinks/deeplinkRoutes.js`
+- `/smartlinks` from `functions/api/kortex/smartLinks.js` (compatibility mount)
+- `/l/:id` and `/resolve` from `functions/api/kortex/deeplinkRoutes.js`
 - `/auth` from `functions/api/auth/authRoutes.js`
 - `/billing` from `functions/api/billing/router.js`
 
 Important files:
 
 ```text
-functions/api/smartLinks/smartLinks.js
-functions/api/smartLinks/smartLinkService.js
-functions/api/smartLinks/redirectHandler.js
-functions/api/smartLinks/tenantContext.js
-functions/api/smartLinks/clickTracking.js
-functions/api/smartLinks/attributionService.js
-functions/api/smartLinks/webhookService.js
+functions/api/kortex/smartLinks.js
+functions/api/kortex/smartLinkService.js
+functions/api/kortex/redirectHandler.js
+functions/api/kortex/deeplinkRoutes.js
+functions/api/kortex/tenantContext.js
+functions/api/kortex/clickTracking.js
+functions/api/kortex/attributionService.js
+functions/api/kortex/webhookService.js
 functions/middleware/authMiddleware.js
 functions/middleware/apiKeyMiddleware.js
 functions/middleware/securityMiddleware.js
@@ -72,7 +73,7 @@ functions/api/campaigns/campaignValidation.js
 functions/__tests__/kortex-campaigns.test.js
 ```
 
-`functions/api/smartLinks/publicApiRouter.js` is not mounted. Do not rely on `/api/public/*` until it is explicitly mounted and tested.
+`functions/api/kortex/publicApiRouter.js` is mounted at `/api/public`. It provides API-key-authenticated external client endpoints.
 
 ## Current Architecture
 

@@ -23,8 +23,8 @@ This folder contains **technical implementation documentation** - architectural 
 - **[products/KORTEX.md](products/KORTEX.md)**
   KORTEX backend routes, tenant aliases, campaigns, auth, and billing
 
-- **[../kaayko/docs/products/KORTEX_TENANT_ARCHITECTURE_PLAN.md](../../kaayko/docs/products/KORTEX_TENANT_ARCHITECTURE_PLAN.md)**
-  End-to-end KORTEX tenant architecture and `kortex.kaayko.com` rollout plan
+- **[../functions/api/kortex/SKILL.md](../functions/api/kortex/SKILL.md)**
+  KORTEX API developer runbook — endpoints, auth stack, plan limits, testing
 
 - **[HOW_SCHEDULED_FUNCTIONS_WORK.md](HOW_SCHEDULED_FUNCTIONS_WORK.md)**  
   Cron job architecture, cache warming (4x daily), scheduled pre-computation
@@ -70,7 +70,7 @@ This folder contains **technical implementation documentation** - architectural 
 
 api/
 ├── README.md                          ← Main entry point
-├── DOCUMENTATION_INDEX.md             ← Navigation hub
+├── CLAUDE.md                          ← Stack, modules, auth patterns
 │
 ├── docs/                              ← TECHNICAL GUIDES (YOU ARE HERE)
 │   ├── README.md                      ← This file
@@ -81,11 +81,9 @@ api/
 └── functions/api/                     ← API ENDPOINT DOCS
     ├── README.md                      ← API overview
     ├── weather/README.md              ← Weather APIs (5 endpoints)
-    ├── kortex/README.md               ← KORTEX links, tenant aliases, events
-    ├── smartLinks/README.md           ← SmartLinks compatibility
+    ├── kortex/README.md               ← KORTEX links, tenants, deep links, events
     ├── ai/README.md                   ← PaddleBot + GPT (7 endpoints)
     ├── products/README.md             ← Products (3 endpoints)
-    ├── deepLinks/README.md            ← Universal Links (3 endpoints)
     └── core/README.md                 ← API docs (3 endpoints)
 ```
 

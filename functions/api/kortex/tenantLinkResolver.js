@@ -262,25 +262,55 @@ router.get('/:tenantSlug/:code', async (req, res, next) => {
     const isDupe = await isDuplicateClick(code, fingerprint);
 
     if (!isDupe) {
-      // Record click
-      const clickData = {
+      const clickUTM = {
+        utm_source: req.query.utm_source || link.utm?.utm_source || null,
+        utm_medium: req.query.utm_medium || link.utm?.utm_medium || null,
+        utm_campaign: req.query.utm_campaign || link.utm?.utm_campaign || null
+      };
+      const ipHash = crypto.createHash('sha256').update(ip).digest('hex').substring(0, 12);
+      const clickId = `c_${crypto.randomBytes(8).toString('hex')}`;
+
+      // Write to BOTH collections for backwards compat + unified analytics
+      const clickBase = {
         code,
         tenantId,
         fingerprint,
-        ipHash: crypto.createHash('sha256').update(ip).digest('hex').substring(0, 12),
+        ipHash,
         userAgent: userAgent.substring(0, 200),
         referer: (req.headers.referer || '').substring(0, 500),
-        utm: {
-          source: req.query.utm_source || link.utm?.utm_source || null,
-          medium: req.query.utm_medium || link.utm?.utm_medium || null,
-          campaign: req.query.utm_campaign || link.utm?.utm_campaign || null
-        },
+        utm: clickUTM,
         timestamp: admin.firestore.FieldValue.serverTimestamp(),
         resolvedVia: 'alumni_namespace'
       };
 
-      // Fire-and-forget (don't block redirect)
-      db.collection('smartLinkClicks').add(clickData).catch(() => {});
+      // click_events — unified analytics collection with device info
+      const ua = userAgent.toLowerCase();
+      const platform = /iphone|ipad/i.test(ua) ? 'ios' : /android/i.test(ua) ? 'android' : 'web';
+      db.collection('click_events').doc(clickId).set({
+        clickId,
+        linkCode: code,
+        tenantId,
+        platform,
+        deviceInfo: {
+          platform,
+          os: /iphone|ipad/i.test(ua) ? 'iOS' : /android/i.test(ua) ? 'Android' : /windows/i.test(ua) ? 'Windows' : /mac/i.test(ua) ? 'macOS' : 'Other',
+          browser: /safari/i.test(ua) && !/chrome/i.test(ua) ? 'Safari' : /chrome/i.test(ua) ? 'Chrome' : /firefox/i.test(ua) ? 'Firefox' : 'Other',
+          deviceType: /mobile|iphone/i.test(ua) ? 'mobile' : /ipad|tablet/i.test(ua) ? 'tablet' : 'desktop'
+        },
+        userAgent: userAgent.substring(0, 200),
+        ip: ipHash,
+        referrer: (req.headers.referer || '').substring(0, 500),
+        utm: clickUTM,
+        redirectedTo: destination,
+        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        timestampMs: Date.now(),
+        installAttributed: false,
+        metadata: { resolvedVia: 'alumni_namespace', linkTitle: link.title || '' },
+        expiresAt: admin.firestore.Timestamp.fromMillis(Date.now() + 30 * 24 * 60 * 60 * 1000)
+      }).catch(() => {});
+
+      // smartLinkClicks — legacy collection
+      db.collection('smartLinkClicks').add(clickBase).catch(() => {});
       db.collection('short_links').doc(code).update({
         clickCount: admin.firestore.FieldValue.increment(1),
         lastClickAt: admin.firestore.FieldValue.serverTimestamp()

@@ -10,7 +10,7 @@
  * - Install event tracking
  * - Conversion metrics calculation
  * 
- * @module api/smartLinks/attributionService
+ * @module api/kortex/attributionService
  */
 
 const admin = require('firebase-admin');

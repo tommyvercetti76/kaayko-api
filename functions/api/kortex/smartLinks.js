@@ -1,5 +1,5 @@
 /**
- * functions/src/api/smartLinks.js
+ * functions/api/kortex/smartLinks.js
  * 
  * Smart Links API v4 - SHORT CODES ONLY!
  * Simple: kaayko.com/l/lkXXXX → anywhere you want

@@ -1,4 +1,4 @@
-//  functions/src/api/deeplinkRoutes.js
+//  functions/api/kortex/deeplinkRoutes.js
 //
 //  Universal Link & Deep Link Management for Kaayko
 //  Handles app-to-web redirection, context preservation, and smart routing
@@ -181,7 +181,7 @@ async function logDeeplinkEvent(eventType, data) {
 router.get("/l/:id", async (req, res) => {
   try {
     const linkId = req.params.id;
-    const { handleRedirect, checkLinkExists } = require('../kortex/redirectHandler');
+    const { handleRedirect, checkLinkExists } = require('./redirectHandler');
     
     // PRIORITY 1: Check if this is a smart link (fast existence check)
     const linkCheck = await checkLinkExists(linkId);

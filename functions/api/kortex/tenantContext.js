@@ -10,7 +10,7 @@
  * - Tenant-scoped Firestore queries
  * - Super-admin cross-tenant access
  * 
- * @module api/smartLinks/tenantContext
+ * @module api/kortex/tenantContext
  */
 
 const admin = require('firebase-admin');

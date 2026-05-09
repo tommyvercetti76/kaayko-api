@@ -88,12 +88,12 @@
 ## 📁 Related Documentation
 
 ### API Documentation
-- **Smart Links API:** `/api/functions/api/smartLinks/README.md`
+- **KORTEX API:** `/api/functions/api/kortex/README.md`
 - **Admin Users API:** `/api/functions/api/admin/README.md` (if exists)
 
 ### Project-Wide Docs
 - **Main README:** `/api/README.md`
-- **Documentation Index:** `/api/DOCUMENTATION_INDEX.md`
+- **CLAUDE.md:** `/api/CLAUDE.md`
 - **Navigation:** `/NAVIGATION.md`
 
 ### Copilot Instructions

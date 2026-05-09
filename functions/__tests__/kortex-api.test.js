@@ -18,7 +18,7 @@ let smartLinksApp;
 let deepLinksApp;
 beforeAll(() => {
   smartLinksApp = buildTestApp('/smartlinks', require('../api/kortex/smartLinks'));
-  deepLinksApp = buildTestApp('/', require('../api/deepLinks/deeplinkRoutes'));
+  deepLinksApp = buildTestApp('/', require('../api/kortex/deeplinkRoutes'));
 });
 
 beforeEach(() => {

@@ -1,5 +1,5 @@
 ---
-description: Use when working on Kortex — smart links, short codes, redirect handling, tenant management, link analytics, billing, or any file under functions/api/smartLinks/, functions/api/auth/, or functions/api/billing/. Also trigger for authMiddleware, securityMiddleware, or apiKeyMiddleware changes that affect Kortex.
+description: Use when working on Kortex — smart links, short codes, redirect handling, tenant management, link analytics, billing, or any file under functions/api/kortex/, functions/api/auth/, or functions/api/billing/. Also trigger for authMiddleware, securityMiddleware, or apiKeyMiddleware changes that affect Kortex.
 ---
 
 # Kortex API — Developer Runbook
@@ -14,18 +14,19 @@ Kortex is Kaayko's smart-linking and redirect platform. It generates short codes
 
 | File | Responsibility |
 |------|---------------|
-| `functions/api/smartLinks/smartLinks.js` | Main router — all `/smartlinks/*` endpoints |
-| `functions/api/smartLinks/smartLinkService.js` | CRUD business logic (create, list, get, update, delete) |
-| `functions/api/smartLinks/redirectHandler.js` | Redirect logic — platform detection, A/B routing, click tracking |
-| `functions/api/smartLinks/tenantContext.js` | Multi-tenant scoping — resolves tenant from headers/user/API key |
-| `functions/api/smartLinks/clickTracking.js` | Click event creation, device info parsing, attribution |
-| `functions/api/smartLinks/webhookService.js` | Outbound webhook notifications with HMAC signing + retry |
-| `functions/api/smartLinks/smartLinkValidation.js` | Code generation, format validation, UTM normalization |
-| `functions/api/smartLinks/smartLinkDefaults.js` | Default destinations per content space (lake, store, reads…) |
-| `functions/api/smartLinks/smartLinkEnrichment.js` | Metadata validation and default field population |
-| `functions/api/smartLinks/publicApiRouter.js` | **NOT MOUNTED** — external API key access (future; see Known Issues) |
-| `functions/api/smartLinks/rateLimitService.js` | Tenant-level rate limiting (for publicApiRouter when mounted) |
-| `functions/api/smartLinks/attributionService.js` | Install attribution — click-to-install mapping |
+| `functions/api/kortex/smartLinks.js` | Main router — all `/kortex/*` and `/smartlinks/*` endpoints |
+| `functions/api/kortex/smartLinkService.js` | CRUD business logic (create, list, get, update, delete) |
+| `functions/api/kortex/redirectHandler.js` | Redirect logic — platform detection, A/B routing, click tracking |
+| `functions/api/kortex/deeplinkRoutes.js` | Universal deep link resolver (`/l/:id`, `/resolve`) |
+| `functions/api/kortex/tenantContext.js` | Multi-tenant scoping — resolves tenant from headers/user/API key |
+| `functions/api/kortex/clickTracking.js` | Click event creation, device info parsing, attribution |
+| `functions/api/kortex/webhookService.js` | Outbound webhook notifications with HMAC signing + retry |
+| `functions/api/kortex/smartLinkValidation.js` | Code generation, format validation, UTM normalization |
+| `functions/api/kortex/smartLinkDefaults.js` | Default destinations per content space (lake, store, reads…) |
+| `functions/api/kortex/smartLinkEnrichment.js` | Metadata validation and default field population |
+| `functions/api/kortex/publicApiRouter.js` | External API key access — mounted at `/api/public` |
+| `functions/api/kortex/rateLimitService.js` | Tenant-level rate limiting (for publicApiRouter) |
+| `functions/api/kortex/attributionService.js` | Install attribution — click-to-install mapping |
 | `functions/api/campaigns/campaignRoutes.js` | Campaign management router mounted at `/campaigns` |
 | `functions/api/campaigns/campaignService.js` | Campaign CRUD, membership writes, audit logs |
 | `functions/api/campaigns/campaignPermissions.js` | Campaign role and permission checks |
@@ -222,9 +223,8 @@ All Kortex routes use this standard shape:
 
 ## Known Issues & Gaps
 
-- **`publicApiRouter.js` is NOT mounted** — the file exists at `functions/api/smartLinks/publicApiRouter.js` and defines API-key-authenticated endpoints for external clients (`POST /api/public/smartlinks`, batch create, stats, attribution). It is intentionally not yet mounted in `functions/index.js`. Do not call `/api/public/*` paths — they will 404. Mount when external API access is ready to ship.
+- **`publicApiRouter.js` is mounted** at `/api/public` in `functions/index.js`. It provides API-key-authenticated endpoints for external clients (`POST /api/public/smartlinks`, batch create, stats, attribution).
 - **KORTEX regression suite exists** — run `npm run test:kortex -- --runInBand --forceExit` from `functions`. Keep adding coverage for campaign ownership, tenant scoping, CRUD, redirect behavior, billing config, and public redaction.
-- **Some frontend docs still reference `/public/smartlinks`** — should be updated when publicApiRouter is mounted.
 
 ---
 
