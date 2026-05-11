@@ -14,8 +14,15 @@
 
 // ─── Firestore mocks ──────────────────────────────────────────
 
-const mockDocData = {};     // docPath → data
-const mockCollectionData = {}; // collectionPath → [ { id, data() } ]
+const mockState = globalThis.__KAAYKO_FIREBASE_ADMIN_MOCK_STATE__ ||
+  (globalThis.__KAAYKO_FIREBASE_ADMIN_MOCK_STATE__ = {
+    docData: {},
+    collectionData: {},
+    activeBatch: null
+  });
+
+const mockDocData = mockState.docData;     // docPath → data
+const mockCollectionData = mockState.collectionData; // collectionPath → [ { id, data() } ]
 
 const mockDocRef = (path) => ({
   id: path.split('/').pop(),
@@ -84,6 +91,21 @@ const mockCollectionRef = (path) => {
   return ref;
 };
 
+function createMockBatch() {
+  const ops = [];
+  const batch = {
+    set: jest.fn((ref, data) => { ops.push(() => ref.set(data)); }),
+    update: jest.fn((ref, data) => { ops.push(() => ref.update(data)); }),
+    delete: jest.fn((ref) => { ops.push(() => ref.delete()); }),
+    commit: jest.fn(async () => {
+      for (const op of ops) await op();
+      ops.length = 0;
+      mockState.activeBatch = null;
+    })
+  };
+  return batch;
+}
+
 const mockFirestore = {
   collection: jest.fn((path) => mockCollectionRef(path)),
   doc: jest.fn((path) => mockDocRef(path)),
@@ -97,13 +119,10 @@ const mockFirestore = {
     return fn(tx);
   }),
   batch: jest.fn(() => {
-    const ops = [];
-    return {
-      set: jest.fn((ref, data) => { ops.push(() => ref.set(data)); }),
-      update: jest.fn((ref, data) => { ops.push(() => ref.update(data)); }),
-      delete: jest.fn((ref) => { ops.push(() => ref.delete()); }),
-      commit: jest.fn(async () => { for (const op of ops) await op(); })
-    };
+    if (!mockState.activeBatch) {
+      mockState.activeBatch = createMockBatch();
+    }
+    return mockState.activeBatch;
   })
 };
 
@@ -191,5 +210,6 @@ module.exports._mocks = {
   resetAll() {
     Object.keys(mockDocData).forEach(k => delete mockDocData[k]);
     Object.keys(mockCollectionData).forEach(k => delete mockCollectionData[k]);
+    mockState.activeBatch = null;
   }
 };

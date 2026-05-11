@@ -120,7 +120,7 @@ function analyzeForecastTrends(forecastData, currentConditions) {
   const today = forecastData.forecast.forecastday[0];
   const hourlyData = today.hourly || [];
   
-  if (hourlyData.length < 6) {
+  if (hourlyData.length < 3) {
     return { adjustment: 0, reason: 'Insufficient forecast data' };
   }
   

@@ -128,6 +128,28 @@ describe('paddlePenalties — applyEnhancedPenalties', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// 2b. dataStandardization
+// ─────────────────────────────────────────────────────────────────────────────
+
+const { standardizeForMLModel } = require('../api/weather/dataStandardization');
+
+describe('dataStandardization — standardizeForMLModel', () => {
+  test('preserves precipitation fields for Paddle LLM and penalty inputs', () => {
+    const result = standardizeForMLModel({
+      temperature: 21,
+      windSpeed: 7,
+      precipMm: 3,
+      precipChancePercent: 70,
+      visibility: 0
+    });
+
+    expect(result.precipMm).toBe(3);
+    expect(result.precipChancePercent).toBe(70);
+    expect(result.visibility).toBe(0);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // 3. smartWarnings
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -345,6 +367,8 @@ describe('mlService — getPrediction fallback', () => {
   beforeEach(() => {
     jest.resetModules();
     process.env.ML_SERVICE_URL = 'https://fake-ml-service.run.app';
+    delete process.env.PADDLE_LLM_URL;
+    delete process.env.PADDLE_LLM_API_KEY;
     getPrediction = require('../api/weather/mlService').getPrediction;
   });
 
@@ -389,5 +413,101 @@ describe('mlService — getPrediction fallback', () => {
     // The thrown error from getMLServiceURL is caught and we get fallback
     expect(result.success).toBe(true);
     expect(result.predictionSource).toBe('fallback-rules');
+  });
+
+  test('prefers Paddle LLM when PADDLE_LLM_URL is configured', async () => {
+    jest.resetModules();
+    process.env.PADDLE_LLM_URL = 'https://paddle-llm.example.run.app';
+    process.env.ML_SERVICE_URL = 'https://fake-ml-service.run.app';
+
+    jest.doMock('../api/weather/paddleLlmClient', () => ({
+      getPaddleLlmPrediction: jest.fn(async () => ({
+        success: true,
+        rating: 4.5,
+        mlModelUsed: true,
+        predictionSource: 'paddle-llm',
+        modelType: 'RandomForestRegressor',
+        confidence: 0.8,
+        riskClass: 'good',
+        explanations: ['favorable conditions']
+      }))
+    }));
+
+    const { getPrediction: getPredictionWithPaddleLlm } = require('../api/weather/mlService');
+    const result = await getPredictionWithPaddleLlm({
+      temperature: 22,
+      windSpeed: 5,
+      gustSpeed: 7,
+      uvIndex: 4,
+      visibility: 10,
+      humidity: 55,
+      cloudCover: 30,
+      latitude: 33.0,
+      longitude: -97.0
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.predictionSource).toBe('paddle-llm');
+    expect(result.rating).toBe(4.5);
+    expect(result.riskClass).toBe('good');
+  });
+});
+
+describe('paddleLlmClient', () => {
+  beforeEach(() => {
+    jest.resetModules();
+    jest.dontMock('../api/weather/paddleLlmClient');
+    delete process.env.PADDLE_LLM_URL;
+    delete process.env.PADDLE_LLM_API_KEY;
+  });
+
+  test('maps existing weather features into Paddle LLM predict contract', () => {
+    const { mapFeaturesToPaddleLlmRequest } = require('../api/weather/paddleLlmClient');
+    const mapped = mapFeaturesToPaddleLlmRequest({
+      temperature: 21,
+      windSpeed: 7,
+      gustSpeed: 10,
+      windDirection: 'SW',
+      humidity: 58,
+      uvIndex: 5,
+      visibility: 12,
+      cloudCover: 25,
+      precipMm: 0,
+      precipChancePercent: 10,
+      waveHeight: 0.2,
+      waterTemp: 18,
+      latitude: 44.1,
+      longitude: -93.2,
+      spotId: 'sample_lake'
+    });
+
+    expect(mapped.temperature_c).toBe(21);
+    expect(mapped.wind_mph).toBe(7);
+    expect(mapped.gust_mph).toBe(10);
+    expect(mapped.wind_degree).toBe(225);
+    expect(mapped.precip_chance_pct).toBe(10);
+    expect(mapped.wave_height_m).toBe(0.2);
+    expect(mapped.location_id).toBe('sample_lake');
+  });
+
+  test('normalizes Paddle LLM prediction response into legacy mlService shape', () => {
+    const { normalizePaddleLlmResponse } = require('../api/weather/paddleLlmClient');
+    const result = normalizePaddleLlmResponse({
+      success: true,
+      prediction: {
+        score: 3.5,
+        risk_class: 'caution',
+        model_type: 'RandomForestRegressor',
+        confidence: 0.8,
+        explanations: ['moderate wind']
+      }
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.rating).toBe(3.5);
+    expect(result.predictionSource).toBe('paddle-llm');
+    expect(result.mlModelUsed).toBe(true);
+    expect(result.riskClass).toBe('caution');
+    expect(result.explanations).toEqual(['moderate wind']);
   });
 });

@@ -160,13 +160,9 @@ async function computePaddleScoreForSpot(loc, options = {}) {
 }
 
 function getInterpretation(rating) {
-    if (rating >= 4.5) return 'Excellent';
-    if (rating >= 4.0) return 'Great';
-    if (rating >= 3.5) return 'Good';
-    if (rating >= 3.0) return 'Fair';
-    if (rating >= 2.5) return 'Below Average';
-    if (rating >= 2.0) return 'Poor';
-    return 'Very Poor';
+    if (rating >= 4) return 'Worth it';
+    if (rating >= 3) return 'Careful';
+    return 'Hard pass';
 }
 
 module.exports = { computePaddleScoreForSpot };

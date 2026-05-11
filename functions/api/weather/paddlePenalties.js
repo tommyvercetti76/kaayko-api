@@ -228,7 +228,11 @@ function toLegacyStrings(details) {
  * @returns {object} updated prediction w/ applied penalties & metadata
  */
 function applyEnhancedPenalties(prediction, features, marineData = null) {
-  let rating = Number(prediction.rating);
+  const normalizedPrediction = typeof prediction === 'number'
+    ? { rating: prediction }
+    : { ...(prediction || {}) };
+  let rating = Number(normalizedPrediction.rating);
+  if (!Number.isFinite(rating)) rating = THRESHOLDS.minRating;
   const details = [];
   let totalPenalty = 0;
 
@@ -386,8 +390,9 @@ function applyEnhancedPenalties(prediction, features, marineData = null) {
   const rounded = clamp(roundToHalf(adjusted), THRESHOLDS.minRating, THRESHOLDS.maxRating);
 
   return {
-    ...prediction,
+    ...normalizedPrediction,
     rating: rounded,
+    finalRating: rounded,
     originalRating: rating,
     penaltiesApplied: toLegacyStrings(details),   // keeps your UI stable
     penaltyDetails: details,                      // richer analytics

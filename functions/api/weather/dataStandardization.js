@@ -114,6 +114,17 @@ function standardizeForMLModel(rawData, marineData = null) {
     uvIndex,
     visibility,
     hasWarnings,
+    pressure,
+    pressureMb,
+    precipMm,
+    precipMM,
+    precipIn,
+    precipChancePercent,
+    precipChance,
+    precipProbability,
+    hour,
+    month,
+    isWeekend,
     
     // Location
     latitude,
@@ -150,6 +161,15 @@ function standardizeForMLModel(rawData, marineData = null) {
     standardGustMph = gustSpeedKph * CONVERSIONS.KPH_TO_MPH;
   }
 
+  const precipAmountMm = precipMm !== undefined ? precipMm :
+                         precipMM !== undefined ? precipMM :
+                         precipIn !== undefined ? precipIn * 25.4 :
+                         0;
+  const precipChancePct = precipChancePercent !== undefined ? precipChancePercent :
+                          precipChance !== undefined ? precipChance :
+                          precipProbability !== undefined ? precipProbability * 100 :
+                          0;
+
   // Marine data integration
   const marineHour = marineData?.forecast?.forecastday?.[0]?.hour?.[0];
   
@@ -158,17 +178,23 @@ function standardizeForMLModel(rawData, marineData = null) {
     temperature: standardTemp, // °C
     windSpeed: standardWindMph, // MPH
     gustSpeed: standardGustMph, // MPH
-    windDirection: windDirection || windDir || 0,
+    windDirection: windDirection ?? windDir ?? 0,
     
     // Derived parameters
     beaufortScale: calculateBeaufortFromMph(standardWindMph),
     
     // Environmental conditions
-    humidity: humidity || DEFAULTS.HUMIDITY_PERCENT,
-    cloudCover: cloudCover || DEFAULTS.CLOUD_COVER_PERCENT,
-    uvIndex: uvIndex || DEFAULTS.UV_INDEX,
-    visibility: visibility || DEFAULTS.VISIBILITY_KM,
-    hasWarnings: hasWarnings || false,
+    humidity: humidity ?? DEFAULTS.HUMIDITY_PERCENT,
+    cloudCover: cloudCover ?? DEFAULTS.CLOUD_COVER_PERCENT,
+    uvIndex: uvIndex ?? DEFAULTS.UV_INDEX,
+    visibility: visibility ?? DEFAULTS.VISIBILITY_KM,
+    hasWarnings: hasWarnings ?? false,
+    pressure: pressure ?? pressureMb ?? 1013,
+    precipMm: Math.max(0, precipAmountMm),
+    precipChancePercent: Math.max(0, Math.min(100, precipChancePct)),
+    hour,
+    month,
+    isWeekend,
     
     // Marine conditions (standardized)
     waveHeight: marineHour?.sig_ht_mt || 
@@ -179,8 +205,8 @@ function standardizeForMLModel(rawData, marineData = null) {
                Math.max(DEFAULTS.MIN_WATER_TEMP_C, standardTemp + DEFAULTS.WATER_TEMP_OFFSET_C),
     
     // Location
-    latitude: latitude || 0,
-    longitude: longitude || 0
+    latitude: latitude ?? 0,
+    longitude: longitude ?? 0
   };
 }
 

@@ -53,6 +53,8 @@ decoded.kreator === true  // kreator operations
 | `kaaykoproducts` | products | Product catalog |
 | `orders` | checkout, admin | Customer orders |
 | `paddlingSpots` | weather | Paddle spot definitions |
+| `public_paddle_ratings` | weather | Public ratings from rate.html (deduped by fingerprint+spot+day) |
+| `rate_limits` | weather | IP-based daily rate limits for public ratings |
 | `short_links` | kortex | Short link definitions (enriched with intent, audience, etc.) |
 | `click_events` | kortex | Unified click analytics (device, platform, utm, referrer) |
 | `smartLinkClicks` | kortex | Legacy click log (kept for backwards compat) |

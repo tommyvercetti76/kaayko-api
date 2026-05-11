@@ -5,6 +5,7 @@
 // Falls back to rule-based rating if Cloud Run is unavailable.
 
 const https = require('https');
+const { getPaddleLlmPrediction } = require('./paddleLlmClient');
 
 // URL must be set in Firebase Functions environment: ML_SERVICE_URL
 // Never falls back to a hardcoded URL — fail loudly so misconfiguration is caught early.
@@ -71,6 +72,16 @@ function httpsPost(url, body, timeoutMs = 10000) {
  */
 async function getPrediction(features) {
   console.log(`ML request — temp: ${features.temperature}°C, wind: ${features.windSpeed}mph`);
+
+  if (process.env.PADDLE_LLM_URL) {
+    try {
+      const result = await getPaddleLlmPrediction(features);
+      console.log(`Paddle LLM prediction — rating: ${result.rating}, model: ${result.modelType}`);
+      return result;
+    } catch (error) {
+      console.warn('Paddle LLM prediction failed, trying legacy ML service:', error.message);
+    }
+  }
 
   try {
     const mlUrl = getMLServiceURL();
@@ -150,10 +161,9 @@ function extractMLFeatures(weatherData) {
 }
 
 function interpretRating(rating) {
-  if (rating >= 4.0) return 'Excellent';
-  if (rating >= 3.0) return 'Good';
-  if (rating >= 2.0) return 'Fair';
-  return 'Poor';
+  if (rating >= 4) return 'Worth it';
+  if (rating >= 3) return 'Careful';
+  return 'Hard pass';
 }
 
 function applyPersonalizedAdjustments(prediction, userPrefs = {}) {

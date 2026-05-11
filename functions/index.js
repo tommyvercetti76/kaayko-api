@@ -30,6 +30,7 @@ apiApp.use("/images", require("./api/products/images"));
 apiApp.get("/helloWorld", (_r, res) => res.send("OK"));
 apiApp.use("/products", require("./api/products/products"));
 apiApp.use("/paddlingOut", require("./api/weather/paddlingout"));
+apiApp.use("/paddle-trainer", require("./api/weather/paddleTrainer"));
 
 // 📚 API DOCUMENTATION
 apiApp.use("/docs", require("./api/core/docs"));
