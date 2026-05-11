@@ -62,6 +62,13 @@ async function cacheSet(key, waterBodies) {
 }
 
 // ── Main endpoint ──────────────────────────────────────────────────────────
+// GET /nearbyWater?lat=&lng=&radius=30&refresh=1 (optional)
+//
+// Response status field:
+//  - "found"      — results found
+//  - "no_results" — search succeeded, but no water bodies in radius
+//  - "error"      — search failed (invalid coords, API error, etc)
+
 router.get('/', async (req, res) => {
   try {
     const lat    = parseFloat(req.query.lat || req.query.latitude);
@@ -70,7 +77,11 @@ router.get('/', async (req, res) => {
     const radiusMiles = radius * 0.621;
 
     if (isNaN(lat) || lat < -90 || lat > 90 || isNaN(lng) || lng < -180 || lng > 180) {
-      return res.status(400).json({ success: false, error: 'Invalid coordinates' });
+      return res.status(400).json({
+        success: false,
+        status: 'error',
+        error: 'Invalid coordinates'
+      });
     }
 
     const key          = gridKey(lat, lng);
@@ -91,6 +102,7 @@ router.get('/', async (req, res) => {
 
         return res.json({
           success: true,
+          status: results.length > 0 ? 'found' : 'no_results',
           waterBodies: results,
           cached: true,
           sources: ['firestore'],
@@ -129,6 +141,7 @@ router.get('/', async (req, res) => {
 
     res.json({
       success: true,
+      status: results.length > 0 ? 'found' : 'no_results',
       waterBodies: results,
       cached: false,
       sources: bodies.length > 0 ? 
@@ -140,7 +153,11 @@ router.get('/', async (req, res) => {
 
   } catch (error) {
     logger.error('nearbyWater error:', error);
-    res.status(500).json({ success: false, error: 'Internal server error' });
+    res.status(500).json({
+      success: false,
+      status: 'error',
+      error: 'Internal server error'
+    });
   }
 });
 
