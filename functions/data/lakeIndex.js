@@ -174,7 +174,7 @@ async function queryNHD(lat, lng, radiusMiles) {
     });
 
     req.on('error', (e) => { logger.warn('NHD request error:', e.message); resolve([]); });
-    req.setTimeout(12000, () => { req.destroy(); resolve([]); });
+    req.setTimeout(5000, () => { req.destroy(); resolve([]); });
     req.end();
   });
 }

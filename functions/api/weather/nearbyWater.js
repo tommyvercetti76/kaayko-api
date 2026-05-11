@@ -93,6 +93,7 @@ router.get('/', async (req, res) => {
           success: true,
           waterBodies: results,
           cached: true,
+          sources: ['firestore'],
           source: 'firestore',
           location: { lat, lng, radiusKm: radius },
           timestamp: new Date().toISOString()
@@ -130,6 +131,8 @@ router.get('/', async (req, res) => {
       success: true,
       waterBodies: results,
       cached: false,
+      sources: bodies.length > 0 ? 
+        [...new Set(bodies.map(b => b.source))] : [],
       source: 'live',
       location: { lat, lng, radiusKm: radius },
       timestamp: new Date().toISOString()
