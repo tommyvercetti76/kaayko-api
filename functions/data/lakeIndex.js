@@ -228,6 +228,42 @@ function makeOsmResult(name, lat, lng, osmType, areaKm2, distanceMiles = 0) {
   };
 }
 
+function buildPaddlerRank(body, query = '') {
+  const sourceBoost = { nhd: 16, hydrolakes: 12, osm: 4 };
+  const typeBoost = {
+    Reservoir: 10,
+    Lake: 9,
+    River: 7,
+    Canal: 3,
+    Playa: 2
+  };
+
+  let score = Number(body.relevancy || 0);
+  score += sourceBoost[body.source] || 0;
+  score += typeBoost[body.type] || 0;
+
+  // Bigger water bodies are generally more reliable paddling destinations.
+  const area = Number(body.areaKm2 || 0);
+  if (area > 0) {
+    score += Math.min(18, Math.log2(area + 1) * 5);
+  }
+
+  // Keep nearer spots preferred, but don't let tiny ponds always beat iconic lakes.
+  const distance = Number(body.distanceMiles || 0);
+  score += Math.max(0, 20 - distance * 0.65);
+
+  const q = query.toLowerCase().trim();
+  if (q) {
+    const name = String(body.name || '').toLowerCase();
+    const tokens = q.split(/\s+/).filter(t => t.length > 2);
+    const matches = tokens.filter(t => name.includes(t)).length;
+    if (matches > 0) score += Math.min(20, matches * 8);
+    if (name.includes(q)) score += 10;
+  }
+
+  return Math.round(score * 10) / 10;
+}
+
 // ── Nominatim fallback ─────────────────────────────────────────────────────
 // Three approaches, run in order until results found:
 //  1. Bounding-box search — finds all named water bodies in the radius area
@@ -376,7 +412,11 @@ async function findNearby(lat, lng, radiusMiles = 30, query = '') {
     logger.info(`🗺️ Global findNearby(${lat.toFixed(3)},${lng.toFixed(3)}): ${osmResults.length} OSM + ${hlResults.length} HL → ${merged.length}`);
   }
 
-  merged.sort((a, b) => b.relevancy - a.relevancy || a.distanceMiles - b.distanceMiles);
+  for (const body of merged) {
+    body.rankScore = buildPaddlerRank(body, query);
+  }
+
+  merged.sort((a, b) => b.rankScore - a.rankScore || a.distanceMiles - b.distanceMiles);
   return merged.slice(0, 25);
 }
 

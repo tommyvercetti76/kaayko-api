@@ -26,12 +26,11 @@ function db() {
   return _db;
 }
 
-// 0.5° grid ≈ 55km cells
+// 0.25° grid ≈ 27km cells (was 0.5° ≈ 55km)
+// Finer grid improves cache hit rate for nearby searches.
 function gridKey(lat, lng) {
   const gLat = Math.round(lat * 4) / 4;
   const gLng = Math.round(lng * 4) / 4;
-// 0.25° grid ≈ 27km cells (was 0.5° ≈ 55km)
-// Finer grid improves cache hit rate for nearby searches
   // Replace minus signs so Firestore accepts it as doc ID
   return `${gLat}_${gLng}`.replace(/-/g, 'N');
 }
@@ -99,7 +98,7 @@ router.get('/', async (req, res) => {
         const results = cached
           .map(b => ({ ...b, distanceMiles: Math.round(distMiles(lat, lng, b.lat, b.lng) * 10) / 10 }))
           .filter(b => b.distanceMiles <= radiusMiles)
-          .sort((a, b) => b.relevancy - a.relevancy || a.distanceMiles - b.distanceMiles)
+          .sort((a, b) => (b.rankScore || b.relevancy || 0) - (a.rankScore || a.relevancy || 0) || a.distanceMiles - b.distanceMiles)
           .slice(0, 20);
 
         return res.json({
@@ -132,7 +131,7 @@ router.get('/', async (req, res) => {
     const results = bodies
       .map(b => ({ ...b, distanceMiles: Math.round(distMiles(lat, lng, b.lat, b.lng) * 10) / 10 }))
       .filter(b => b.distanceMiles <= radiusMiles)
-      .sort((a, b) => b.relevancy - a.relevancy || a.distanceMiles - b.distanceMiles)
+      .sort((a, b) => (b.rankScore || b.relevancy || 0) - (a.rankScore || a.relevancy || 0) || a.distanceMiles - b.distanceMiles)
       .slice(0, 20);
 
     if (results.length > 0) {
