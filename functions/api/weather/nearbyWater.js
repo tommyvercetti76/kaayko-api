@@ -7,7 +7,7 @@
 //   • USGS NHD    — US-only REST API, comprehensive regional lake/reservoir data, ~2s
 //
 // Caching: Firestore `water_body_index` collection, 7-day TTL.
-// Repeat queries for the same 0.5° grid cell: ~50ms (Firestore read).
+// Repeat queries for the same 0.25° grid cell: ~50ms (Firestore read).
 
 const express  = require('express');
 const { logger } = require('firebase-functions');
@@ -28,8 +28,10 @@ function db() {
 
 // 0.5° grid ≈ 55km cells
 function gridKey(lat, lng) {
-  const gLat = Math.round(lat * 2) / 2;
-  const gLng = Math.round(lng * 2) / 2;
+  const gLat = Math.round(lat * 4) / 4;
+  const gLng = Math.round(lng * 4) / 4;
+// 0.25° grid ≈ 27km cells (was 0.5° ≈ 55km)
+// Finer grid improves cache hit rate for nearby searches
   // Replace minus signs so Firestore accepts it as doc ID
   return `${gLat}_${gLng}`.replace(/-/g, 'N');
 }
