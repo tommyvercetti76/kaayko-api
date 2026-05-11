@@ -69,3 +69,11 @@ mp3-service/
 # Automation — ephemeral run output and generated dashboard
 automation/runs/
 automation/dashboard/
+
+# Generated docs/spec artifacts (keep local, do not track)
+docs/**/*.json
+docs/**/*.yaml
+docs/**/*.yml
+docs/**/*.py
+functions/docs/cameras/
+functions/docs/admin/
