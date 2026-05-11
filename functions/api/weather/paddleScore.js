@@ -432,4 +432,94 @@ router.get('/metrics', requireAdmin, async (req, res) => {
   }
 });
 
+// ─── POST /paddleScores (batch) ────────────────────────────────────────────
+//
+// Batch score endpoint — solves N+1 problem for search results.
+// Frontend makes 1 request for 15 locations instead of 15 individual requests.
+//
+// POST /paddleScores
+// Body: { locations: [ { lat, lng }, ... ] }
+// Response: { success, scores: [ { lat, lng, score, rating }, ... ] }
+
+router.post('/batch', async (req, res) => {
+  const startTime = Date.now();
+  
+  try {
+    const { locations } = req.body;
+
+    // Validate input
+    if (!Array.isArray(locations)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Body must contain locations array',
+        response_time_ms: Date.now() - startTime
+      });
+    }
+
+    if (locations.length === 0) {
+      return res.json({
+        success: true,
+        scores: [],
+        response_time_ms: Date.now() - startTime
+      });
+    }
+
+    if (locations.length > 50) {
+      return res.status(400).json({
+        success: false,
+        error: 'Maximum 50 locations per batch',
+        response_time_ms: Date.now() - startTime
+      });
+    }
+
+    // Validate each location
+    const validated = locations.map((loc, idx) => {
+      if (typeof loc.lat !== 'number' || typeof loc.lng !== 'number') {
+        throw new Error(`Location ${idx}: lat/lng must be numbers`);
+      }
+      return { lat: loc.lat, lng: loc.lng };
+    });
+
+    // Compute all scores in parallel
+    const scorePromises = validated.map(({ lat, lng }) =>
+      computePaddleScoreForSpot(
+        { id: null, lat, lng, name: `${lat},${lng}` },
+        { calibrationOffsets: new Map() }
+      ).catch(err => {
+        console.warn(`Batch score compute failed for ${lat},${lng}:`, err.message);
+        return null;
+      })
+    );
+
+    const scores = await Promise.all(scorePromises);
+
+    // Map results back to locations
+    const results = validated.map((loc, idx) => {
+      const score = scores[idx];
+      return {
+        lat: loc.lat,
+        lng: loc.lng,
+        score: score ? score.rating : null,
+        rating: score ? score.rating : null,
+        interpretation: score ? score.interpretation : null,
+        confidence: score ? score.confidence : null
+      };
+    });
+
+    return res.json({
+      success: true,
+      scores: results,
+      response_time_ms: Date.now() - startTime
+    });
+
+  } catch (error) {
+    console.error('paddleScore POST /batch error:', error.message, error.stack);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to compute batch scores',
+      response_time_ms: Date.now() - startTime
+    });
+  }
+});
+
 module.exports = router;
