@@ -1,0 +1,42 @@
+name: Kortex CI
+
+# Runs the Kortex test suites on every push/PR that touches the API.
+# The hardening suite is a required gate (must stay green — catches regressions in
+# the security/product hardening). The full legacy suite runs informationally while
+# its known pre-existing failures are burned down (see functions/docs/KORTEX_AUDIT.md).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'functions/**'
+      - '.github/workflows/kortex-ci.yml'
+  pull_request:
+    paths:
+      - 'functions/**'
+      - '.github/workflows/kortex-ci.yml'
+
+jobs:
+  kortex-tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: functions
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Hardening suite (required gate)
+        run: npm run test:kortex:hardening
+
+      - name: Full Kortex suite (informational until legacy failures are fixed)
+        run: npm run test:kortex
+        continue-on-error: true

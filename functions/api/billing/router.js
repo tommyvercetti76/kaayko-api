@@ -22,13 +22,8 @@ const PRICE_IDS = {
   business: process.env.STRIPE_PRICE_BUSINESS || 'price_business_monthly'
 };
 
-// Plan limits — enforced across the platform
-const PLAN_LIMITS = {
-  starter: { links: 25, api_calls: 0, campaigns: 3, analytics_range_days: 7 },
-  pro: { links: 500, api_calls: 5000, campaigns: 25, analytics_range_days: 90 },
-  business: { links: 2500, api_calls: 25000, campaigns: Infinity, analytics_range_days: Infinity },
-  enterprise: { links: Infinity, api_calls: Infinity, campaigns: Infinity, analytics_range_days: Infinity }
-};
+// Plan limits — shared source of truth (also enforced in smartLinkService).
+const { PLAN_LIMITS } = require('./planLimits');
 
 /**
  * Helper to check if Stripe is configured

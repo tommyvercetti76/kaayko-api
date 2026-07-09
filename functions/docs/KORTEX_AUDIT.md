@@ -27,6 +27,26 @@ This document is the source of truth for what Kortex does today. Where it disagr
 
 > **Deploy note:** fix #0 requires `firebase deploy --only firestore:rules`. Fixes #1–#3 require `firebase deploy --only functions`. Confirm no external system reads `short_links`/`link_analytics` via the client SDK before shipping #0 (audit found none — all hits were backlog-doc strings).
 
+## Fixes applied — batch 2 (product-readiness hardening)
+
+Verified by a new required test gate: `npm run test:kortex:hardening` (27 tests, all green). CI runs it on every push (`.github/workflows/kortex-ci.yml`).
+
+| Area | Finding closed | Change |
+|------|----------------|--------|
+| Security | Public V2 event endpoint let anyone attribute events to any tenant | `recordEvent` now derives `tenantId` from the stored link, ignoring caller-supplied tenantId; both public event routes are rate-limited (`v2LinkIntents.js`, `smartLinks.js`) |
+| Security | Domain allowlist bypassable via public API / tenant-links | Enforcement moved into `smartLinkService.create/updateShortLink` via a shared `domainPolicy.js`, so admin, public API, batch, and tenant-link paths share one rule (default tenant → Kaayko whitelist; real tenants → their `allowedDomains` or default-open) |
+| Security | Webhook SSRF + no management surface | New `ssrfGuard.js` (https-only; blocks loopback/link-local/private/metadata) wired into `createWebhookSubscription`/`update`; new `/kortex/webhooks` CRUD routes (tenant-scoped) |
+| Security | HMAC link secret fell back to a repo-committed default | `linkSecurityService.js` is now fail-closed (no default secret; signing/verification disabled without the env var) + timingSafeEqual length guard |
+| Security | Raw IPs stored per click (GDPR/DPDP) | `clickTracking.js` stores a salted hash of the client IP, never the raw address |
+| Security | Raw `error.message`/Firestore errors leaked to clients | Sanitized the router's 500 responses (`smartLinks.js`) |
+| Product | Plan limits unenforced | `createShortLink` enforces `PLAN_LIMITS[plan].links` per tenant (shared `billing/planLimits.js`); default tenant unlimited |
+| Product | No API-key provisioning surface | New `/kortex/api-keys` CRUD (create/list/revoke, tenant-scoped, scope-validated, plaintext returned once) |
+| Product | Webhook events `link.updated`/`link.deleted` never fired | PUT/DELETE handlers now emit them |
+| Analytics | Weekly digest read the wrong (legacy) collection → ~0 clicks | Digest now reads `click_events` |
+| Ops | No CI, no rollback story, no observability | Added `kortex-ci.yml`, a structured `logger.js` wired into the redirect failure path, and a deploy/rollback/monitoring runbook in `SKILL.md` |
+
+**Still open (next):** analytics rollups + full main-path dedup/crawler-exclusion consolidation; `X-Forwarded-For`/`trust proxy` hardening (deferred — needs coordinated changes across all abuse-code call sites to avoid a half-fix); split the redirect handler into its own function + `minInstances`; tenant approval/offboarding + GDPR erasure; the 9 pre-existing legacy test failures (redirect/resolver/hardening suites) to make the full suite a required gate.
+
 ---
 
 ## CRITICAL / HIGH — open

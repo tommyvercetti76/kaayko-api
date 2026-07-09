@@ -19,6 +19,7 @@
 const express = require('express');
 const router = express.Router();
 const admin = require('firebase-admin');
+const crypto = require('crypto');
 const { FieldValue } = require('firebase-admin/firestore');
 
 const db = admin.firestore();
@@ -42,30 +43,22 @@ const {
 const { sendLinkCreatedNotification } = require('../../services/emailNotificationService');
 
 // Import webhook service
-const { triggerWebhooks, EVENT_TYPES } = require('./webhookService');
+const {
+  triggerWebhooks,
+  EVENT_TYPES,
+  createWebhookSubscription,
+  listWebhookSubscriptions,
+  updateWebhookSubscription,
+  deleteWebhookSubscription
+} = require('./webhookService');
+
+// Import API key + webhook provisioning helpers
+const { createApiKey, listApiKeys, revokeApiKey } = require('../../middleware/apiKeyMiddleware');
 
 // Import security middleware
 const { rateLimiter, botProtection, secureHeaders, honeypot } = require('../../middleware/securityMiddleware');
 
 const ALLOWED_PUBLIC_EVENT_TYPES = new Set(['install', 'open', 'conversion']);
-
-// Global Kaayko domain whitelist — only these domains (and subdomains) are allowed as destinations.
-// Super-admins with destinationCategory==='custom' bypass this check.
-const KAAYKO_DOMAIN_WHITELIST = [
-  'kaayko.com',
-  'coolschools.kaayko.com',
-  'alumni.kaayko.com',
-  'blog.kaayko.com',
-];
-
-function isWhitelistedDomain(url) {
-  try {
-    const host = new URL(url).hostname.replace(/^www\./, '').toLowerCase();
-    return KAAYKO_DOMAIN_WHITELIST.some(d => host === d || host.endsWith('.' + d));
-  } catch {
-    return false;
-  }
-}
 
 // Apply security middleware to all routes
 router.use(secureHeaders);
@@ -183,7 +176,7 @@ router.get('/tenants/resolve', async (req, res) => {
     return res.status(500).json({
       success: false,
       error: 'Failed to resolve tenant',
-      message: error.message
+      message: 'An unexpected error occurred'
     });
   }
 });
@@ -219,7 +212,7 @@ router.get('/tenants/:tenantSlug/bootstrap', async (req, res) => {
     return res.status(500).json({
       success: false,
       error: 'Failed to bootstrap tenant',
-      message: error.message
+      message: 'An unexpected error occurred'
     });
   }
 });
@@ -243,12 +236,12 @@ router.get('/links/:code/resolve', async (req, res) => {
       success: false,
       error: status === 404 ? 'Link not found' : 'Failed to resolve link',
       code: error.code || 'RESOLVE_FAILED',
-      message: error.message
+      message: 'An unexpected error occurred'
     });
   }
 });
 
-router.post('/events', async (req, res) => {
+router.post('/events', rateLimiter('api'), async (req, res) => {
   try {
     const event = await KortexV2.recordEvent(req.body.type, req.body, req);
     return res.status(201).json({
@@ -320,7 +313,7 @@ router.get('/tenants/:tenantId/analytics', requireAuth, requireAdmin, async (req
     return res.status(500).json({
       success: false,
       error: 'Failed to fetch tenant analytics',
-      message: error.message
+      message: 'An unexpected error occurred'
     });
   }
 });
@@ -343,7 +336,7 @@ router.get('/admin/migrate', requireAuth, requireAdmin, async (req, res) => {
     return res.status(500).json({
       success: false,
       error: 'Migration failed',
-      message: error.message
+      message: 'An unexpected error occurred'
     });
   }
 });
@@ -406,7 +399,7 @@ router.post('/tenant-registration', rateLimiter('tenantRegistration'), async (re
     return res.status(500).json({
       success: false,
       error: 'Failed to submit registration',
-      message: error.message
+      message: 'An unexpected error occurred'
     });
   }
 });
@@ -529,7 +522,7 @@ router.get('/tenants', requireAuth, rateLimiter('tenants'), async (req, res) => 
     return res.status(500).json({
       success: false,
       error: 'Failed to fetch tenants',
-      message: error.message
+      message: 'An unexpected error occurred'
     });
   }
 });
@@ -549,7 +542,7 @@ router.post('/digest/trigger', requireAuth, requireAdmin, async (req, res) => {
     return res.json({ success: true, drops: digest.drops, topLinks: digest.topLinks });
   } catch (error) {
     console.error('[Digest] Manual trigger error:', error);
-    return res.status(500).json({ success: false, error: error.message });
+    return res.status(500).json({ success: false, error: 'Failed to generate digest' });
   }
 });
 
@@ -777,6 +770,200 @@ router.get('/r/:code', async (req, res) => {
 });
 
 // ============================================================================
+// API KEY PROVISIONING (Protected - tenant-scoped admin)
+// Registered before /:code so GET /api-keys is not swallowed by the catch-all.
+// ============================================================================
+
+const ALLOWED_API_KEY_SCOPES = new Set([
+  'read:links', 'create:links', 'update:links', 'delete:links', 'read:stats'
+]);
+
+router.post('/api-keys', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const tenantContext = await getTenantFromRequest(req);
+    const { name, scopes = ['read:links'], rateLimitPerMinute } = req.body;
+
+    if (!name || !String(name).trim()) {
+      return res.status(400).json({ success: false, error: 'name is required', code: 'VALIDATION_ERROR' });
+    }
+
+    // Only super-admins may grant the wildcard scope; others are restricted to the known set.
+    const requestedScopes = Array.isArray(scopes) ? scopes : [scopes];
+    for (const s of requestedScopes) {
+      if (s === '*' && !tenantContext.isSuperAdmin) {
+        return res.status(403).json({ success: false, error: 'Wildcard scope requires super-admin', code: 'SCOPE_NOT_ALLOWED' });
+      }
+      if (s !== '*' && !ALLOWED_API_KEY_SCOPES.has(s)) {
+        return res.status(400).json({ success: false, error: `Unknown scope: ${s}`, code: 'INVALID_SCOPE' });
+      }
+    }
+
+    const created = await createApiKey({
+      tenantId: tenantContext.tenantId,
+      tenantName: tenantContext.tenantName,
+      name: String(name).trim(),
+      scopes: requestedScopes,
+      rateLimitPerMinute: Number(rateLimitPerMinute) || 60
+    });
+
+    // The plaintext key is returned exactly once.
+    return res.status(201).json({
+      success: true,
+      apiKey: created.apiKey,
+      keyId: created.keyId,
+      scopes: created.scopes,
+      message: 'Store this key now — it cannot be retrieved again.'
+    });
+  } catch (error) {
+    console.error('[APIKey] Create route error:', error);
+    return res.status(500).json({ success: false, error: 'Failed to create API key' });
+  }
+});
+
+router.get('/api-keys', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const tenantContext = await getTenantFromRequest(req);
+    const keys = await listApiKeys(tenantContext.tenantId);
+    return res.json({ success: true, keys, total: keys.length });
+  } catch (error) {
+    console.error('[APIKey] List route error:', error);
+    return res.status(500).json({ success: false, error: 'Failed to list API keys' });
+  }
+});
+
+router.delete('/api-keys/:keyId', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const tenantContext = await getTenantFromRequest(req);
+    const keyDoc = await db.collection('api_keys').doc(req.params.keyId).get();
+    if (!keyDoc.exists) {
+      return res.status(404).json({ success: false, error: 'API key not found' });
+    }
+    if (!tenantContext.isSuperAdmin && keyDoc.data().tenantId !== tenantContext.tenantId) {
+      return res.status(403).json({ success: false, error: 'API key belongs to another tenant', code: 'TENANT_ACCESS_DENIED' });
+    }
+    await revokeApiKey(req.params.keyId);
+    return res.json({ success: true, keyId: req.params.keyId, revoked: true });
+  } catch (error) {
+    console.error('[APIKey] Revoke route error:', error);
+    return res.status(500).json({ success: false, error: 'Failed to revoke API key' });
+  }
+});
+
+// ============================================================================
+// WEBHOOK PROVISIONING (Protected - tenant-scoped admin)
+// ============================================================================
+
+const VALID_WEBHOOK_EVENTS = new Set(Object.values(EVENT_TYPES));
+
+router.post('/webhooks', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const tenantContext = await getTenantFromRequest(req);
+    const { targetUrl, events, description = '' } = req.body;
+
+    if (!targetUrl) {
+      return res.status(400).json({ success: false, error: 'targetUrl is required', code: 'VALIDATION_ERROR' });
+    }
+    const eventList = Array.isArray(events) ? events : [];
+    if (eventList.length === 0 || !eventList.every(e => VALID_WEBHOOK_EVENTS.has(e))) {
+      return res.status(400).json({
+        success: false,
+        error: `events must be a non-empty subset of: ${[...VALID_WEBHOOK_EVENTS].join(', ')}`,
+        code: 'INVALID_EVENTS'
+      });
+    }
+
+    // Generate the signing secret server-side; returned once.
+    const secret = `whsec_${crypto.randomBytes(24).toString('hex')}`;
+
+    const subscription = await createWebhookSubscription({
+      tenantId: tenantContext.tenantId,
+      targetUrl,
+      secret,
+      events: eventList,
+      description
+    });
+
+    return res.status(201).json({
+      success: true,
+      subscriptionId: subscription.subscriptionId,
+      secret,
+      events: eventList,
+      message: 'Store this signing secret now — it will be masked in future responses.'
+    });
+  } catch (error) {
+    if (error.code === 'INSECURE_WEBHOOK_URL' || error.code === 'BLOCKED_WEBHOOK_URL' || error.code === 'INVALID_WEBHOOK_URL') {
+      return res.status(400).json({ success: false, error: error.message, code: error.code });
+    }
+    console.error('[Webhook] Create route error:', error);
+    return res.status(500).json({ success: false, error: 'Failed to create webhook subscription' });
+  }
+});
+
+router.get('/webhooks', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const tenantContext = await getTenantFromRequest(req);
+    const subscriptions = await listWebhookSubscriptions(tenantContext.tenantId);
+    return res.json({ success: true, subscriptions, total: subscriptions.length });
+  } catch (error) {
+    console.error('[Webhook] List route error:', error);
+    return res.status(500).json({ success: false, error: 'Failed to list webhook subscriptions' });
+  }
+});
+
+async function assertWebhookOwnership(req, tenantContext) {
+  const doc = await db.collection('webhook_subscriptions').doc(req.params.id).get();
+  if (!doc.exists) return { notFound: true };
+  if (!tenantContext.isSuperAdmin && doc.data().tenantId !== tenantContext.tenantId) {
+    return { forbidden: true };
+  }
+  return { doc };
+}
+
+router.patch('/webhooks/:id', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const tenantContext = await getTenantFromRequest(req);
+    const ownership = await assertWebhookOwnership(req, tenantContext);
+    if (ownership.notFound) return res.status(404).json({ success: false, error: 'Webhook not found' });
+    if (ownership.forbidden) return res.status(403).json({ success: false, error: 'Webhook belongs to another tenant', code: 'TENANT_ACCESS_DENIED' });
+
+    const updates = {};
+    if (req.body.enabled !== undefined) updates.enabled = req.body.enabled === true;
+    if (req.body.targetUrl !== undefined) updates.targetUrl = req.body.targetUrl;
+    if (Array.isArray(req.body.events)) {
+      if (!req.body.events.every(e => VALID_WEBHOOK_EVENTS.has(e))) {
+        return res.status(400).json({ success: false, error: 'events contains an unknown type', code: 'INVALID_EVENTS' });
+      }
+      updates.events = req.body.events;
+    }
+    if (req.body.description !== undefined) updates.description = req.body.description;
+
+    const updated = await updateWebhookSubscription(req.params.id, updates);
+    return res.json({ success: true, subscription: { ...updated, secret: '***' } });
+  } catch (error) {
+    if (error.code === 'INSECURE_WEBHOOK_URL' || error.code === 'BLOCKED_WEBHOOK_URL' || error.code === 'INVALID_WEBHOOK_URL') {
+      return res.status(400).json({ success: false, error: error.message, code: error.code });
+    }
+    console.error('[Webhook] Update route error:', error);
+    return res.status(500).json({ success: false, error: 'Failed to update webhook subscription' });
+  }
+});
+
+router.delete('/webhooks/:id', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const tenantContext = await getTenantFromRequest(req);
+    const ownership = await assertWebhookOwnership(req, tenantContext);
+    if (ownership.notFound) return res.status(404).json({ success: false, error: 'Webhook not found' });
+    if (ownership.forbidden) return res.status(403).json({ success: false, error: 'Webhook belongs to another tenant', code: 'TENANT_ACCESS_DENIED' });
+
+    await deleteWebhookSubscription(req.params.id);
+    return res.json({ success: true, subscriptionId: req.params.id, deleted: true });
+  } catch (error) {
+    console.error('[Webhook] Delete route error:', error);
+    return res.status(500).json({ success: false, error: 'Failed to delete webhook subscription' });
+  }
+});
+
+// ============================================================================
 // CREATE SHORT LINK (Protected - Requires Authentication)
 // ============================================================================
 
@@ -785,43 +972,16 @@ router.post('/', requireAuth, requireAdmin, async (req, res) => {
     const tenantContext = await getTenantFromRequest(req);
     const tenantConfig = await getTenantConfig(tenantContext.tenantId);
 
-    // Global domain whitelist — super-admins with custom category bypass
-    const destUrl = req.body.webDestination || req.body.destinations?.web || '';
+    // Domain policy + plan quota are enforced in the service layer (smartLinkService)
+    // so every creation path — admin, public API, batch, tenant-links — shares one rule.
+    // Super-admins may bypass the domain whitelist with destinationCategory==='custom'.
     const isCustomBypass = tenantContext.isSuperAdmin && req.body.destinationCategory === 'custom';
-    if (destUrl && !isCustomBypass && !isWhitelistedDomain(destUrl)) {
-      return res.status(403).json({
-        success: false,
-        error: 'Destination domain is not on the Kaayko whitelist. Only approved Kaayko domains are allowed.',
-        code: 'DOMAIN_NOT_WHITELISTED'
-      });
-    }
-
-    // Enforce destination domain restrictions for non-super-admin tenant users
-    if (!tenantContext.isSuperAdmin && tenantContext.tenantId !== DEFAULT_TENANT_ID) {
-      const tenantDoc = await db.collection('tenants').doc(tenantContext.tenantId).get();
-      const allowedDomains = tenantDoc.exists && tenantDoc.data().settings?.allowedDomains;
-      if (allowedDomains && allowedDomains.length > 0) {
-        const dest = req.body.webDestination || req.body.destinations?.web || '';
-        try {
-          const destHost = new URL(dest).hostname.replace(/^www\./, '');
-          const isAllowed = allowedDomains.some(d => destHost === d || destHost.endsWith('.' + d));
-          if (!isAllowed) {
-            return res.status(403).json({
-              success: false,
-              error: `Destination domain not allowed for this tenant. Allowed: ${allowedDomains.join(', ')}`,
-              code: 'DOMAIN_NOT_ALLOWED'
-            });
-          }
-        } catch (urlErr) {
-          // Invalid URL — let downstream validation handle it
-        }
-      }
-    }
 
     // Add creator info and tenant-owned domain settings.
     // Client-supplied domain/pathPrefix are ignored for non-super-admin tenant safety.
     const linkData = {
       ...req.body,
+      bypassDomainCheck: isCustomBypass,
       createdBy: req.user.email || req.user.uid,
       tenantId: tenantConfig.id,
       tenantName: tenantConfig.name,
@@ -887,6 +1047,14 @@ router.post('/', requireAuth, requireAdmin, async (req, res) => {
       });
     }
 
+    if (error.code === 'DOMAIN_NOT_WHITELISTED' || error.code === 'DOMAIN_NOT_ALLOWED') {
+      return res.status(403).json({ success: false, error: error.message, code: error.code });
+    }
+
+    if (error.code === 'PLAN_LIMIT_EXCEEDED') {
+      return res.status(403).json({ success: false, error: error.message, code: 'PLAN_LIMIT_EXCEEDED' });
+    }
+
     res.status(400).json({
       success: false,
       error: error.message || 'Failed to create link'
@@ -927,7 +1095,7 @@ router.get('/', requireAuth, requireAdmin, async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Failed to fetch links',
-      message: error.message
+      message: 'An unexpected error occurred'
     });
   }
 });
@@ -973,20 +1141,23 @@ router.put('/:code', requireAuth, requireAdmin, async (req, res) => {
       assertTenantAccess(req.user, existingLink.tenantId || DEFAULT_TENANT_ID);
     }
 
-    // Global domain whitelist on update — super-admins with custom category bypass
-    const updatedWeb = updates.destinations?.web || updates.webDestination || '';
-    if (updatedWeb) {
-      const isCustomBypass = tenantContext.isSuperAdmin && updates.destinationCategory === 'custom';
-      if (!isCustomBypass && !isWhitelistedDomain(updatedWeb)) {
-        return res.status(403).json({
-          success: false,
-          error: 'Destination domain is not on the Kaayko whitelist. Only approved Kaayko domains are allowed.',
-          code: 'DOMAIN_NOT_WHITELISTED'
-        });
-      }
-    }
+    // Domain policy is enforced in the service layer. Super-admins may bypass the
+    // whitelist with destinationCategory==='custom'.
+    const isCustomBypass = tenantContext.isSuperAdmin && updates.destinationCategory === 'custom';
 
-    const link = await LinkService.updateShortLink(code, updates);
+    const link = await LinkService.updateShortLink(code, { ...updates, bypassDomainCheck: isCustomBypass });
+
+    // Fire link.updated webhook (async, non-blocking).
+    triggerWebhooks({
+      tenantId: existingLink.tenantId || DEFAULT_TENANT_ID,
+      eventType: EVENT_TYPES.LINK_UPDATED,
+      payload: {
+        event: 'link.updated',
+        link: { code: link.code, shortUrl: link.shortUrl, title: link.title, destinations: link.destinations },
+        timestamp: new Date().toISOString()
+      }
+    }).catch(err => console.error('⚠️ Webhook trigger error (update):', err));
+
     res.json({ success: true, link });
   } catch (error) {
     console.error('[SmartLinks] Error updating link:', error);
@@ -1007,13 +1178,17 @@ router.put('/:code', requireAuth, requireAdmin, async (req, res) => {
       });
     }
 
+    if (error.code === 'DOMAIN_NOT_WHITELISTED' || error.code === 'DOMAIN_NOT_ALLOWED') {
+      return res.status(403).json({ success: false, error: error.message, code: error.code });
+    }
+
     if (error.message?.includes('tenant') || error.message?.includes('Access denied') || error.code?.startsWith('TENANT')) {
       return tenantAccessError(res, error);
     }
 
     res.status(500).json({
       success: false,
-      error: error.message || 'Failed to update link'
+      error: 'Failed to update link'
     });
   }
 });
@@ -1032,6 +1207,18 @@ router.delete('/:code', requireAuth, requireAdmin, async (req, res) => {
     }
 
     const result = await LinkService.deleteShortLink(code);
+
+    // Fire link.deleted webhook (async, non-blocking).
+    triggerWebhooks({
+      tenantId: existingLink.tenantId || DEFAULT_TENANT_ID,
+      eventType: EVENT_TYPES.LINK_DELETED,
+      payload: {
+        event: 'link.deleted',
+        link: { code, shortUrl: existingLink.shortUrl, title: existingLink.title },
+        timestamp: new Date().toISOString()
+      }
+    }).catch(err => console.error('⚠️ Webhook trigger error (delete):', err));
+
     res.json({ success: true, ...result });
   } catch (error) {
     console.error('[SmartLinks] Error deleting link:', error);
@@ -1058,7 +1245,7 @@ router.delete('/:code', requireAuth, requireAdmin, async (req, res) => {
 // TRACK EVENTS (Install, Open, etc.)
 // ============================================================================
 
-router.post('/events/:type', async (req, res) => {
+router.post('/events/:type', rateLimiter('api'), async (req, res) => {
   try {
     const { type } = req.params;
     const { linkId, userId, platform, metadata = {} } = req.body;

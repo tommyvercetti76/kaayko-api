@@ -717,13 +717,13 @@ async function handleRedirect(req, res, code, options = {}) {
     return res.redirect(302, destination);
 
   } catch (error) {
-    // Log error with context for debugging
-    console.error('[Redirect] Handler error:', {
+    // Structured error log so Cloud Logging can alert on redirect 5xx spikes.
+    require('./logger').error('redirect_failed', {
       code,
-      error: error.message,
+      err: error.message,
       stack: error.stack
     });
-    
+
     return res.status(500).send(errorPage(
       500,
       'Something Went Wrong',

@@ -239,6 +239,36 @@ All Kortex routes use this standard shape:
 
 ---
 
+## Operations — deploy, rollback, monitoring
+
+**CI:** `.github/workflows/kortex-ci.yml` runs on every push/PR touching `functions/`.
+The hardening suite (`npm run test:kortex:hardening`) is a required gate; the full
+legacy suite runs informationally until its known pre-existing failures are burned
+down (tracked in [`../../docs/KORTEX_AUDIT.md`](../../docs/KORTEX_AUDIT.md)).
+
+**Deploy:**
+```bash
+firebase deploy --only functions          # code (all API routes share exports.api)
+firebase deploy --only firestore:rules    # security rules (separate target)
+```
+
+**Rollback:** the redirect path lives inside the shared `exports.api` function, so a
+bad deploy affects every live link. To roll back:
+```bash
+# 1. Find the last-good commit/tag
+git log --oneline -n 10
+# 2. Check out and redeploy it
+git checkout <last-good-sha> -- functions/
+firebase deploy --only functions
+# 3. For rules, redeploy the previous firestore.rules the same way.
+```
+Prefer tagging releases (`git tag kortex-vN`) so rollback is `git checkout kortex-v<N-1>`.
+
+**Monitoring:** the redirect handler emits structured JSON logs via
+`api/kortex/logger.js` (severity=ERROR on redirect failure). Create a Cloud Logging
+log-based metric on `severity=ERROR AND jsonPayload.component=kortex` and alert on a
+5xx spike. Add an uptime check hitting `GET /kortex/health` plus a known redirect.
+
 ## Testing
 
 **Run existing smoke tests:**

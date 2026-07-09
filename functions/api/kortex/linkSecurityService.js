@@ -18,9 +18,17 @@ const db = admin.firestore();
 // 1. HMAC-SIGNED URLS
 // ============================================================================
 
-const SIGNING_SECRET = process.env.KORTEX_LINK_SIGNING_SECRET || 'kx-default-signing-key-replace-in-prod';
+// Fail-closed: there is no hardcoded fallback secret. If KORTEX_LINK_SIGNING_SECRET
+// is unset outside the emulator, signing and verification are disabled rather than
+// falling back to a repo-committed (forgeable) key.
+const IS_EMULATOR = process.env.FUNCTIONS_EMULATOR === 'true';
+const SIGNING_SECRET = process.env.KORTEX_LINK_SIGNING_SECRET || (IS_EMULATOR ? 'kx-emulator-signing-key' : null);
+if (!SIGNING_SECRET) {
+  console.error('[Security] KORTEX_LINK_SIGNING_SECRET is not set — link signing/verification is DISABLED (fail-closed). Set it to enable signed links.');
+}
 
 function signCode(code, tenantId) {
+  if (!SIGNING_SECRET) return null; // not configured → no (forgeable) signature
   const payload = `${tenantId}:${code}`;
   return crypto.createHmac('sha256', SIGNING_SECRET)
     .update(payload)
@@ -29,12 +37,14 @@ function signCode(code, tenantId) {
 }
 
 function verifySignature(code, tenantId, sig) {
+  if (!SIGNING_SECRET) return null; // not configured → never accept a signature as proof
   if (!sig) return null; // no sig = not enforced (backwards compat)
   const expected = signCode(code, tenantId);
-  return crypto.timingSafeEqual(
-    Buffer.from(sig, 'utf8'),
-    Buffer.from(expected, 'utf8')
-  );
+  if (!expected) return null;
+  const sigBuf = Buffer.from(sig, 'utf8');
+  const expBuf = Buffer.from(expected, 'utf8');
+  if (sigBuf.length !== expBuf.length) return false; // timingSafeEqual requires equal lengths
+  return crypto.timingSafeEqual(sigBuf, expBuf);
 }
 
 // ============================================================================

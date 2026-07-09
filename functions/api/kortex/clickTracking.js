@@ -41,6 +41,14 @@ function generateClickId() {
   return `c_${randomBytes}`;
 }
 
+// Privacy: store a salted hash of the client IP, never the raw address.
+// Preserves per-IP dedup/analytics grouping without retaining PII (GDPR/DPDP).
+const IP_SALT = process.env.KORTEX_IP_SALT || 'kortex-ip-salt';
+function hashIp(ip) {
+  if (!ip) return null;
+  return crypto.createHash('sha256').update(`${IP_SALT}:${ip}`).digest('hex').slice(0, 16);
+}
+
 /**
  * Track a click event with full context
  * Returns clickId for attribution chain
@@ -87,8 +95,8 @@ async function trackClick(params) {
     deviceInfo,
     userAgent,
     
-    // Network & location
-    ip,
+    // Network & location — store a salted hash, never the raw IP.
+    ip: hashIp(ip),
     // Note: Geolocation can be added via IP lookup service
     
     // Attribution

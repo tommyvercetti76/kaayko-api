@@ -12,6 +12,8 @@ const admin = require('firebase-admin');
 const { FieldValue } = require('firebase-admin/firestore');
 const { generateShortCode, isValidShortCode } = require('./smartLinkValidation');
 const { DEFAULT_TENANT_ID } = require('./tenantContext');
+const { assertDestinationAllowed } = require('./domainPolicy');
+const { PLAN_LIMITS } = require('../billing/planLimits');
 
 const db = admin.firestore();
 
@@ -207,6 +209,39 @@ async function createShortLink(data) {
     }
   }
 
+  // Load tenant config once (reused for domain policy, quota, and slug below).
+  let tenantDocData = null;
+  if (tenantId !== DEFAULT_TENANT_ID) {
+    const tdoc = await db.collection('tenants').doc(tenantId).get();
+    tenantDocData = tdoc.exists ? tdoc.data() : null;
+  }
+
+  // Destination domain policy — shared by admin, public API, batch, and tenant-links.
+  assertDestinationAllowed({
+    webDestination,
+    tenantId,
+    allowedDomains: tenantDocData?.settings?.allowedDomains || null,
+    bypass: data.bypassDomainCheck === true
+  });
+
+  // Plan quota — cap link count per tenant. The default Kaayko tenant is unlimited.
+  if (tenantId !== DEFAULT_TENANT_ID) {
+    const plan = tenantDocData?.plan || 'starter';
+    const linkLimit = PLAN_LIMITS[plan]?.links ?? PLAN_LIMITS.starter.links;
+    if (linkLimit !== Infinity) {
+      // Bounded read: fetch at most `linkLimit` docs — enough to know we're at/over the cap.
+      const existing = await db.collection('short_links')
+        .where('tenantId', '==', tenantId)
+        .limit(linkLimit)
+        .get();
+      if (existing.size >= linkLimit) {
+        const err = new Error(`Plan limit reached: the ${plan} plan allows ${linkLimit} links. Upgrade to add more.`);
+        err.code = 'PLAN_LIMIT_EXCEEDED';
+        throw err;
+      }
+    }
+  }
+
   // Determine short code: use provided or generate secure tenant-prefixed code
   let shortCode = providedCode;
   if (!shortCode) {
@@ -228,9 +263,8 @@ async function createShortLink(data) {
   // Construct short URL — tenant links use alumni.kaayko.com namespace
   let shortUrl, qrCodeUrl;
   if (tenantId !== DEFAULT_TENANT_ID) {
-    // Tenant-namespaced: alumni.kaayko.com/<slug>/<code>
-    const tenantDoc = await db.collection('tenants').doc(tenantId).get();
-    const tenantSlug = tenantDoc.exists ? (tenantDoc.data().slug || tenantId) : tenantId;
+    // Tenant-namespaced: alumni.kaayko.com/<slug>/<code> (reuse tenant doc from above)
+    const tenantSlug = tenantDocData ? (tenantDocData.slug || tenantId) : tenantId;
     shortUrl = `https://alumni.kaayko.com/${tenantSlug}/${publicCode || shortCode}`;
     qrCodeUrl = `https://alumni.kaayko.com/${tenantSlug}/qr/${shortCode}.png`;
   } else {
@@ -478,6 +512,23 @@ async function updateShortLink(code, updates) {
   };
 
   const currentData = linkDoc.data() || {};
+
+  // Destination domain policy on update — mirrors createShortLink.
+  if (destinations && destinations.web) {
+    const linkTenantId = currentData.tenantId || DEFAULT_TENANT_ID;
+    let allowedDomains = null;
+    if (linkTenantId !== DEFAULT_TENANT_ID) {
+      const tdoc = await db.collection('tenants').doc(linkTenantId).get();
+      allowedDomains = tdoc.exists ? (tdoc.data().settings?.allowedDomains || null) : null;
+    }
+    assertDestinationAllowed({
+      webDestination: destinations.web,
+      tenantId: linkTenantId,
+      allowedDomains,
+      bypass: updates.bypassDomainCheck === true
+    });
+  }
+
   if (metadata !== undefined) {
     const currentDestinations = currentData.destinations || {};
     const nextWebDestination = destinations?.web !== undefined

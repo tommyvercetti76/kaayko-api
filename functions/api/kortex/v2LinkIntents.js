@@ -246,10 +246,27 @@ async function recordEvent(type, payload = {}, req = null) {
     throw error;
   }
 
+  const linkCode = payload.linkCode || payload.code || null;
+
+  // Anti-poisoning: never trust a caller-supplied tenantId for a real link.
+  // When a linkCode is given and the link exists, derive tenantId from the stored
+  // link so an anonymous caller can't attribute events to a competitor's tenant.
+  let tenantId = payload.tenantId || DEFAULT_TENANT_ID;
+  if (linkCode) {
+    try {
+      const linkDoc = await db.collection('short_links').doc(linkCode).get();
+      if (linkDoc.exists) {
+        tenantId = linkDoc.data().tenantId || DEFAULT_TENANT_ID;
+      }
+    } catch (_) {
+      // Lookup failure is non-fatal; fall back to the best-effort tenantId.
+    }
+  }
+
   const event = {
     type,
-    tenantId: payload.tenantId || DEFAULT_TENANT_ID,
-    linkCode: payload.linkCode || payload.code || null,
+    tenantId,
+    linkCode,
     campaignId: payload.campaignId || null,
     clickId: payload.clickId || null,
     source: payload.source || null,

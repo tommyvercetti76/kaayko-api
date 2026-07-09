@@ -16,6 +16,7 @@
 
 const admin = require('firebase-admin');
 const crypto = require('crypto');
+const { assertSafeWebhookUrl } = require('./ssrfGuard');
 
 const db = admin.firestore();
 
@@ -218,12 +219,8 @@ async function createWebhookSubscription(subscriptionData) {
     throw new Error('At least one event type is required');
   }
 
-  // Validate URL
-  try {
-    new URL(targetUrl);
-  } catch {
-    throw new Error('Invalid targetUrl');
-  }
+  // SSRF guard: https-only, no private/loopback/link-local/metadata destinations.
+  assertSafeWebhookUrl(targetUrl);
 
   const subscription = {
     tenantId,
@@ -265,6 +262,11 @@ async function updateWebhookSubscription(subscriptionId, updates) {
 
   if (!subscriptionDoc.exists) {
     throw new Error('Subscription not found');
+  }
+
+  // Re-run the SSRF guard if the target URL is being changed.
+  if (updates.targetUrl) {
+    assertSafeWebhookUrl(updates.targetUrl);
   }
 
   await subscriptionRef.update({

@@ -25,8 +25,12 @@ async function getLinkClicksInRange(tenantId, startDate, endDate) {
     const linkData = doc.data();
     const code = linkData.code || doc.id;
 
-    const clicksSnap = await db.collection('smartLinkClicks')
-      .where('code', '==', code)
+    // Read from click_events (the unified collection the main redirect path writes).
+    // The previous smartLinkClicks source was only populated by the alumni path, so
+    // main-path links reported ~0 clicks. Requires the click_events linkCode+timestamp
+    // composite index (declared in firestore.indexes.json).
+    const clicksSnap = await db.collection('click_events')
+      .where('linkCode', '==', code)
       .where('timestamp', '>=', startDate)
       .where('timestamp', '<=', endDate)
       .count()
