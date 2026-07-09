@@ -8,6 +8,7 @@ const router = express.Router();
 const admin = require('firebase-admin');
 const db = admin.firestore();
 const { requireAuth } = require('../../middleware/authMiddleware');
+const { getTenantFromRequest } = require('../kortex/tenantContext');
 
 // Stripe configuration - only initialize if key is available
 let stripe = null;
@@ -60,7 +61,7 @@ router.get('/config', (req, res) => {
  */
 router.get('/subscription', requireAuth, async (req, res) => {
   try {
-    const tenantId = req.user.tenantId || 'kaayko';
+    const { tenantId } = await getTenantFromRequest(req);
     
     // Get tenant subscription from Firestore
     const tenantDoc = await db.collection('tenants').doc(tenantId).get();
@@ -116,7 +117,7 @@ router.get('/subscription', requireAuth, async (req, res) => {
 router.post('/create-checkout', requireAuth, requireStripe, async (req, res) => {
   try {
     const { planId } = req.body;
-    const tenantId = req.user.tenantId || 'kaayko';
+    const { tenantId } = await getTenantFromRequest(req);
     const userEmail = req.user.email;
     
     if (!planId || !PRICE_IDS[planId]) {
@@ -186,7 +187,7 @@ router.post('/create-checkout', requireAuth, requireStripe, async (req, res) => 
 router.post('/downgrade', requireAuth, async (req, res) => {
   try {
     const { planId } = req.body;
-    const tenantId = req.user.tenantId || 'kaayko';
+    const { tenantId } = await getTenantFromRequest(req);
     
     const tenantDoc = await db.collection('tenants').doc(tenantId).get();
     
@@ -238,125 +239,10 @@ router.post('/downgrade', requireAuth, async (req, res) => {
   }
 });
 
-/**
- * POST /billing/webhook
- * Handle Stripe webhook events for subscription lifecycle
- */
-router.post('/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
-  if (!stripe) {
-    return res.status(503).json({ error: 'Stripe not configured' });
-  }
-  
-  const sig = req.headers['stripe-signature'];
-  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
-  
-  if (!webhookSecret) {
-    return res.status(503).json({ error: 'Webhook secret not configured' });
-  }
-  
-  let event;
-  
-  try {
-    event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
-  } catch (err) {
-    console.error('Webhook signature verification failed:', err.message);
-    return res.status(400).send(`Webhook Error: ${err.message}`);
-  }
-  
-  // Handle the event
-  switch (event.type) {
-    case 'checkout.session.completed': {
-      const session = event.data.object;
-      const { tenantId, planId } = session.metadata;
-      
-      // Update tenant with subscription details
-      await db.collection('tenants').doc(tenantId).update({
-        plan: planId,
-        stripeSubscriptionId: session.subscription,
-        subscriptionStatus: 'active',
-        currentPeriodEnd: new Date(session.expires_at * 1000),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp()
-      });
-      
-      console.log(`✅ Subscription activated: ${tenantId} → ${planId}`);
-      break;
-    }
-    
-    case 'customer.subscription.updated': {
-      const subscription = event.data.object;
-      const customerId = subscription.customer;
-      
-      // Find tenant by customer ID
-      const tenantsSnapshot = await db.collection('tenants')
-        .where('stripeCustomerId', '==', customerId)
-        .limit(1)
-        .get();
-      
-      if (!tenantsSnapshot.empty) {
-        const tenantDoc = tenantsSnapshot.docs[0];
-        await tenantDoc.ref.update({
-          subscriptionStatus: subscription.status,
-          currentPeriodEnd: new Date(subscription.current_period_end * 1000),
-          updatedAt: admin.firestore.FieldValue.serverTimestamp()
-        });
-      }
-      break;
-    }
-    
-    case 'customer.subscription.deleted': {
-      const subscription = event.data.object;
-      const customerId = subscription.customer;
-      const scheduledPlan = subscription.metadata?.scheduledPlan || 'starter';
-      
-      // Find tenant and downgrade
-      const tenantsSnapshot = await db.collection('tenants')
-        .where('stripeCustomerId', '==', customerId)
-        .limit(1)
-        .get();
-      
-      if (!tenantsSnapshot.empty) {
-        const tenantDoc = tenantsSnapshot.docs[0];
-        await tenantDoc.ref.update({
-          plan: scheduledPlan,
-          subscriptionStatus: 'cancelled',
-          stripeSubscriptionId: null,
-          scheduledDowngrade: null,
-          updatedAt: admin.firestore.FieldValue.serverTimestamp()
-        });
-        
-        console.log(`📉 Subscription cancelled: ${tenantDoc.id} → ${scheduledPlan}`);
-      }
-      break;
-    }
-    
-    case 'invoice.payment_failed': {
-      const invoice = event.data.object;
-      const customerId = invoice.customer;
-      
-      // Mark subscription as past_due
-      const tenantsSnapshot = await db.collection('tenants')
-        .where('stripeCustomerId', '==', customerId)
-        .limit(1)
-        .get();
-      
-      if (!tenantsSnapshot.empty) {
-        const tenantDoc = tenantsSnapshot.docs[0];
-        await tenantDoc.ref.update({
-          subscriptionStatus: 'past_due',
-          updatedAt: admin.firestore.FieldValue.serverTimestamp()
-        });
-        
-        console.log(`⚠️ Payment failed: ${tenantDoc.id}`);
-      }
-      break;
-    }
-    
-    default:
-      console.log(`Unhandled event type: ${event.type}`);
-  }
-  
-  res.json({ received: true });
-});
+// NOTE: POST /billing/webhook is intentionally NOT defined here.
+// It requires the raw (unparsed) request body for Stripe signature verification,
+// so it is mounted before the global express.json() in functions/index.js via
+// ./stripeWebhook.js. Defining it here would never receive a verifiable body.
 
 /**
  * GET /billing/usage
@@ -364,7 +250,7 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
  */
 router.get('/usage', requireAuth, async (req, res) => {
   try {
-    const tenantId = req.user.tenantId || 'kaayko';
+    const { tenantId } = await getTenantFromRequest(req);
     
     // Get tenant info
     const tenantDoc = await db.collection('tenants').doc(tenantId).get();

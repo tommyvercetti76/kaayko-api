@@ -22,6 +22,10 @@ apiApp.use((req, _res, next) => {
 // Must be defined BEFORE express.json() middleware
 apiApp.use("/createPaymentIntent/webhook", express.raw({ type: 'application/json' }), require("./api/checkout/stripeWebhook"));
 
+// ⚠️ CRITICAL: Kortex billing (subscription) webhook also needs the raw body.
+// Must be mounted BEFORE express.json() for the same signature-verification reason.
+apiApp.use("/billing/webhook", express.raw({ type: 'application/json' }), require("./api/billing/stripeWebhook"));
+
 // Now apply JSON parsing for all other routes
 apiApp.use(express.json());
 
@@ -29,6 +33,7 @@ apiApp.use(express.json());
 apiApp.use("/images", require("./api/products/images"));
 apiApp.get("/helloWorld", (_r, res) => res.send("OK"));
 apiApp.use("/products", require("./api/products/products"));
+apiApp.use("/animals", require("./api/products/animals"));
 apiApp.use("/paddlingOut", require("./api/weather/paddlingout"));
 apiApp.use("/paddle-trainer", require("./api/weather/paddleTrainer"));
 
@@ -50,7 +55,10 @@ const kortexRouter = require("./api/kortex/smartLinks");
 apiApp.use("/kortex", kortexRouter);
 apiApp.use("/smartlinks", kortexRouter);
 apiApp.use("/campaigns", require("./api/campaigns/campaignRoutes"));  // KORTEX campaign management
-apiApp.use("/api/public", require("./api/kortex/publicApiRouter"));   // KORTEX public developer API (API-key auth)
+// Mounted at "/public" because the prefix-strip middleware above rewrites the
+// external path /api/public/* -> /public/* before routing. External callers still
+// use /api/public/*; mounting at /api/public would be unreachable (double-strip).
+apiApp.use("/public", require("./api/kortex/publicApiRouter"));       // KORTEX public developer API (API-key auth)
 
 // 🎓 ALUMNI INTEREST CAMPAIGN
 apiApp.use("/alumni", require("./api/alumni/alumniRoutes"));           // Interest form, scoring, admin dashboard

@@ -1,214 +1,190 @@
-# Kortex — Product Brief for Brand & Value Prop Development
+# Kortex — Product Brief (Reality-Aligned)
 
-> **Purpose:** Source-of-truth feature inventory for the Product Owner to create landing page copy, brand material, value propositions, and marketing collateral.
+> **Purpose:** Source-of-truth feature inventory for the Product Owner — landing-page copy, value props, and marketing collateral. Every claim here is verified against the code so marketing does not promise what the backend can't do.
 >
-> **Compiled from:** Full codebase audit — 16 backend files, 7 frontend modules, landing page, and all service layers.
+> **Rewritten:** 2026-07-09, from a full multi-agent code audit (see [`KORTEX_AUDIT.md`](./KORTEX_AUDIT.md)). Supersedes the May 7, 2026 brief, which oversold ~8 features against the code.
 >
-> **Date:** May 7, 2026
+> **Status legend:**
+> - ✅ **Shipped** — implemented, mounted, reachable, and (mostly) tested.
+> - 🟡 **Partial** — works only on a specific path (usually the alumni/campaign vertical) or is missing its management surface. Do **not** market as universal.
+> - 🔧 **Roadmap** — designed or stubbed in code but not reachable/enforced. Do **not** market yet.
 
 ---
 
 ## What Is Kortex?
 
-Kortex is a **multi-tenant smart link infrastructure platform** that goes beyond URL shortening. It combines intelligent device routing, campaign attribution, security hardening, and real-time analytics into a single system. Built for institutions, creators, and teams who need links that **think, adapt, and report**.
+Kortex is Kaayko's **multi-tenant smart-link platform**: device-aware redirects, campaign attribution, a tenant model, and click analytics behind short codes. Today it is a **strong smart-link engine for the Kaayko ecosystem and the alumni/campaign vertical**, with a credible path to a commercial Bitly/Branch-class product. The honest one-liner for marketing is: *"Links that route by device and report by campaign — built multi-tenant from the start."* Claims beyond that need the status tags below.
 
 ---
 
-## Core Feature Set (Grouped by Category)
+## Core Feature Set
 
 ### A. Smart Link Engine
 
-| # | Feature | What It Does | Differentiator? |
-|---|---------|-------------|-----------------|
-| 1 | **Custom Short Codes** | Auto-generated (`lk` + 4 chars) or user-defined vanity codes | — |
-| 2 | **Multi-Platform Destinations** | Set separate destinations for iOS, Android, and Web per link | Most shorteners route everyone to the same URL |
-| 3 | **Device-Aware Routing** | Detects platform from User-Agent and routes to the correct destination automatically | Core differentiator — no manual "if iPhone then X" needed |
-| 4 | **A/B Testing (Weighted Variants)** | Split traffic across multiple destinations by weight (e.g., 70/30) | Built-in — competitors require external experimentation tools |
-| 5 | **UTM Management** | Store and auto-append 5 UTM fields per link; merge with runtime query params | UTM aliasing (`src` → `utm_source`) for cleaner URLs |
-| 6 | **Link Expiry** | Auto-disable links after a set date | — |
-| 7 | **Enable/Disable Toggle** | Instantly kill or revive a link without deleting it | — |
-| 8 | **Click Caps** | Max-uses limit; link auto-disables after N clicks | Useful for exclusivity/scarcity campaigns |
-| 9 | **Source-Level Access Rules** | Per-source time windows (`startsAt`/`endsAt`) — e.g., "QR code only works during the event" | Uncommon in the category |
-| 10 | **App Store Default** | Toggle to route mobile users to app store when no platform-specific destination is set | — |
-| 11 | **HMAC-Signed URLs** | Every link gets a cryptographic signature; optional `?sig=` param for verified access | Enterprise security feature — prevents link tampering |
-| 12 | **Social Crawler Detection** | Detects 10+ social platform crawlers (Facebook, Twitter, WhatsApp, Discord, LinkedIn, Slack, Telegram) and serves OG metadata instead of redirecting | Link previews render correctly without inflating click counts |
+| Feature | Status | Reality |
+|---------|--------|---------|
+| Custom short codes (`lk`+4, or vanity) | ✅ Shipped | `smartLinkValidation.js`; uniqueness retry. |
+| Multi-platform destinations (iOS/Android/Web) | ✅ Shipped | Per-link `destinations{}`, real device routing. |
+| Device-aware routing | ✅ Shipped | User-Agent detection in `redirectHandler.js`. Core differentiator. |
+| UTM management (5 fields, aliasing, runtime merge) | ✅ Shipped | Normalized at create + redirect; `src`→`utm_source` aliasing. |
+| Link expiry (auto-disable by date) | ✅ Shipped | Returns 410 when expired. |
+| Enable/disable toggle | ✅ Shipped | |
+| Social-crawler OG previews (no click inflation) | 🟡 Partial | **Alumni path only.** The main `/l/` path counts crawler hits. Don't market as universal. |
+| Click caps (max-uses) | 🟡 Partial | Enforced only for `metadata.campaign === 'alumni'` links and the alumni resolver. A regular link's `maxUses` is not enforced. |
+| Source-level access windows (`startsAt`/`endsAt`) | 🟡 Partial | Alumni/campaign metadata path. |
+| App-store default routing | ✅ Shipped | |
+| HMAC-signed URLs | 🔧 Roadmap | Signatures generate, but verification is optional (missing `?sig=` passes) and the secret falls back to a repo-committed default. Not enforced. Do not claim "every link signed." |
+| A/B testing (weighted variants) | 🔧 Roadmap | Redirect-side selection exists, but every write path rejects variant arrays — cannot be configured. |
 
-### B. Intent-Based Routing (V2 Architecture)
+### B. Intent-Based Routing (V2)
 
-| # | Feature | What It Does |
-|---|---------|-------------|
-| 1 | **11 Destination Types** | `tenant_admin_login`, `tenant_alumni_login`, `tenant_registration`, `tenant_public_page`, `tenant_dashboard`, `campaign_landing`, `campaign_member_view`, `philanthropy_campaign`, `donation_checkout`, `campaign_report`, `external_url` |
-| 2 | **5 Audience Types** | admin, alumni, donor, public, invited |
-| 3 | **6 Intent Types** | login, register, view, donate, report, share |
-| 4 | **6 Source Types** | qr, email, sms, social, manual, print |
-| 5 | **Semantic Routing** | A single link adapts behavior based on who clicks it, from which channel, and for what purpose |
+| Feature | Status | Reality |
+|---------|--------|---------|
+| 11 destination types, 5 audiences, 6 intents, 6 sources | ✅ Shipped | `v2LinkIntents.js`, mounted and tested. |
+| Semantic routing (one link adapts by who/where/why) | ✅ Shipped | Real differentiator for the alumni/campaign vertical. |
 
-> **Value prop:** "Links that understand context. One link does the work of six."
+> **Value prop (safe):** "One link, many audiences — admin, alumni, and donor each land where they should."
 
 ### C. Click Tracking & Analytics
 
-| # | Feature | What It Does |
-|---|---------|-------------|
-| 1 | **Full Click Context** | Every click records: platform, OS, browser, device type, IP, referrer, UTM params, timestamp, metadata |
-| 2 | **Click Deduplication** | SHA-256 fingerprint (IP + UA + Accept-Language) prevents double-counting |
-| 3 | **7-Day Trend Charts** | Visual bar chart of daily click volume per link |
-| 4 | **Breakdown Dimensions** | Platform, Browser, Device, UTM Source, Referrer — with ranked distribution bars |
-| 5 | **Link Health Badges** | Auto-computed: Hot (5+ clicks in 48h), Active, Dormant (no clicks in 14d) |
-| 6 | **Portfolio Analytics** | Aggregate view: total clicks, active links, avg clicks/link, dormant count, campaign performance ranking, platform mix, performance buckets |
-| 7 | **Time Range Filtering** | 7d, 30d, 90d, all — tier-gated |
-| 8 | **CSV Export** | Download full analytics data as spreadsheet |
-| 9 | **Weekly Performance Digests** | Automated email when top links drop >30% week-over-week (Pro+ only) |
+| Feature | Status | Reality |
+|---------|--------|---------|
+| Rich per-click context (platform/OS/browser/device/referrer/UTM) | ✅ Shipped | `click_events` schema is richer than baseline Bitly. |
+| Click deduplication (SHA-256 fingerprint) | 🟡 Partial | **Alumni path only.** Main path double-counts refreshes. |
+| Per-link breakdowns + 7-day trend | 🟡 Partial | Computed from ≤200 recent clicks and shown against a lifetime counter — a **sample presented as a total** past 200 clicks. UTC day buckets skew IST charts. |
+| Portfolio / tenant analytics | 🟡 Partial | Reads ≤500 arbitrarily-ordered events; scans all links per request (won't scale). |
+| Time-range filtering (7/30/90/all) | 🔧 Roadmap | 30-day event retention intent + frontend-only gating; 90d/all cannot be satisfied. |
+| CSV export | 🟡 Partial | Client-side serialization of the ≤200-doc sample; no backend export endpoint. |
+| Weekly performance digest | 🔧 Roadmap | Scheduled job runs but reads the wrong (legacy) collection → ~0 clicks for main-path links, and its emails queue to a collection nothing sends. |
+| Geo analytics | 🔧 Roadmap | Not captured on clicks (country is used only for in-memory security checks). |
+
+> **Honest analytics claim:** "Recent-click analytics with device and UTM breakdowns." Avoid "full historical analytics," "geo," and "guaranteed dedup" until the pipeline is consolidated.
 
 ### D. Mobile Attribution
 
-| # | Feature | What It Does |
-|---|---------|-------------|
-| 1 | **Click-to-Install Attribution** | Track when a click leads to an app install |
-| 2 | **Deferred Deep Linking** | Mobile app resolves the original click context on first open after install |
-| 3 | **Install Idempotency** | Prevents double-counting installs |
-| 4 | **Custom Funnel Events** | Track downstream actions: signup, purchase, engagement |
-| 5 | **Conversion Metrics** | Click count → install count → conversion rate → avg time to conversion |
+| Feature | Status | Reality |
+|---------|--------|---------|
+| Click-to-install attribution | 🟡 Partial | **Newly wired** (attribution branch now reachable via `/resolve`), but end-to-end depends on the mobile platform-association files below. Needs an integration test before marketing. |
+| Deferred deep linking | 🟡 Partial | Same — code path now live; OS-level linking blocked until AASA/assetlinks cover Kortex paths. |
+| Install idempotency | 🟡 Partial | Non-transactional; concurrent app retries can double-count. |
+| Conversion / funnel events | 🔧 Roadmap | `trackCustomEvent` has no reachable call site. |
 
-> **Value prop:** "Compete with Branch and AppsFlyer — attribution built into your links."
+> Do **not** yet market "compete with Branch and AppsFlyer." Prerequisite: ship `assetlinks.json`, extend the iOS AASA to `/kortex/r/*`, and add an attribution integration test.
 
 ### E. Campaign System
 
-| # | Feature | What It Does |
-|---|---------|-------------|
-| 1 | **Campaign CRUD** | Create, edit, pause, resume, archive campaigns with lifecycle management |
-| 2 | **Auto-Categorization** | Links auto-grouped into campaign groups (alumni, roots, admin, marketing, general) based on metadata and URL patterns |
-| 3 | **Campaign Metrics** | Per-campaign: link count, click total, live count, status |
-| 4 | **Bulk Operations** | Enable/disable all links in a campaign at once |
-| 5 | **Alumni Campaign Fields** | Dedicated metadata: sourceGroup, sourceBatch, schoolName, channel, audienceType, organizerRole, sender, maxUses |
-| 6 | **ROOTS Integration** | Dual-write bridge syncs links to ROOTS Knowledge Engine API |
+| Feature | Status | Reality |
+|---------|--------|---------|
+| Campaign CRUD + lifecycle (pause/resume/archive) | ✅ Shipped | `campaignRoutes.js`, permission-checked, audit-logged. |
+| Membership management | ✅ Shipped | Real Firestore upserts/deletes (the old brief wrongly called this "mock"). |
+| Audit log | ✅ Shipped | Real writes (also wrongly called "mock" before). |
+| Campaign metrics, auto-categorization, bulk enable/disable | ✅ Shipped | |
+| Alumni campaign fields | ✅ Shipped | |
+| ROOTS integration (dual-write bridge) | ✅ Shipped | Proxy holds `KORTEX_SYNC_KEY`. |
 
-### F. QR Code System
+### F. QR Codes
 
-| # | Feature | What It Does |
-|---|---------|-------------|
-| 1 | **Auto-Generated QR** | Every link can generate a QR code instantly |
-| 2 | **Branded QR Codes** | Custom foreground/background colors + logo overlay (Pro+) |
-| 3 | **High Error Correction** | QR codes with logo use Level H correction — tolerates 30% obstruction |
-| 4 | **QR Gallery** | Visual grid of all QR codes with download/copy actions |
-| 5 | **QR Scan Tracking** | Separate `qrScans` counter per link |
+| Feature | Status | Reality |
+|---------|--------|---------|
+| QR generation (PNG/SVG, error-correction H) | ✅ Shipped | Real, via MIT `qrcode` lib, behind admin `POST /kortex/qr/generate`. |
+| Branded QR (colors + logo, Pro-gated) | ✅ Shipped | |
+| Auto QR URL on every link | 🔧 Roadmap | Stored `qrCodeUrl` (`kaayko.com/qr/<code>.png`) 404s — no route/rewrite serves it. |
+| QR scan tracking (`qrScans` counter) | 🔧 Roadmap | `trackQRScan` is dead code. |
 
 ### G. Multi-Tenant Architecture
 
-| # | Feature | What It Does |
-|---|---------|-------------|
-| 1 | **Full Tenant Isolation** | All data queries scoped to active tenant |
-| 2 | **4-Tier Tenant Resolution** | Header override → user profile → API key → default fallback |
-| 3 | **Cryptographic Code Namespacing** | Tenant-prefixed codes with unambiguous character sets |
-| 4 | **Multi-Tenant Membership** | Users can belong to multiple organizations |
-| 5 | **Custom Domains** | Per-tenant vanity domains (Pro: 1, Business: 5, Enterprise: unlimited) |
-| 6 | **Self-Registration** | Public endpoint for new tenant signup |
-| 7 | **Churn Grace Period** | 30-day deactivation delay — links keep working during grace period |
+| Feature | Status | Reality |
+|---------|--------|---------|
+| Tenant isolation (authenticated API) | ✅ Shipped | Tenant identity derived server-side from the verified token; cross-tenant 403s on the API. **Firestore rules now lock client-SDK access** (was a world-readable gap — fixed). |
+| 4-tier tenant resolution | ✅ Shipped | Header → profile → API key → default. |
+| Tenant-prefixed code namespacing | ✅ Shipped | |
+| Multi-tenant membership | ✅ Shipped | |
+| Custom domains (per-tenant) | 🔧 Roadmap | `domain`/`alumniDomain` fields drive resolution, but no quota, no config endpoint, no DNS setup path. |
+| Self-registration | 🟡 Partial | Registration form writes a pending doc; **no approval/provisioning path** turns it into a tenant. |
+| Churn grace period | 🔧 Roadmap | `tenantChurnedAt` is read by the redirect handler but never written. |
 
-> **Value prop:** "Built for B2B from day one — not a single-tenant product with multi-tenant bolted on."
+### H. Security Stack
 
-### H. Six-Layer Security Stack
+| Layer | Status | Reality |
+|-------|--------|---------|
+| Bot/automation scoring | ✅ Shipped | Applies to main redirect routes. |
+| Honeypot canary links + trap routes | ✅ Shipped | |
+| HMAC-signed URLs | 🔧 Roadmap | Not enforced; default secret (see A). |
+| Click-velocity profiling | 🟡 Partial | Alumni path; in-memory (per-instance) — ineffective at scale. |
+| Geo-anomaly detection | 🟡 Partial | Alumni path; in-memory. |
+| Referrer-farm blocking | 🟡 Partial | Alumni path. |
+| Enumeration protection (constant-time 404s) | 🟡 Partial | Alumni path; in-memory. |
+| Rate limiting | 🟡 Partial | Firestore-backed on public mutations + per-API-key; the **tenant-level** limit is a no-op, and all limits are `X-Forwarded-For`-spoofable (`trust proxy` unset). |
 
-| Layer | Name | What It Does |
-|-------|------|-------------|
-| 1 | **HMAC-Signed URLs** | Cryptographic link verification with timing-safe comparison |
-| 2 | **Click Velocity Profiling** | Detects traffic spikes (3x ramp over 5 one-minute buckets) |
-| 3 | **Honeypot Canary Links** | Trap codes (`trap-` prefix) that alert on access |
-| 4 | **Bot/Automation Detection** | Scoring system: headless Chrome (90pts), automation tools (95pts), empty UA (70pts); blocked at 70+ |
-| 5 | **Geographic Anomaly Detection** | Flags >15 countries or >80% single-country dominance |
-| 6 | **Referrer Farm Blocking** | Blocks known traffic farms (fiverr, freelancer, microworkers, etc.) |
+> **Honest security claim:** "Bot scoring, honeypot canaries, and rate-limited public endpoints." The full "six-layer" stack is real but **runs on the alumni/campaign path**, not universally.
 
-Plus:
-- **Enumeration Protection** — constant-time 404s with random delays
-- **Abuse Spike Detection** — alert at 100 clicks in 5 minutes
-- **Rate Limiting** — 4 strategies (IP, user, tenant, API key) with distributed counters
-- **Honeypot Trap Routes** — fake admin endpoints that catch attackers
+### I. Webhooks
 
-> **Value prop:** "Enterprise-grade link security. Six layers between your links and bad actors."
+| Feature | Status | Reality |
+|---------|--------|---------|
+| HMAC-SHA256 signed payloads | ✅ Shipped | Delivery engine signs correctly. |
+| Event delivery | 🟡 Partial | Only `link.created` and `link.clicked` fire; `link.updated`/`link.deleted`/`app.installed`/`custom.event` do not. |
+| Subscription management (create/list/update/delete) | 🔧 Roadmap | Functions exist; **no HTTP route** — tenants can't register a webhook. |
+| Retries / dead-letter queue / replay | 🔧 Roadmap | Fire-and-forget after response (Cloud Functions may kill it); retry delay capped at 5s; no management surface. No SSRF protection yet. |
 
-### I. Webhook System
-
-| # | Feature | What It Does |
-|---|---------|-------------|
-| 1 | **6 Event Types** | `link.created`, `link.updated`, `link.deleted`, `link.clicked`, `app.installed`, `custom.event` |
-| 2 | **HMAC-SHA256 Signed Payloads** | Every delivery cryptographically signed |
-| 3 | **12-Retry Exponential Backoff** | Reliable delivery with increasing delays |
-| 4 | **Dead Letter Queue** | Failed webhooks stored for 7 days with manual replay |
-| 5 | **Delivery Logging** | Full audit trail of every webhook attempt |
-
-> **Value prop:** "Infrastructure-grade webhooks. Your systems stay in sync — guaranteed."
+> Do **not** market "infrastructure-grade webhooks" until subscription CRUD, durable retries (Cloud Tasks/scheduler), and SSRF protection ship.
 
 ### J. Billing & Plans
 
-| Plan | Price | Links | Analytics | QR | Domains | API Calls |
-|------|-------|-------|-----------|-----|---------|-----------|
-| **Starter** | Free | 25 | Basic | Standard | 0 | — |
-| **Pro** | $29/mo | 500 | Advanced | Branded | 1 | 5K/mo |
-| **Business** | $99/mo | 2,500 | Team | White-label | 5 | 25K/mo |
-| **Enterprise** | Custom | Unlimited | Full | Full | Unlimited | Unlimited |
+| Feature | Status | Reality |
+|---------|--------|---------|
+| Stripe checkout + subscription lifecycle | ✅ Shipped | **Webhook signature verification and tenant resolution now fixed** (were broken). |
+| Plan definitions (Starter/Pro/Business/Enterprise) | ✅ Shipped | Defined and displayed. |
+| Quota enforcement (links / API calls / campaigns) | 🔧 Roadmap | **Not enforced** — a free tenant currently gets the whole product. Pricing/limits are display-only until enforced. |
+| Branded-QR / digest gating | ✅ Shipped | The few real plan checks that exist. |
 
-### K. Product-Led Growth
+> Publish prices only alongside a commitment to ship enforcement — today the pricing page is aspirational.
 
-| # | Feature | What It Does |
-|---|---------|-------------|
-| 1 | **"Powered by Kortex" Interstitial** | Free-tier links show branded page before redirecting — drives organic awareness |
-| 2 | **Content-Space Auto-Enrichment** | Links auto-populate metadata from content collections (lake, product, category, store) |
+### K. Public Developer API
 
----
-
-## Unique Selling Points (for Marketing Copy)
-
-### 1. "Links That Think"
-Device-aware routing + intent-based routing means one link does the work of many. No "if iPhone go here" spreadsheets needed.
-
-### 2. "Six Layers of Security"
-Enterprise-grade protection stack that most competitors don't come close to. HMAC signatures, velocity profiling, honeypot canaries, bot scoring, geo-anomaly detection, referrer farm blocking.
-
-### 3. "Attribution, Not Just Analytics"
-Full click-to-install-to-conversion attribution pipeline. Compete with dedicated attribution platforms — it's built into the link.
-
-### 4. "Multi-Tenant by Design"
-Cryptographic namespacing, 4-tier tenant resolution, custom domains, self-registration. Built for institutions and agencies serving multiple clients.
-
-### 5. "A/B Test Without Another Tool"
-Weighted destination variants let you split traffic without Optimizely or LaunchDarkly.
-
-### 6. "Webhooks That Don't Drop"
-HMAC-signed, 12-retry, dead-letter queue with manual replay. Slack/JIRA-level webhook reliability.
-
-### 7. "One Link, Multiple Audiences"
-Intent-based routing: admin sees the dashboard, alumni sees the registration page, donor sees the campaign — same link.
-
-### 8. "QR Codes That Report Back"
-Every scan is tracked separately from link clicks. Branded QR with logo overlay and high error correction.
+| Feature | Status | Reality |
+|---------|--------|---------|
+| API-key-authenticated REST (create/list/get/update/delete/batch/stats) | 🟡 Partial | **Now reachable** at `/api/public/*` (mount was broken). Keys are hashed + scoped. |
+| API-key provisioning (issue/rotate/revoke) | 🔧 Roadmap | No endpoint — keys require manual Firestore surgery. Blocks self-serve developer adoption. |
 
 ---
 
-## Known Gaps (Roadmap Candidates)
+## Safe Marketing Claims (use these today)
 
-| Gap | Impact | Priority Suggestion |
-|-----|--------|-------------------|
-| Public REST API not mounted | Blocks developer adoption / integrations | High |
-| Campaign member management is mock data | No real team collaboration on campaigns | Medium |
-| Campaign audit log is mock data | No accountability trail | Medium |
-| No custom domain configuration UI | Users can't self-serve domain setup | Medium |
-| No bulk import UI (CSV/spreadsheet) | Friction for migrating from competitors | Medium |
-| No link preview/testing tool | Can't QA routing before publishing | Low |
-| No real-time analytics (WebSocket/SSE) | No live dashboard during events | Low |
-| No user-defined tags/labels | Only auto-categorization, no ad-hoc grouping | Low |
-| No link scheduling/rotation | Can't time-shift destinations | Low |
-| No conversion goal tracking UI | Backend supports it, no frontend for it | Low |
+1. **"Links that route by device."** Real, shipped, differentiated.
+2. **"One link, many audiences."** V2 intent routing — real for alumni/campaigns.
+3. **"Multi-tenant from the start."** Real isolation on the authenticated API; rules hardened.
+4. **"Campaign links with attribution and audit."** Campaign system is genuinely complete.
+5. **"Branded QR codes."** Real generator.
 
----
+## Claims to Avoid Until the Roadmap Lands
 
-## Competitive Positioning
-
-| Competitor | What They Do | Where Kortex Wins |
-|-----------|-------------|-------------------|
-| **Bitly** | Basic link shortening + analytics | Device routing, A/B testing, six-layer security, multi-tenant, attribution |
-| **Branch** | Mobile attribution + deep linking | Full link management + analytics + campaigns in one platform |
-| **Rebrandly** | Branded links + custom domains | Intent routing, campaign system, security stack, webhook reliability |
-| **Short.io** | API-first link shortening | Security stack, multi-tenant architecture, alumni/education verticalization |
+- "Compete with Branch/AppsFlyer" (attribution needs platform files + tests)
+- "Six layers of security" as universal (it's alumni-path)
+- "Infrastructure-grade webhooks" (no management surface, no durable retries)
+- "A/B test without another tool" (not configurable)
+- Any specific pricing/quota as enforced (it isn't)
+- "Full analytics / geo / historical" (30-day, sampled, no geo)
 
 ---
 
-*This document should be treated as the single source of truth for what Kortex can do today. The Product Owner should use this to draft value propositions, feature grids, and messaging hierarchy for the landing page redesign.*
+## Roadmap to a Full Product (from the audit)
+
+**Now shipped (this change set):** Firestore rules lockdown · public API reachable · billing webhook + tenant resolution · attribution `/resolve` wired.
+
+**Next — makes it a product:** consolidate analytics on `click_events` · API-key + webhook provisioning routes · single service-layer domain policy · lock down public event endpoints · split the redirect function + CI gating on `test:kortex` · emulator-backed rules tests.
+
+**Then — scale & trust:** daily rollups · hash IPs at write · enforce plan quotas · tenant approval + offboarding/erasure · observability + uptime checks · per-tenant custom domains + `assetlinks.json`/AASA coverage.
+
+---
+
+## Competitive Positioning (honest)
+
+| Competitor | Where Kortex genuinely competes today |
+|-----------|----------------------------------------|
+| **Bitly** | Device routing + multi-tenant + campaign attribution (Bitly lacks device routing). |
+| **Branch** | Not yet — attribution is newly wired and needs platform files + tests first. |
+| **Rebrandly** | Intent routing + campaign system; **behind** on custom-domain self-serve. |
+| **Short.io** | **Behind** — no API-key provisioning yet; catch up before an API-first pitch. |
+
+*Treat this document as the single source of truth. When it conflicts with older collateral, this wins.*

@@ -20,6 +20,9 @@ const {
   createAPIErrorHandler
 } = require('../weather/sharedWeatherUtils');
 
+// Click-to-install attribution (mobile deferred deep linking)
+const { resolveContext } = require('./attributionService');
+
 const db = admin.firestore();
 
 // Security configuration
@@ -427,6 +430,27 @@ router.get("/l/:id", async (req, res) => {
  */
 router.get("/resolve", async (req, res) => {
   try {
+    // Click-to-install attribution: when a mobile app opens for the first time after
+    // install it calls /resolve with the clickId (and/or deviceId) captured from the
+    // deep link, so we can attribute the install back to the originating click.
+    // Falls through to the legacy cookie/ctx-token restoration below when absent.
+    const { clickId, deviceId, platform, appVersion, userId } = req.query;
+    if (clickId || deviceId) {
+      const result = await resolveContext({
+        clickId,
+        deviceId,
+        platform,
+        appVersion,
+        userId,
+        metadata: {
+          userAgent: req.get('user-agent'),
+          ip: req.ip || req.connection.remoteAddress
+        }
+      });
+      await logDeeplinkEvent('resolve_attribution', { clickId, attributed: !!result.attributed });
+      return res.json(result);
+    }
+
     const ctxId = req.query.id || (req.cookies && req.cookies.kaayko_ctxid) || (req.cookies && req.cookies.kaayko_lake_id);
     const cachedLocation = req.cookies && req.cookies.kaayko_location;
     

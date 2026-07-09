@@ -10,20 +10,19 @@ service cloud.firestore {
       allow write: if false;
     }
     
-    // Short links collection - Public reads for redirects, API-only writes
+    // Short links collection - API-only (all access via Cloud Functions Admin SDK)
+    // Redirects, reads and writes go through the /kortex API, which uses the Admin
+    // SDK and bypasses these rules. Client SDK access is denied so that the public
+    // Firebase web config cannot be used to dump every tenant's links.
     match /short_links/{linkId} {
-      // Public read access (needed for redirect functionality)
-      allow read: if true;
-      // Only Cloud Functions can write
-      allow write: if false;
+      allow read, write: if false;
     }
-    
-    // Link analytics - Write by authenticated users, read by admins
+
+    // Link analytics - API-only (event ingestion goes through the /kortex API)
+    // Client create is denied so arbitrary analytics docs cannot be injected with
+    // the public Firebase config; the API validates and scopes every write.
     match /link_analytics/{analyticsId} {
-      // Anyone can write analytics (for tracking)
-      allow create: if true;
-      // Only Cloud Functions can read/update/delete
-      allow read, update, delete: if false;
+      allow read, write: if false;
     }
     
     // Forecast cache - Public reads, API-only writes
