@@ -3,6 +3,7 @@ const router = express.Router();
 const admin = require('firebase-admin');
 const axios = require('axios');
 const { WEATHER_CONFIG } = require('../../config/weatherConfig');
+const { isPublicPaddlingSpot } = require('./communitySpotVisibility');
 
 const db = admin.firestore();
 
@@ -10,7 +11,7 @@ const db = admin.firestore();
 router.get('/tourist-lakes', async (req, res) => {
   try {
     const snapshot = await db.collection('paddlingSpots').get();
-    const lakes = snapshot.docs.map(doc => {
+    const lakes = snapshot.docs.filter(doc => isPublicPaddlingSpot(doc.data())).map(doc => {
       const d = doc.data();
       const loc = d.location || {};
       return {

@@ -285,6 +285,16 @@ async function sendEmail({ to, from, subject, htmlBody, textBody }) {
   };
 }
 
+async function sendRawEmail({ to, subject, html, text, from = FROM_EMAIL }) {
+  return sendEmail({
+    to,
+    from,
+    subject,
+    htmlBody: html || '',
+    textBody: text || ''
+  });
+}
+
 /**
  * HTML escape helper
  * @private
@@ -416,5 +426,6 @@ async function sendMagicLinkEmail({ email, firstName, magicLinkUrl, expiresAt, i
 
 module.exports = {
   sendLinkCreatedNotification,
-  sendMagicLinkEmail
+  sendMagicLinkEmail,
+  sendRawEmail
 };

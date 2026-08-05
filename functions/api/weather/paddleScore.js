@@ -13,6 +13,7 @@ const { createInputMiddleware } = require('./inputStandardization');
 const { computePaddleScoreForSpot } = require('./paddleScoreCompute');
 const PaddleScoreCache = require('../../cache/paddleScoreCache');
 const { requireAdmin } = require('../../middleware/authMiddleware');
+const { isPublicPaddlingSpot } = require('./communitySpotVisibility');
 
 const db = getFirestore();
 
@@ -45,6 +46,14 @@ router.get('/', createInputMiddleware('paddleScore'), async (req, res) => {
         });
       }
       const data = doc.data();
+      if (!isPublicPaddlingSpot(data)) {
+        return res.status(404).json({
+          success: false,
+          error: 'Paddling spot not found',
+          spotId,
+          available_via: '/paddlingOut'
+        });
+      }
       if (!data.location?.latitude || !data.location?.longitude) {
         return res.status(500).json({ success: false, error: 'Spot has no coordinates' });
       }
