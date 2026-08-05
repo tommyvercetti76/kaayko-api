@@ -11,7 +11,7 @@ const express = require('express');
 const router  = express.Router();
 const admin   = require('firebase-admin');
 const crypto  = require('crypto');
-const multer  = require('multer');
+const Busboy  = require('busboy');
 const PaddleScoreCache = require('../../cache/paddleScoreCache');
 const { isPublicPaddlingSpot } = require('./communitySpotVisibility');
 const { requireAdmin } = require('../../middleware/authMiddleware');
@@ -29,36 +29,130 @@ const SUBMISSION_IMAGE_LIMIT = 3;
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const MAX_TOTAL_IMAGE_BYTES = SUBMISSION_IMAGE_LIMIT * MAX_IMAGE_BYTES;
 const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
-
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: {
-    fileSize: MAX_IMAGE_BYTES,
-    files: SUBMISSION_IMAGE_LIMIT,
-    fields: 30,
-    fieldSize: 1000
-  },
-  fileFilter: (_req, file, cb) => {
-    if (!ALLOWED_IMAGE_TYPES.has(file.mimetype)) {
-      return cb(new Error('Images must be JPEG, PNG, or WebP files'));
-    }
-    return cb(null, true);
-  }
-});
+const SUBMISSION_FIELDS = new Set([
+  'lakeName',
+  'name',
+  'city',
+  'region',
+  'state',
+  'country',
+  'lat',
+  'latitude',
+  'lng',
+  'lon',
+  'longitude',
+  'launchHint',
+  'description',
+  'text',
+  'parkingAvl',
+  'parking',
+  'restroomsAvl',
+  'restrooms',
+  'contactPreference',
+  'anonymous',
+  'email',
+  'pageUrl',
+  'referrer',
+  'source'
+]);
 
 function submitEntryUpload(req, res, next) {
-  upload.array('images', SUBMISSION_IMAGE_LIMIT)(req, res, err => {
-    if (!err) return next();
-    if (err instanceof multer.MulterError) {
-      const message = err.code === 'LIMIT_FILE_SIZE'
-        ? 'Each image must be 5 MB or smaller'
-        : err.code === 'LIMIT_FILE_COUNT'
-          ? `Upload ${SUBMISSION_IMAGE_LIMIT} images or fewer`
-          : 'Image upload is invalid';
-      return res.status(400).json({ success: false, error: message });
+  const contentType = String(req.headers['content-type'] || '');
+  if (!contentType.toLowerCase().startsWith('multipart/form-data')) {
+    req.files = [];
+    return next();
+  }
+
+  const busboy = Busboy({
+    headers: req.headers,
+    limits: {
+      files: SUBMISSION_IMAGE_LIMIT,
+      fileSize: MAX_IMAGE_BYTES,
+      fields: 30,
+      fieldSize: 1000
     }
-    return res.status(400).json({ success: false, error: err.message || 'Image upload is invalid' });
   });
+  const fields = {};
+  const files = [];
+  let totalBytes = 0;
+  let uploadError = '';
+  let finished = false;
+
+  function fail(message) {
+    uploadError = uploadError || message;
+  }
+
+  busboy.on('field', (name, value, info = {}) => {
+    if (uploadError) return;
+    if (!SUBMISSION_FIELDS.has(name)) return;
+    if (Object.prototype.hasOwnProperty.call(fields, name)) {
+      return fail('Duplicate form fields are not allowed');
+    }
+    if (info.valueTruncated) return fail('Form field is too large');
+    fields[name] = value;
+  });
+
+  busboy.on('file', (name, file, info = {}) => {
+    if (name !== 'images') {
+      file.resume();
+      return;
+    }
+
+    const mimeType = info.mimeType || '';
+    if (!ALLOWED_IMAGE_TYPES.has(mimeType)) {
+      fail('Images must be JPEG, PNG, or WebP files');
+      file.resume();
+      return;
+    }
+
+    const chunks = [];
+    let size = 0;
+    file.on('data', chunk => {
+      if (uploadError) return;
+      size += chunk.length;
+      totalBytes += chunk.length;
+      if (totalBytes > MAX_TOTAL_IMAGE_BYTES) {
+        fail('Total image upload must be 15 MB or smaller');
+        return;
+      }
+      chunks.push(chunk);
+    });
+    file.on('limit', () => fail('Each image must be 5 MB or smaller'));
+    file.on('end', () => {
+      if (uploadError) return;
+      files.push({
+        fieldname: name,
+        originalname: sanitizeText(info.filename, 160),
+        mimetype: mimeType,
+        size,
+        buffer: Buffer.concat(chunks)
+      });
+    });
+  });
+
+  busboy.on('filesLimit', () => fail(`Upload ${SUBMISSION_IMAGE_LIMIT} images or fewer`));
+  busboy.on('fieldsLimit', () => fail('Too many form fields'));
+  busboy.on('error', () => {
+    if (finished) return;
+    finished = true;
+    return res.status(400).json({ success: false, error: 'Image upload is invalid' });
+  });
+  busboy.on('finish', () => {
+    if (finished) return;
+    finished = true;
+    if (uploadError) {
+      return res.status(400).json({ success: false, error: uploadError });
+    }
+    req.body = fields;
+    req.files = files;
+    return next();
+  });
+
+  if (Buffer.isBuffer(req.rawBody)) {
+    busboy.end(req.rawBody);
+  } else {
+    req.pipe(busboy);
+  }
 }
 
 function sanitizeText(value, maxLength = 160) {
