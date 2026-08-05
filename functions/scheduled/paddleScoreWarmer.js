@@ -9,6 +9,7 @@ const { logger } = require('firebase-functions');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const PaddleScoreCache = require('../cache/paddleScoreCache');
 const { computePaddleScoreForSpot } = require('../api/weather/paddleScoreCompute');
+const { isPublicPaddlingSpot } = require('../api/weather/communitySpotVisibility');
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -21,6 +22,7 @@ async function getLocationsFromFirestore() {
     try {
         const snapshot = await db.collection('paddlingSpots').get();
         return snapshot.docs
+            .filter(doc => isPublicPaddlingSpot(doc.data()))
             .map(doc => {
                 const data = doc.data();
                 return {

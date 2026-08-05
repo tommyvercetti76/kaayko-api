@@ -12,6 +12,7 @@ const rateLimit = require('../../middleware/rateLimit');
 const UnifiedWeatherService = require('./unifiedWeatherService');
 const mlService = require('./mlService');
 const { createInputMiddleware } = require('./inputStandardization');
+const { isPublicPaddlingSpot } = require('./communitySpotVisibility');
 
 const db = admin.firestore();
 
@@ -175,6 +176,7 @@ async function getPaddlingLocations() {
     
     snapshot.forEach(doc => {
       const data = doc.data();
+      if (!isPublicPaddlingSpot(data)) return;
       
       // Extract location query from paddling spot data
       let locationQuery = null;
