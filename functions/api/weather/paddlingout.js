@@ -10,6 +10,8 @@
 const express = require('express');
 const router  = express.Router();
 const admin   = require('firebase-admin');
+const crypto  = require('crypto');
+const Busboy  = require('busboy');
 const PaddleScoreCache = require('../../cache/paddleScoreCache');
 const { isPublicPaddlingSpot } = require('./communitySpotVisibility');
 const { requireAdmin } = require('../../middleware/authMiddleware');
@@ -22,8 +24,139 @@ const Timestamp = admin.firestore.Timestamp;
 
 const LAKE_SUBMISSION_LIMIT_PER_DAY = 5;
 const COMMUNITY_GO_LIVE_DELAY_MS = 48 * 60 * 60 * 1000;
+const LAKE_SUBMISSION_DEDUPE_MS = 7 * 24 * 60 * 60 * 1000;
+const SUBMISSION_IMAGE_LIMIT = 3;
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+const MAX_TOTAL_IMAGE_BYTES = SUBMISSION_IMAGE_LIMIT * MAX_IMAGE_BYTES;
+const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
+const SUBMISSION_FIELDS = new Set([
+  'lakeName',
+  'name',
+  'city',
+  'region',
+  'state',
+  'country',
+  'lat',
+  'latitude',
+  'lng',
+  'lon',
+  'longitude',
+  'launchHint',
+  'description',
+  'text',
+  'parkingAvl',
+  'parking',
+  'restroomsAvl',
+  'restrooms',
+  'contactPreference',
+  'anonymous',
+  'email',
+  'pageUrl',
+  'referrer',
+  'source'
+]);
+
+function submitEntryUpload(req, res, next) {
+  const contentType = String(req.headers['content-type'] || '');
+  if (!contentType.toLowerCase().startsWith('multipart/form-data')) {
+    req.files = [];
+    return next();
+  }
+
+  const busboy = Busboy({
+    headers: req.headers,
+    limits: {
+      files: SUBMISSION_IMAGE_LIMIT,
+      fileSize: MAX_IMAGE_BYTES,
+      fields: 30,
+      fieldSize: 1000
+    }
+  });
+  const fields = {};
+  const files = [];
+  let totalBytes = 0;
+  let uploadError = '';
+  let finished = false;
+
+  function fail(message) {
+    uploadError = uploadError || message;
+  }
+
+  busboy.on('field', (name, value, info = {}) => {
+    if (uploadError) return;
+    if (!SUBMISSION_FIELDS.has(name)) return;
+    if (Object.prototype.hasOwnProperty.call(fields, name)) {
+      return fail('Duplicate form fields are not allowed');
+    }
+    if (info.valueTruncated) return fail('Form field is too large');
+    fields[name] = value;
+  });
+
+  busboy.on('file', (name, file, info = {}) => {
+    if (name !== 'images') {
+      file.resume();
+      return;
+    }
+
+    const mimeType = info.mimeType || '';
+    if (!ALLOWED_IMAGE_TYPES.has(mimeType)) {
+      fail('Images must be JPEG, PNG, or WebP files');
+      file.resume();
+      return;
+    }
+
+    const chunks = [];
+    let size = 0;
+    file.on('data', chunk => {
+      if (uploadError) return;
+      size += chunk.length;
+      totalBytes += chunk.length;
+      if (totalBytes > MAX_TOTAL_IMAGE_BYTES) {
+        fail('Total image upload must be 15 MB or smaller');
+        return;
+      }
+      chunks.push(chunk);
+    });
+    file.on('limit', () => fail('Each image must be 5 MB or smaller'));
+    file.on('end', () => {
+      if (uploadError) return;
+      files.push({
+        fieldname: name,
+        originalname: sanitizeText(info.filename, 160),
+        mimetype: mimeType,
+        size,
+        buffer: Buffer.concat(chunks)
+      });
+    });
+  });
+
+  busboy.on('filesLimit', () => fail(`Upload ${SUBMISSION_IMAGE_LIMIT} images or fewer`));
+  busboy.on('fieldsLimit', () => fail('Too many form fields'));
+  busboy.on('error', () => {
+    if (finished) return;
+    finished = true;
+    return res.status(400).json({ success: false, error: 'Image upload is invalid' });
+  });
+  busboy.on('finish', () => {
+    if (finished) return;
+    finished = true;
+    if (uploadError) {
+      return res.status(400).json({ success: false, error: uploadError });
+    }
+    req.body = fields;
+    req.files = files;
+    return next();
+  });
+
+  if (Buffer.isBuffer(req.rawBody)) {
+    busboy.end(req.rawBody);
+  } else {
+    req.pipe(busboy);
+  }
+}
 
 function sanitizeText(value, maxLength = 160) {
+  if (Array.isArray(value)) return '';
   if (typeof value !== 'string') return '';
   return value
     .replace(/<[^>]*>/g, '')
@@ -40,6 +173,7 @@ function sanitizeEmail(value) {
 }
 
 function parseCoordinate(value) {
+  if (Array.isArray(value)) return NaN;
   if (value === undefined || value === null || value === '') return null;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : NaN;
@@ -60,7 +194,8 @@ function slugify(value) {
 }
 
 async function uniqueSpotId(baseSlug) {
-  const base = `community-${baseSlug}`.slice(0, 90).replace(/-$/g, '');
+  const random = crypto.randomBytes(4).toString('hex');
+  const base = `community-${baseSlug}-${random}`.slice(0, 90).replace(/-$/g, '');
   for (let i = 0; i < 8; i++) {
     const candidate = i === 0 ? base : `${base}-${i + 1}`;
     const doc = await db.collection('paddlingSpots').doc(candidate).get();
@@ -74,6 +209,167 @@ function sanitizeYesNo(value) {
   if (['yes', 'y', 'true', 'available'].includes(v)) return 'Y';
   if (['no', 'n', 'false', 'unavailable'].includes(v)) return 'N';
   return 'N';
+}
+
+function parseBoolean(value) {
+  if (value === true) return true;
+  const v = String(value || '').trim().toLowerCase();
+  return ['true', '1', 'yes', 'y'].includes(v);
+}
+
+function publicStorageUrl(path) {
+  return `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(path)}?alt=media`;
+}
+
+function hashValue(value) {
+  const salt = process.env.IP_HASH_SALT || process.env.ADMIN_PASSPHRASE || 'kaayko-paddlingout-v1';
+  return crypto.createHash('sha256').update(`${salt}:${value || 'unknown'}`).digest('hex');
+}
+
+function normalizedSubmissionKey({ lakeName, city, region, country, lat, lng }) {
+  const key = [
+    lakeName.toLowerCase(),
+    city.toLowerCase(),
+    region.toLowerCase(),
+    country.toLowerCase(),
+    Number(lat).toFixed(3),
+    Number(lng).toFixed(3)
+  ].join('|');
+  return hashValue(key);
+}
+
+function detectImageMime(buffer) {
+  if (!Buffer.isBuffer(buffer) || buffer.length < 12) return null;
+  if (buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) return 'image/jpeg';
+  if (buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return 'image/png';
+  if (buffer.subarray(0, 4).toString('ascii') === 'RIFF' && buffer.subarray(8, 12).toString('ascii') === 'WEBP') return 'image/webp';
+  return null;
+}
+
+function imageExtension(mime) {
+  if (mime === 'image/jpeg') return 'jpg';
+  if (mime === 'image/png') return 'png';
+  if (mime === 'image/webp') return 'webp';
+  return 'bin';
+}
+
+function validateSubmissionImages(files) {
+  if (!Array.isArray(files) || files.length === 0) {
+    const err = new Error('At least one lake image is required');
+    err.code = 'IMAGE_REQUIRED';
+    throw err;
+  }
+  if (files.length > SUBMISSION_IMAGE_LIMIT) {
+    const err = new Error(`Upload ${SUBMISSION_IMAGE_LIMIT} images or fewer`);
+    err.code = 'TOO_MANY_IMAGES';
+    throw err;
+  }
+
+  const totalBytes = files.reduce((sum, file) => sum + (file.size || 0), 0);
+  if (totalBytes > MAX_TOTAL_IMAGE_BYTES) {
+    const err = new Error('Total image upload must be 15 MB or smaller');
+    err.code = 'IMAGES_TOO_LARGE';
+    throw err;
+  }
+
+  return files.map(file => {
+    const detectedMime = detectImageMime(file.buffer);
+    if (!detectedMime || detectedMime !== file.mimetype || !ALLOWED_IMAGE_TYPES.has(detectedMime)) {
+      const err = new Error('Images must be valid JPEG, PNG, or WebP files');
+      err.code = 'INVALID_IMAGE_SIGNATURE';
+      throw err;
+    }
+    return {
+      file,
+      mime: detectedMime,
+      size: file.size || file.buffer.length,
+      ext: imageExtension(detectedMime)
+    };
+  });
+}
+
+async function reserveSubmissionSlot({ ipHash, dedupeKey }) {
+  const today = new Date().toISOString().split('T')[0];
+  const rateDocId = `${ipHash}_${today}`;
+  const rateRef = db.collection('lake_submission_rate_limits').doc(rateDocId);
+  const dedupeRef = db.collection('paddling_lake_submission_keys').doc(dedupeKey);
+  const expiresAt = Timestamp.fromMillis(Date.now() + LAKE_SUBMISSION_DEDUPE_MS);
+
+  await db.runTransaction(async transaction => {
+    const [rateSnap, dedupeSnap] = await Promise.all([
+      transaction.get(rateRef),
+      transaction.get(dedupeRef)
+    ]);
+
+    if (rateSnap.exists && (rateSnap.data().count || 0) >= LAKE_SUBMISSION_LIMIT_PER_DAY) {
+      const err = new Error('Daily lake submission limit reached. Please try again tomorrow.');
+      err.code = 'RATE_LIMIT';
+      throw err;
+    }
+    if (dedupeSnap.exists) {
+      const err = new Error('This lake entry was already submitted recently.');
+      err.code = 'DUPLICATE_SUBMISSION';
+      throw err;
+    }
+
+    transaction.set(rateRef, {
+      count: FieldValue.increment(1),
+      date: today,
+      ipHash,
+      updatedAt: FieldValue.serverTimestamp()
+    }, { merge: true });
+    transaction.set(dedupeRef, {
+      ipHash,
+      createdAt: FieldValue.serverTimestamp(),
+      expiresAt
+    });
+  });
+}
+
+async function uploadSubmissionImages(images, spotId) {
+  const uploaded = [];
+  try {
+    for (let i = 0; i < images.length; i++) {
+      const image = images[i];
+      const random = crypto.randomBytes(6).toString('hex');
+      const path = `images/paddling_out/${spotId}-${i + 1}-${random}.${image.ext}`;
+      const fileRef = bucket.file(path);
+      await fileRef.save(image.file.buffer, {
+        resumable: false,
+        metadata: {
+          contentType: image.mime,
+          cacheControl: 'public, max-age=31536000, immutable',
+          metadata: {
+            source: 'paddlingout_submitentry',
+            communitySubmission: 'true'
+          }
+        },
+        validation: 'md5'
+      });
+      uploaded.push({
+        path,
+        url: publicStorageUrl(path),
+        contentType: image.mime,
+        size: image.size
+      });
+    }
+    return uploaded;
+  } catch (err) {
+    await Promise.allSettled(uploaded.map(image => bucket.file(image.path).delete()));
+    throw err;
+  }
+}
+
+async function deleteSubmissionImages(imagePaths) {
+  if (!Array.isArray(imagePaths) || !imagePaths.length) return [];
+  const results = await Promise.allSettled(
+    imagePaths.map(path => bucket.file(path).delete())
+  );
+  return results.map((result, index) => ({
+    path: imagePaths[index],
+    deleted: result.status === 'fulfilled',
+    error: result.status === 'rejected' ? result.reason?.message || 'delete failed' : null
+  }));
 }
 
 function publicSubmissionPayload(docSnap) {
@@ -90,6 +386,10 @@ function publicSubmissionPayload(docSnap) {
     launchHint: data.launchHint || '',
     parkingAvl: data.parkingAvl || 'N',
     restroomsAvl: data.restroomsAvl || 'N',
+    imgSrc: Array.isArray(data.imgSrc) ? data.imgSrc : [],
+    imageCount: data.imageCount || 0,
+    imagePaths: Array.isArray(data.imagePaths) ? data.imagePaths : [],
+    imageMeta: Array.isArray(data.imageMeta) ? data.imageMeta : [],
     anonymous: data.anonymous === true,
     contactEmail: data.contactEmail || null,
     status: data.status || data.submissionStatus || 'pending',
@@ -158,8 +458,7 @@ async function fetchSpotImages(spotId) {
       return fileName.toLowerCase().startsWith(spotId.toLowerCase());
     });
     return matching.map(file => {
-      const encodedPath = encodeURIComponent(file.name);
-      return `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodedPath}?alt=media`;
+      return publicStorageUrl(file.name);
     });
   } catch (err) {
     console.error(`fetchSpotImages failed for ${spotId}:`, err.message);
@@ -173,26 +472,37 @@ async function submitEntryHandler(req, res) {
     const lakeName = sanitizeText(body.lakeName || body.name, 120);
     const city = sanitizeText(body.city, 80);
     const region = sanitizeText(body.region || body.state, 80);
-    const country = sanitizeText(body.country, 80) || 'United States';
+    const country = sanitizeText(body.country, 80);
     const launchHint = sanitizeText(body.launchHint, 160);
     const description = sanitizeText(body.description || body.text, 360);
-    const source = sanitizeText(body.source, 60) || 'paddlingout_submitentry';
+    const source = 'paddlingout_submitentry';
     const pageUrl = sanitizeText(body.pageUrl, 500);
     const referrer = sanitizeText(body.referrer, 500);
     const email = sanitizeEmail(body.email);
-    const anonymous = body.anonymous === true || body.contactPreference === 'anonymous' || !email;
+    const contactPreference = sanitizeText(body.contactPreference, 20);
+    const anonymous = parseBoolean(body.anonymous) || contactPreference === 'anonymous';
     const parkingAvl = sanitizeYesNo(body.parkingAvl || body.parking);
     const restroomsAvl = sanitizeYesNo(body.restroomsAvl || body.restrooms);
+    const images = validateSubmissionImages(req.files || []);
 
     if (email === null) {
       return res.status(400).json({ success: false, error: 'Invalid email address' });
     }
+    if (!anonymous && !email) {
+      return res.status(400).json({ success: false, error: 'Email is required when notification is requested' });
+    }
 
-    if (!lakeName) {
-      return res.status(400).json({
-        success: false,
-        error: 'Lake name is required'
-      });
+    if (!lakeName || lakeName.length < 2) {
+      return res.status(400).json({ success: false, error: 'Lake name is required' });
+    }
+    if (!city || city.length < 2) {
+      return res.status(400).json({ success: false, error: 'City or nearest town is required' });
+    }
+    if (!region || region.length < 2) {
+      return res.status(400).json({ success: false, error: 'State or region is required' });
+    }
+    if (!country || country.length < 2) {
+      return res.status(400).json({ success: false, error: 'Country is required' });
     }
 
     const lat = parseCoordinate(body.lat ?? body.latitude);
@@ -211,18 +521,10 @@ async function submitEntryHandler(req, res) {
       return res.status(400).json({ success: false, error: 'Invalid coordinates' });
     }
 
-    const today = new Date().toISOString().split('T')[0];
     const ip = getClientIp(req);
-    const rateDocId = `${ip}_${today}`.replace(/[\/#?[\]]/g, '_');
-    const rateRef = db.collection('lake_submission_rate_limits').doc(rateDocId);
-    const rateSnap = await rateRef.get();
-
-    if (rateSnap.exists && (rateSnap.data().count || 0) >= LAKE_SUBMISSION_LIMIT_PER_DAY) {
-      return res.status(429).json({
-        success: false,
-        error: 'Daily lake submission limit reached. Please try again tomorrow.'
-      });
-    }
+    const ipHash = hashValue(ip);
+    const dedupeKey = normalizedSubmissionKey({ lakeName, city, region, country, lat, lng });
+    await reserveSubmissionSlot({ ipHash, dedupeKey });
 
     const locationPieces = [city, region, country].filter(Boolean);
     const subtitle = locationPieces.join(', ');
@@ -233,6 +535,9 @@ async function submitEntryHandler(req, res) {
       launchHint ? `Launch note: ${launchHint}.` : '',
       'Community-submitted paddling location awaiting validation.'
     ].filter(Boolean).join(' ');
+    const uploadedImages = await uploadSubmissionImages(images, spotId);
+    const imgSrc = uploadedImages.map(image => image.url);
+    const imagePaths = uploadedImages.map(image => image.path);
 
     const publicSpotDoc = {
       lakeName,
@@ -243,11 +548,12 @@ async function submitEntryHandler(req, res) {
       parkingAvl,
       restroomsAvl,
       youtubeURL: '',
-      imgSrc: [],
+      imgSrc,
+      imageCount: uploadedImages.length,
       communitySubmission: true,
       submissionStatus: 'pending',
       submittedAt: FieldValue.serverTimestamp(),
-      goLiveAt: Timestamp.fromDate(goLiveAtDate),
+      goLiveAt: Timestamp.fromMillis(goLiveAtDate.getTime()),
       validatedAt: null,
       validatedBy: null,
       source,
@@ -263,11 +569,17 @@ async function submitEntryHandler(req, res) {
       contactEmail: anonymous ? null : email,
       anonymous,
       notificationStatus: anonymous ? 'not_requested' : 'pending_validation_notice',
+      imagePaths,
+      imageMeta: uploadedImages.map(image => ({
+        contentType: image.contentType,
+        size: image.size
+      })),
       source,
       pageUrl,
       referrer,
       userAgent: sanitizeText(req.headers['user-agent'], 300),
-      ip,
+      ipHash,
+      dedupeKey,
       status: 'pending',
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp()
@@ -275,11 +587,6 @@ async function submitEntryHandler(req, res) {
 
     await db.collection('paddlingSpots').doc(spotId).set(publicSpotDoc);
     await db.collection('paddling_lake_submissions').doc(spotId).set(submissionDoc);
-    await rateRef.set({
-      count: FieldValue.increment(1),
-      date: today,
-      updatedAt: FieldValue.serverTimestamp()
-    }, { merge: true });
 
     return res.status(201).json({
       success: true,
@@ -291,6 +598,15 @@ async function submitEntryHandler(req, res) {
     });
 
   } catch (err) {
+    if (err.code === 'RATE_LIMIT') {
+      return res.status(429).json({ success: false, error: err.message });
+    }
+    if (err.code === 'DUPLICATE_SUBMISSION') {
+      return res.status(409).json({ success: false, error: err.message });
+    }
+    if (['IMAGE_REQUIRED', 'TOO_MANY_IMAGES', 'IMAGES_TOO_LARGE', 'INVALID_IMAGE_SIGNATURE'].includes(err.code)) {
+      return res.status(400).json({ success: false, error: err.message });
+    }
     console.error('paddlingOut POST /submitEntry error:', err.message, err.stack);
     return res.status(500).json({ success: false, error: 'Failed to submit lake entry' });
   }
@@ -302,8 +618,8 @@ async function submitEntryHandler(req, res) {
  * Public community lake submission. Writes a paddlingSpots-compatible document
  * immediately, but public reads hide it until admin validation or goLiveAt.
  */
-router.post('/submitEntry', submitEntryHandler);
-router.post('/lakeRequests', submitEntryHandler);
+router.post('/submitEntry', submitEntryUpload, submitEntryHandler);
+router.post('/lakeRequests', submitEntryUpload, submitEntryHandler);
 
 /**
  * GET /paddlingOut/admin/submissions
@@ -423,6 +739,72 @@ router.post('/admin/submissions/:id/validate', requireAdmin, async (req, res) =>
 });
 
 /**
+ * POST /paddlingOut/admin/submissions/:id/reject
+ *
+ * Admin safety brake for spam, private-property submissions, or unsafe images.
+ * Rejected submissions never auto-publish, and uploaded images are deleted by
+ * default so rejected media does not remain publicly addressable.
+ */
+router.post('/admin/submissions/:id/reject', requireAdmin, async (req, res) => {
+  const id = req.params.id;
+  if (!id || !/^[a-zA-Z0-9_-]+$/.test(id)) {
+    return res.status(400).json({ success: false, error: 'Invalid submission ID' });
+  }
+
+  try {
+    const submissionRef = db.collection('paddling_lake_submissions').doc(id);
+    const spotRef = db.collection('paddlingSpots').doc(id);
+    const [submissionSnap, spotSnap] = await Promise.all([
+      submissionRef.get(),
+      spotRef.get()
+    ]);
+
+    if (!submissionSnap.exists || !spotSnap.exists) {
+      return res.status(404).json({ success: false, error: 'Submission not found' });
+    }
+
+    const submission = submissionSnap.data() || {};
+    const actor = adminActor(req);
+    const reason = sanitizeText(req.body?.reason, 500);
+    const deleteImages = req.body?.deleteImages !== false;
+    const deletionResult = deleteImages
+      ? await deleteSubmissionImages(submission.imagePaths || [])
+      : [];
+
+    const spotUpdate = {
+      submissionStatus: 'rejected',
+      imgSrc: [],
+      imageCount: 0,
+      rejectedAt: FieldValue.serverTimestamp(),
+      rejectedBy: actor,
+      updatedAt: FieldValue.serverTimestamp()
+    };
+    const submissionUpdate = {
+      ...spotUpdate,
+      status: 'rejected',
+      rejectionReason: reason || null,
+      imageDeletionResult: deletionResult,
+      notificationStatus: submission.contactEmail ? 'rejected_not_sent' : (submission.notificationStatus || 'not_requested')
+    };
+
+    await Promise.all([
+      spotRef.set(spotUpdate, { merge: true }),
+      submissionRef.set(submissionUpdate, { merge: true })
+    ]);
+
+    return res.json({
+      success: true,
+      id,
+      status: 'rejected',
+      imagesDeleted: deletionResult.filter(item => item.deleted).length
+    });
+  } catch (err) {
+    console.error(`paddlingOut POST /admin/submissions/${id}/reject error:`, err.message, err.stack);
+    return res.status(500).json({ success: false, error: 'Failed to reject submission' });
+  }
+});
+
+/**
  * GET /paddlingOut
  *
  * Returns all curated paddling spots. Each spot includes pre-warmed paddle scores
@@ -488,9 +870,7 @@ router.get('/', async (req, res) => {
   } catch (err) {
     console.error('paddlingOut GET / error:', err.message, err.stack);
     return res.status(500).json({
-      error: 'Server error',
-      details: err.message,
-      timestamp: new Date().toISOString()
+      error: 'Server error'
     });
   }
 });
