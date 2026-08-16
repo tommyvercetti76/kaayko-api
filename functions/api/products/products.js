@@ -38,10 +38,12 @@ async function fetchImagesFromStorage(productID) {
   try {
     const prefix = `kaaykoStoreTShirtImages/${productID}/`;
     const [files] = await bucket.getFiles({ prefix });
-    
-    // Create public URLs instead of signed URLs
+
+    // Skip preview files (`.preview.webp`) — they're for carousel cards, not
+    // the modal/zoom view that this fallback feeds.
     const urls = files
       .filter(f => !f.name.endsWith("/"))
+      .filter(f => !f.name.endsWith(".preview.webp"))
       .map(file => {
         // Create public URL format: https://firebasestorage.googleapis.com/v0/b/BUCKET_NAME/o/PATH?alt=media
         const encodedPath = encodeURIComponent(file.name);
@@ -73,17 +75,32 @@ router.get("/", async (_req, res) => {
           title:           d.title           || "",
           description:     d.description     || "",
           price:           d.price           || "",
+          actualPrice:     typeof d.actualPrice === "number" ? d.actualPrice : null,
           votes:           d.votes           || 0,
           productID:       d.productID       || "",
           tags:            d.tags            || [],
           availableColors: d.availableColors || [],
           availableSizes:  d.availableSizes  || [],
           maxQuantity:     d.maxQuantity     || 1,
-          imgSrc:          Array.isArray(d.imgSrc) ? d.imgSrc : []
+          productType:     d.productType     || "",
+          category:        d.category        || "",
+          isAvailable:     d.isAvailable !== false,
+          createdAt:       d.createdAt?.toDate?.()?.toISOString() || null,
+          animalSlug:      d.animalSlug || null,
+          imgSrc:          Array.isArray(d.imgSrc) ? d.imgSrc : [],
+          previewSrc:      Array.isArray(d.previewSrc) ? d.previewSrc : [],
+          theme:           d.theme || "",
+          nationalPark:    d.nationalPark || ""
         };
 
-        // Always fetch images from Storage to ensure we get the latest
-        if (base.productID) {
+        // Trust Firestore imgSrc/previewSrc only when the URLs are the new
+        // unsigned/public format (`firebasestorage.googleapis.com/v0/...`).
+        // Legacy docs hold time-limited signed URLs (`GoogleAccessId`+`Expires`)
+        // that have since expired — for those we MUST regenerate from the
+        // current Storage listing.
+        const isStaleSignedUrl = (u) => !u || u.includes("GoogleAccessId=") || u.includes("X-Goog-Signature=");
+        const allFresh = base.imgSrc.length > 0 && base.imgSrc.every(u => !isStaleSignedUrl(u));
+        if (base.productID && !allFresh) {
           base.imgSrc = await fetchImagesFromStorage(base.productID);
         }
         return base;
@@ -116,17 +133,29 @@ router.get("/:id", async (req, res) => {
       title:           d.title           || "",
       description:     d.description     || "",
       price:           d.price           || "",
+      actualPrice:     typeof d.actualPrice === "number" ? d.actualPrice : null,
       votes:           d.votes           || 0,
       productID:       d.productID       || "",
       tags:            d.tags            || [],
       availableColors: d.availableColors || [],
       availableSizes:  d.availableSizes  || [],
       maxQuantity:     d.maxQuantity     || 1,
-      imgSrc:          Array.isArray(d.imgSrc) ? d.imgSrc : []
+      productType:     d.productType     || "",
+      category:        d.category        || "",
+      isAvailable:     d.isAvailable !== false,
+      createdAt:       d.createdAt?.toDate?.()?.toISOString() || null,
+      animalSlug:      d.animalSlug || null,
+      imgSrc:          Array.isArray(d.imgSrc) ? d.imgSrc : [],
+      previewSrc:      Array.isArray(d.previewSrc) ? d.previewSrc : [],
+      theme:           d.theme || "",
+      nationalPark:    d.nationalPark || ""
     };
 
-    // Always fetch images from Storage to ensure we get the latest
-    if (product.productID) {
+    // Same fallback rule as the list endpoint — regenerate if any URL is a
+    // stale signed URL or the array is empty.
+    const isStaleSignedUrl = (u) => !u || u.includes("GoogleAccessId=") || u.includes("X-Goog-Signature=");
+    const allFresh = product.imgSrc.length > 0 && product.imgSrc.every(u => !isStaleSignedUrl(u));
+    if (product.productID && !allFresh) {
       product.imgSrc = await fetchImagesFromStorage(product.productID);
     }
 
