@@ -18,6 +18,39 @@ apiApp.use((req, _res, next) => {
   next();
 });
 
+// Privileged surfaces are same-origin only. Public routes keep the permissive
+// CORS above (they serve the catalog and forecasts to any caller), but admin
+// and account routes have no legitimate cross-origin consumer, so a browser on
+// another site must not be able to read their responses. Auth is Bearer-token
+// based, so this is defence in depth rather than the primary control.
+const ADMIN_ORIGIN_ALLOWLIST = new Set([
+  "https://kaayko.com",
+  "https://www.kaayko.com",
+  "https://kaaykostore.web.app",
+  "https://kaaykostore.firebaseapp.com",
+]);
+const PRIVILEGED_PREFIXES = ["/admin", "/kreators/admin", "/billing", "/campaigns"];
+
+apiApp.use((req, res, next) => {
+  const path = req.url.split("?")[0];
+  if (!PRIVILEGED_PREFIXES.some(p => path === p || path.startsWith(p + "/"))) return next();
+
+  const origin = req.headers.origin;
+  res.setHeader("Vary", "Origin");
+  if (origin && ADMIN_ORIGIN_ALLOWLIST.has(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+  } else {
+    // Unknown origin: strip the permissive header set by cors() above so the
+    // browser refuses to hand the response to the calling page.
+    res.removeHeader("Access-Control-Allow-Origin");
+    if (origin && req.method === "OPTIONS") return res.status(403).end();
+  }
+  if (req.method === "OPTIONS") return res.status(204).end();
+  next();
+});
+
 // ⚠️ CRITICAL: Stripe webhook needs raw body for signature verification
 // Must be defined BEFORE express.json() middleware
 apiApp.use("/createPaymentIntent/webhook", express.raw({ type: 'application/json' }), require("./api/checkout/stripeWebhook"));
