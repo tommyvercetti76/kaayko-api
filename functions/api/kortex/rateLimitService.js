@@ -13,6 +13,7 @@
  */
 
 const admin = require('firebase-admin');
+const { getClientIp } = require('./clientIp');
 const db = admin.firestore();
 
 /**
@@ -113,7 +114,7 @@ function ipRateLimit(options = {}) {
   } = options;
 
   return async (req, res, next) => {
-    const ip = req.ip || req.connection.remoteAddress || 'unknown';
+    const ip = getClientIp(req) || 'unknown';
     
     const result = await checkRateLimit({
       key: ip,

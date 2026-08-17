@@ -13,6 +13,7 @@
  */
 
 const admin = require('firebase-admin');
+const { getClientIp } = require('./clientIp');
 const { FieldValue } = require('firebase-admin/firestore');
 const { trackClick, updateClickRedirect } = require('./clickTracking');
 const KortexV2 = require('./v2LinkIntents');
@@ -555,7 +556,7 @@ async function handleRedirect(req, res, code, options = {}) {
           tenantId: linkData.tenantId || 'kaayko-default',
           platform,
           userAgent,
-          ip: req.ip || req.connection.remoteAddress,
+          ip: getClientIp(req),
           referrer: req.get('referer') || null,
           utm: trackingContext.utm,
           metadata: {
@@ -648,7 +649,7 @@ async function handleRedirect(req, res, code, options = {}) {
           tenantId: linkData.tenantId || 'kaayko-default',
           platform,
           userAgent,
-          ip: req.ip || req.connection.remoteAddress,
+          ip: getClientIp(req),
           referrer: req.get('referer') || null,
           utm: trackingContext.utm,
           metadata: {

@@ -10,6 +10,7 @@
  */
 
 const express = require('express');
+const { getClientIp } = require('./clientIp');
 const router = express.Router();
 const admin = require('firebase-admin');
 
@@ -141,7 +142,7 @@ router.get("/resolve", async (req, res) => {
         userId,
         metadata: {
           userAgent: req.get('user-agent'),
-          ip: req.ip || req.connection.remoteAddress
+          ip: getClientIp(req)
         }
       });
       

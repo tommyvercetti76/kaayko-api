@@ -291,6 +291,71 @@ router.post('/tenant-links', requireAuth, requireAdmin, async (req, res) => {
   }
 });
 
+/**
+ * GET /kortex/links/:code/analytics
+ * Full per-link drill-down, aggregated from retained click_events.
+ * Admin only — click history is visitor-level data.
+ */
+router.get('/links/:code/analytics', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const code = String(req.params.code || '').trim();
+    if (!code) {
+      return res.status(400).json({ success: false, error: 'Link code is required' });
+    }
+
+    const doc = await db.collection('short_links').doc(code).get();
+    let linkData = doc.exists ? doc.data() : null;
+    if (!linkData) {
+      const q = await db.collection('short_links').where('code', '==', code).limit(1).get();
+      if (!q.empty) linkData = q.docs[0].data();
+    }
+    if (!linkData) {
+      return res.status(404).json({ success: false, error: 'Link not found', code });
+    }
+
+    const tenantContext = await getTenantFromRequest(req);
+    if (!tenantContext.isSuperAdmin) {
+      assertTenantAccess(req.user, linkData.tenantId || 'kaayko-default');
+    }
+
+    const { getLinkAnalytics } = require('./linkAnalytics');
+    const analytics = await getLinkAnalytics(code, linkData);
+
+    return res.json({
+      success: true,
+      link: {
+        code,
+        title: linkData.title || null,
+        description: linkData.description || null,
+        shortUrl: linkData.shortUrl || null,
+        destination: linkData.destinations?.web || linkData.webDestination || null,
+        destinations: linkData.destinations || null,
+        destinationType: linkData.destinationType || null,
+        utm: linkData.utm || null,
+        campaignId: linkData.campaignId || null,
+        tenantId: linkData.tenantId || null,
+        tenantName: linkData.tenantName || null,
+        createdBy: linkData.createdBy || null,
+        createdAt: linkData.createdAt?.toDate?.()?.toISOString() || null,
+        enabled: linkData.enabled !== false,
+        expiresAt: linkData.expiresAt?.toDate?.()?.toISOString() || null,
+        qrCodeUrl: linkData.qrCodeUrl || null,
+      },
+      analytics,
+    });
+  } catch (error) {
+    console.error('[Kortex] Link analytics error:', error);
+    if (error.message?.includes('Access denied') || error.code?.startsWith('TENANT')) {
+      return tenantAccessError(res, error);
+    }
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to fetch link analytics',
+      message: 'An unexpected error occurred',
+    });
+  }
+});
+
 router.get('/tenants/:tenantId/analytics', requireAuth, requireAdmin, async (req, res) => {
   try {
     const tenantId = req.params.tenantId;

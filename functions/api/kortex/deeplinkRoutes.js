@@ -8,6 +8,7 @@
 //  • GET  /health                   → Health check
 
 const express = require('express');
+const { getClientIp } = require('./clientIp');
 const router = express.Router();
 const admin = require('firebase-admin');
 const crypto = require('crypto');
@@ -444,7 +445,7 @@ router.get("/resolve", async (req, res) => {
         userId,
         metadata: {
           userAgent: req.get('user-agent'),
-          ip: req.ip || req.connection.remoteAddress
+          ip: getClientIp(req)
         }
       });
       await logDeeplinkEvent('resolve_attribution', { clickId, attributed: !!result.attributed });
