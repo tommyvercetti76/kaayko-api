@@ -80,6 +80,9 @@ async function getLinkAnalytics(code, linkData) {
       referrer: e.referrer || null,
       redirectedTo: e.redirectedTo || null,
       installAttributed: e.installAttributed === true,
+      // redirectTimestamp - timestamp is the time the visitor spent waiting on
+      // the resolver. It is stored on every event but has never been surfaced.
+      redirectMs: (e.redirectTimestamp?.toMillis ? e.redirectTimestamp.toMillis() : null),
     }))
     .filter(e => e.ms)
     .sort((a, b) => a.ms - b.ms);
@@ -162,6 +165,12 @@ async function getLinkAnalytics(code, linkData) {
     browser: tally(events.map(e => e.browser)),
     referrer: tally(events.map(e => e.referrer)),
     destination: tally(events.map(e => e.redirectedTo)),
+    dayOfWeekUtc: (() => {
+      const names = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      const d = new Array(7).fill(0);
+      for (const e of events) d[new Date(e.ms).getUTCDay()] += 1;
+      return d.map((clicks, i) => ({ value: names[i], clicks }));
+    })(),
     hourOfDayUtc: (() => {
       const h = new Array(24).fill(0);
       for (const e of events) h[new Date(e.ms).getUTCHours()] += 1;
@@ -181,6 +190,36 @@ async function getLinkAnalytics(code, linkData) {
     reason: 'Country/region is not captured at click time, so no location breakdown ' +
             'can be produced. It would require storing a geo lookup during redirect.',
   });
+
+  // Resolver latency: what the visitor actually waited before being redirected.
+  const latencies = events.map(e => (e.redirectMs && e.ms ? e.redirectMs - e.ms : null))
+                          .filter(v => v !== null && v >= 0);
+  const latency = latencies.length ? {
+    samples: latencies.length,
+    medianMs: latencies.slice().sort((a, b) => a - b)[Math.floor(latencies.length / 2)],
+    slowestMs: Math.max(...latencies),
+  } : null;
+  if (!latency) {
+    unavailable.push({
+      metric: 'redirect latency',
+      reason: 'No event recorded a redirect timestamp, so time-to-redirect cannot be measured.',
+    });
+  }
+
+  // Gaps between consecutive clicks say more about a physical QR code than a
+  // total does: a sticker that is working produces a rhythm, not a burst.
+  const gapsHours = [];
+  for (let i = 1; i < events.length; i++) {
+    gapsHours.push((events[i].ms - events[i - 1].ms) / 3600000);
+  }
+  const cadence = gapsHours.length ? {
+    longestQuietHours: Math.round(Math.max(...gapsHours)),
+    medianGapHours: Math.round(gapsHours.slice().sort((a, b) => a - b)[Math.floor(gapsHours.length / 2)]),
+    hoursSinceLastClick: Math.round((Date.now() - events[total - 1].ms) / 3600000),
+    hoursToFirstClick: linkData?.createdAt?.toMillis
+      ? Math.round((events[0].ms - linkData.createdAt.toMillis()) / 3600000)
+      : null,
+  } : null;
 
   const storedClickCount = linkData?.clickCount ?? null;
   const drift = storedClickCount == null ? null : storedClickCount - total;
@@ -209,6 +248,8 @@ async function getLinkAnalytics(code, linkData) {
     installs: {
       attributed: events.filter(e => e.installAttributed).length,
     },
+    latency,
+    cadence,
     timeline,
     breakdowns,
     unavailable,
