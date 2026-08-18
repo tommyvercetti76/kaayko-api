@@ -292,6 +292,31 @@ router.post('/tenant-links', requireAuth, requireAdmin, async (req, res) => {
 });
 
 /**
+ * GET /kortex/analytics/portfolio
+ * Portfolio-wide analytics aggregated from the real click_events stream (not the
+ * shallow per-link clickCount counters). Super-admins see all tenants; tenant
+ * admins are scoped to their own. Admin only.
+ */
+router.get('/analytics/portfolio', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const tenantContext = await getTenantFromRequest(req);
+    // Super-admin sees everything; a tenant admin is scoped to their tenant.
+    const tenantId = tenantContext.isSuperAdmin ? null : (tenantContext.tenantId || 'kaayko-default');
+
+    const { getPortfolioAnalytics } = require('./portfolioAnalytics');
+    const analytics = await getPortfolioAnalytics({ tenantId });
+
+    return res.json({ success: true, scope: tenantId || 'all', analytics });
+  } catch (error) {
+    console.error('[Kortex] Portfolio analytics error:', error);
+    if (error.message?.includes('Access denied') || error.code?.startsWith('TENANT')) {
+      return tenantAccessError(res, error);
+    }
+    return res.status(500).json({ success: false, error: 'Failed to fetch portfolio analytics', message: 'An unexpected error occurred' });
+  }
+});
+
+/**
  * GET /kortex/links/:code/analytics
  * Full per-link drill-down, aggregated from retained click_events.
  * Admin only — click history is visitor-level data.
