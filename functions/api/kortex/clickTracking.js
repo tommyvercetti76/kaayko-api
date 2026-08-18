@@ -49,6 +49,24 @@ function hashIp(ip) {
   return crypto.createHash('sha256').update(`${IP_SALT}:${ip}`).digest('hex').slice(0, 16);
 }
 
+// Country resolution from the raw IP, offline. The lookup happens here, on the
+// non-blocking tracking path, and the raw IP is discarded immediately after —
+// only the resolved country code and the salted hash are ever stored. Using a
+// bundled database (not a third-party API) keeps the visitor IP inside our own
+// infrastructure, consistent with never storing it raw.
+const { isPublic } = require('./clientIp');
+let _geoip = null;
+function resolveGeo(ip) {
+  if (!ip || !isPublic(ip)) return null;
+  try {
+    if (!_geoip) _geoip = require('geoip-country');
+    const r = _geoip.lookup(ip);
+    return r && r.country ? { country: r.country } : null;
+  } catch (e) {
+    return null; // geo is best-effort; a failure must never break tracking
+  }
+}
+
 /**
  * Track a click event with full context
  * Returns clickId for attribution chain
@@ -95,10 +113,11 @@ async function trackClick(params) {
     deviceInfo,
     userAgent,
     
-    // Network & location — store a salted hash, never the raw IP.
+    // Network & location — store a salted hash and a resolved country, never
+    // the raw IP. resolveGeo() reads the raw IP then it is discarded here.
     ip: hashIp(ip),
-    // Note: Geolocation can be added via IP lookup service
-    
+    geo: resolveGeo(ip),
+
     // Attribution
     referrer: referrer || null,
     utm,

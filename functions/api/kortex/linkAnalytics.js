@@ -79,6 +79,7 @@ async function getLinkAnalytics(code, linkData) {
       ip: e.ip || null,
       referrer: e.referrer || null,
       redirectedTo: e.redirectedTo || null,
+      country: e.geo?.country || null,
       installAttributed: e.installAttributed === true,
       // redirectTimestamp - timestamp is the time the visitor spent waiting on
       // the resolver. It is stored on every event but has never been surfaced.
@@ -185,11 +186,20 @@ async function getLinkAnalytics(code, linkData) {
               'the camera app sends no Referer header. Not a tracking fault.',
     });
   }
-  unavailable.push({
-    metric: 'geography',
-    reason: 'Country/region is not captured at click time, so no location breakdown ' +
-            'can be produced. It would require storing a geo lookup during redirect.',
-  });
+
+  // Country is captured at redirect time (offline lookup) as of 2026-08-18.
+  // Show it when present; only report it unavailable when no event carries it
+  // (older events, or clients whose IP couldn't be resolved to a country).
+  const countryRows = tally(events.map(e => e.country));
+  if (countryRows.some(r => r.value !== null)) {
+    breakdowns.country = countryRows;
+  } else {
+    unavailable.push({
+      metric: 'geography',
+      reason: 'No retained event carries a resolved country yet — country capture began ' +
+              '2026-08-18, so links with only older clicks show no location.',
+    });
+  }
 
   // Resolver latency: what the visitor actually waited before being redirected.
   const latencies = events.map(e => (e.redirectMs && e.ms ? e.redirectMs - e.ms : null))

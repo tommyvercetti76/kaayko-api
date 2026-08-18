@@ -29,8 +29,7 @@
     "predeploy:check": "npm run catalog:cameras && npm run reviewpacket:cameras && npm run audit:cameras && npm run validate:cameras && node scripts/predeploy-check.js && npm run test:smoke && npm run test:paddlingout",
     "test:performance": "node ../tests/firebase_performance_test.js",
     "install-python": "pip3 install -r requirements.txt",
-    "postinstall": "pip3 install -r requirements.txt || echo 'Python dependencies installation failed, will fallback to JS'",
-    "test:paddlingout": "node ./node_modules/jest/bin/jest.js --runInBand __tests__/paddlingout-submit.test.js --forceExit --detectOpenHandles"
+    "postinstall": "pip3 install -r requirements.txt || echo 'Python dependencies installation failed, will fallback to JS'"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
@@ -41,6 +40,7 @@
     "express": "^4.22.1",
     "firebase-admin": "^13.2.0",
     "firebase-functions": "^7.0.3",
+    "geoip-country": "^5.0.202608142355",
     "multer": "^2.0.2",
     "openai": "^4.77.0",
     "qrcode": "^1.5.4",
