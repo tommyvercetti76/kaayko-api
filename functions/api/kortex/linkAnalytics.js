@@ -231,6 +231,18 @@ async function getLinkAnalytics(code, linkData) {
       : null,
   } : null;
 
+  // Individual scans, newest first. For a low-volume physical QR the exact
+  // moments (and device/country) are the real story — an hour-of-day histogram
+  // over a handful of points is noise. The client shows this scan log at low
+  // volume and the distribution ramps only once there are enough events.
+  const recentScans = events.slice(-25).reverse().map(e => ({
+    at: new Date(e.ms).toISOString(),
+    deviceType: e.deviceType,
+    os: e.os,
+    browser: e.browser,
+    country: e.country,
+  }));
+
   const storedClickCount = linkData?.clickCount ?? null;
   const drift = storedClickCount == null ? null : storedClickCount - total;
 
@@ -260,6 +272,7 @@ async function getLinkAnalytics(code, linkData) {
     },
     latency,
     cadence,
+    recentScans,
     timeline,
     breakdowns,
     unavailable,
