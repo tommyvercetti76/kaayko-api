@@ -25,6 +25,11 @@ const PRICE_IDS = {
 // Plan limits — shared source of truth (also enforced in smartLinkService).
 const { PLAN_LIMITS } = require('./planLimits');
 
+// Plan ranking, low → high. A "downgrade" may only move to an equal or lower
+// rank; moving UP requires a paid Stripe checkout, never a bare plan write.
+const PLAN_RANK = { starter: 0, pro: 1, business: 2, enterprise: 3 };
+const isKnownPlan = (p) => Object.prototype.hasOwnProperty.call(PLAN_RANK, p);
+
 /**
  * Helper to check if Stripe is configured
  */
@@ -183,17 +188,34 @@ router.post('/downgrade', requireAuth, async (req, res) => {
   try {
     const { planId } = req.body;
     const { tenantId } = await getTenantFromRequest(req);
-    
+
+    // Reject unknown plans outright.
+    if (!isKnownPlan(planId)) {
+      return res.status(400).json({ success: false, error: 'Unknown plan' });
+    }
+
     const tenantDoc = await db.collection('tenants').doc(tenantId).get();
-    
+    const currentPlan = tenantDoc.exists ? (tenantDoc.data().plan || 'starter') : 'starter';
+
+    // A downgrade endpoint must never RAISE the plan — that is a paid action
+    // that has to go through Stripe checkout. Without this guard, any
+    // authenticated tenant user could POST {planId:'enterprise'} and unlock
+    // Infinity quotas for free.
+    if (PLAN_RANK[planId] > PLAN_RANK[currentPlan]) {
+      return res.status(403).json({
+        success: false,
+        error: 'Upgrades require checkout. This endpoint only lowers your plan.'
+      });
+    }
+
     if (!tenantDoc.exists || !tenantDoc.data().stripeSubscriptionId) {
-      // No active subscription, just update plan
+      // No active subscription, just update plan (guaranteed ≤ current rank).
       await db.collection('tenants').doc(tenantId).set({
         plan: planId,
         scheduledDowngrade: null,
         updatedAt: admin.firestore.FieldValue.serverTimestamp()
       }, { merge: true });
-      
+
       return res.json({
         success: true,
         message: 'Plan updated immediately'

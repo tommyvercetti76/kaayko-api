@@ -15,6 +15,21 @@
  */
 
 const admin = require('firebase-admin');
+const crypto = require('crypto');
+
+/**
+ * Constant-time string compare for secrets (admin key / passphrase).
+ * A plain `===` short-circuits on the first differing byte, leaking the secret
+ * one character at a time via response timing. timingSafeEqual removes that
+ * side channel; the length pre-check only leaks length (standard, acceptable).
+ */
+function timingSafeEqualStr(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string') return false;
+  const ab = Buffer.from(a);
+  const bb = Buffer.from(b);
+  if (ab.length !== bb.length) return false;
+  return crypto.timingSafeEqual(ab, bb);
+}
 
 /**
  * Verify Firebase ID token and attach user to request
@@ -123,7 +138,7 @@ function requireAdmin(req, res, next) {
     });
   }
   
-  if (adminKey && ADMIN_PASSPHRASE && adminKey === ADMIN_PASSPHRASE) {
+  if (adminKey && ADMIN_PASSPHRASE && timingSafeEqualStr(adminKey, ADMIN_PASSPHRASE)) {
     // Admin key is valid - grant access
     req.user = req.user || { uid: 'admin-key-user', email: 'admin@kaayko.com', role: 'admin' };
     req.user.role = 'admin';

@@ -262,7 +262,7 @@ function poweredByPage(destination, linkTitle) {
 </head><body>
 <div class="wrap"><p>Redirecting...</p><a href="${safeDestination}">Click here if not redirected</a></div>
 <div class="bar">Powered by <a href="https://kaayko.com/kortex?ref=powered-by">Kortex</a> — Smart links for institutions</div>
-<script>window.location.href="${destination.replace(/"/g, '\\"')}";</script>
+<script>window.location.href=${JSON.stringify(destination).replace(/</g, '\\u003c')};</script>
 </body></html>`;
 }
 
@@ -282,10 +282,17 @@ function detectPlatform(userAgent = '') {
  * @returns {string} HTML error page
  */
 function errorPage(code, title, message, showAppButton = true) {
-  const appButton = showAppButton 
+  const appButton = showAppButton
     ? `<a href="https://kaayko.com" class="btn">Go to Kaayko</a>`
     : '';
-  
+
+  // Escape at this choke point: several callers compose `message` from the
+  // raw `:code` route param (e.g. `The link "${code}" doesn't exist`), which
+  // is attacker-controlled and reflected into HTML. Escaping here covers every
+  // call site at once and closes the reflected-XSS on the redirect 404 page.
+  const safeTitle = escapeHtml(title);
+  const safeMessage = escapeHtml(message);
+
   // Icon based on error type
   const icon = code === 404 ? '🔍' : code === 410 ? '⏰' : '⚠️';
   
@@ -384,8 +391,8 @@ function errorPage(code, title, message, showAppButton = true) {
       <div class="container">
         <div class="inner">
           <div class="icon">${icon}</div>
-          <h1>${title}</h1>
-          <p>${message}</p>
+          <h1>${safeTitle}</h1>
+          <p>${safeMessage}</p>
           <p class="contact">Questions? <a href="mailto:rohan@kaayko.com">rohan@kaayko.com</a></p>
           ${appButton}
         </div>
@@ -414,6 +421,18 @@ function errorPage(code, title, message, showAppButton = true) {
  */
 async function handleRedirect(req, res, code, options = {}) {
   try {
+    // Defense-in-depth for the reflected/stored content on the HTML pages this
+    // handler serves (error page, social preview, "powered by" interstitial):
+    // block all scripts and inline event handlers. None of these pages needs
+    // JS — the interstitial redirects via its <meta http-equiv="refresh">, so
+    // the redirect still works with scripts disabled. A 302 has no body, so the
+    // header is harmless on the common success path.
+    res.setHeader(
+      'Content-Security-Policy',
+      "default-src 'none'; style-src 'unsafe-inline' https://fonts.googleapis.com; " +
+      "font-src https://fonts.gstatic.com; img-src https: data:; base-uri 'none'; form-action 'none'"
+    );
+
     const userAgent = req.get('user-agent') || '';
     const platform = detectPlatform(userAgent);
 

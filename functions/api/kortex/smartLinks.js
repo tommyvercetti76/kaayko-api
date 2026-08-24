@@ -624,7 +624,13 @@ router.get('/tenants', requireAuth, rateLimiter('tenants'), async (req, res) => 
 router.post('/digest/trigger', requireAuth, requireAdmin, async (req, res) => {
   try {
     const { generateTenantDigest } = require('./analyticsAlertService');
-    const tenantId = req.headers['x-tenant-id'] || 'kaayko-default';
+    // Derive the tenant from the access-controlled context, NOT the raw
+    // `x-tenant-id` header — otherwise any tenant admin could pass another
+    // tenant's id and read its digest (drops + top links). getTenantFromRequest
+    // gates the x-kaayko-tenant-id override to super-admins / the caller's own
+    // tenant list.
+    const tenantContext = await getTenantFromRequest(req);
+    const tenantId = tenantContext.tenantId || 'kaayko-default';
     const tenantDoc = await db.collection('tenants').doc(tenantId).get();
     const tenantName = tenantDoc.exists ? tenantDoc.data().name : tenantId;
 
@@ -643,7 +649,10 @@ router.post('/digest/trigger', requireAuth, requireAdmin, async (req, res) => {
 router.post('/qr/generate', requireAuth, requireAdmin, async (req, res) => {
   try {
     const { url, code, format, foreground, background, logoUrl, size } = req.body;
-    const tenantId = req.headers['x-tenant-id'] || 'kaayko-default';
+    // Access-controlled tenant, not the spoofable raw header — otherwise the
+    // Pro-plan branded-QR gate could be evaluated against another tenant.
+    const qrTenantContext = await getTenantFromRequest(req);
+    const tenantId = qrTenantContext.tenantId || 'kaayko-default';
 
     if (!url && !code) {
       return res.status(400).json({ success: false, error: 'url or code is required' });

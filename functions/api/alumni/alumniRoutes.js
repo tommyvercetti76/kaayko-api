@@ -3,8 +3,8 @@
  *
  * Mounted at /alumni in index.js.
  *
- * IMPORTANT: Campaign links are ONLY created through the KORTEX UI
- * (create-kortex-link.html). This router only handles vote submissions and admin reads.
+ * IMPORTANT: Campaign links are ONLY created through the KORTEX admin console
+ * (/admin/kortex#/create). This router only handles vote submissions and admin reads.
  *
  * Public endpoints:
  *   GET  /alumni/vote-count             Fuzzed live count (no auth, 10-min cache)

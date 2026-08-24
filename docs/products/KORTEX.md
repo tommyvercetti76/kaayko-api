@@ -99,7 +99,6 @@ Primary route files:
 Primary frontend files:
 
 - `src/kortex.html`
-- `src/create-kortex-link.html`
 - `src/admin/kortex.html`
 - `src/tenant.html`
 - `src/admin/login.html`
