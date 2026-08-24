@@ -14,7 +14,7 @@ const crypto  = require('crypto');
 const Busboy  = require('busboy');
 const PaddleScoreCache = require('../../cache/paddleScoreCache');
 const { isPublicPaddlingSpot } = require('./communitySpotVisibility');
-const { requireAdmin } = require('../../middleware/authMiddleware');
+const { requireAdmin, optionalAuthForAdmin } = require('../../middleware/authMiddleware');
 const { sendRawEmail } = require('../../services/emailNotificationService');
 
 const db     = admin.firestore();
@@ -553,7 +553,11 @@ async function submitEntryHandler(req, res) {
       communitySubmission: true,
       submissionStatus: 'pending',
       submittedAt: FieldValue.serverTimestamp(),
-      goLiveAt: Timestamp.fromMillis(goLiveAtDate.getTime()),
+      // Approve-to-publish: null goLiveAt means isPublicPaddlingSpot keeps this
+      // hidden until an admin sets submissionStatus='validated' via the Kortex
+      // Submissions tab. (To revert to auto-publish, restore
+      // Timestamp.fromMillis(now + COMMUNITY_GO_LIVE_DELAY_MS).)
+      goLiveAt: null,
       validatedAt: null,
       validatedBy: null,
       source,
@@ -588,13 +592,36 @@ async function submitEntryHandler(req, res) {
     await db.collection('paddlingSpots').doc(spotId).set(publicSpotDoc);
     await db.collection('paddling_lake_submissions').doc(spotId).set(submissionDoc);
 
+    // Notify the admin that a new submission is waiting for review (best-effort;
+    // never fail the submission if mail is down). The Kortex Submissions tab
+    // reads the same `paddling_lake_submissions` (status == 'pending') queue and
+    // shows a live count badge, so this is a convenience nudge on top of that.
+    (function notifyAdmin() {
+      const esc = (s) => String(s == null ? '' : s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+      const coords = hasLat ? `${lat}, ${lng}` : 'n/a';
+      sendRawEmail({
+        to: 'rohan@kaayko.com',
+        subject: `New lake submission: ${lakeName}`,
+        text:
+          `A community paddling spot was submitted and is awaiting review.\n\n` +
+          `Name: ${lakeName}\nLocation: ${subtitle}\nCoords: ${coords}\n` +
+          `From: ${anonymous ? 'anonymous' : email}\n\n` +
+          `Review it in Kortex → Submissions: https://kaayko.com/admin/kortex#/submissions`,
+        html:
+          `<p>A community paddling spot is awaiting review.</p>` +
+          `<p><strong>${esc(lakeName)}</strong><br>${esc(subtitle)}<br>Coords: ${esc(coords)}<br>` +
+          `From: ${anonymous ? 'anonymous' : esc(email)}</p>` +
+          `<p>Review it in <a href="https://kaayko.com/admin/kortex#/submissions">Kortex → Submissions</a>.</p>`
+      }).catch(() => {});
+    })();
+
     return res.status(201).json({
       success: true,
       id: spotId,
-      goLiveAt: goLiveAtDate.toISOString(),
+      goLiveAt: null,
       message: anonymous
-        ? 'Entry received. It will go live after the validation window.'
-        : 'Entry received. We will notify you when it is validated.'
+        ? 'Entry received. It will appear on the map once our team reviews and approves it.'
+        : 'Entry received. We will review it shortly and email you when it is approved.'
     });
 
   } catch (err) {
@@ -627,7 +654,7 @@ router.post('/lakeRequests', submitEntryUpload, submitEntryHandler);
  * Admin-only view of community lake submissions. Uses the existing X-Admin-Key
  * path through requireAdmin for lightweight internal review tools.
  */
-router.get('/admin/submissions', requireAdmin, async (req, res) => {
+router.get('/admin/submissions', optionalAuthForAdmin, requireAdmin, async (req, res) => {
   try {
     const status = sanitizeText(req.query.status, 40);
     const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 100);
@@ -657,7 +684,7 @@ router.get('/admin/submissions', requireAdmin, async (req, res) => {
  * public; pending submissions also become public automatically when goLiveAt
  * passes.
  */
-router.post('/admin/submissions/:id/validate', requireAdmin, async (req, res) => {
+router.post('/admin/submissions/:id/validate', optionalAuthForAdmin, requireAdmin, async (req, res) => {
   const id = req.params.id;
   if (!id || !/^[a-zA-Z0-9_-]+$/.test(id)) {
     return res.status(400).json({ success: false, error: 'Invalid submission ID' });
@@ -745,7 +772,7 @@ router.post('/admin/submissions/:id/validate', requireAdmin, async (req, res) =>
  * Rejected submissions never auto-publish, and uploaded images are deleted by
  * default so rejected media does not remain publicly addressable.
  */
-router.post('/admin/submissions/:id/reject', requireAdmin, async (req, res) => {
+router.post('/admin/submissions/:id/reject', optionalAuthForAdmin, requireAdmin, async (req, res) => {
   const id = req.params.id;
   if (!id || !/^[a-zA-Z0-9_-]+$/.test(id)) {
     return res.status(400).json({ success: false, error: 'Invalid submission ID' });
