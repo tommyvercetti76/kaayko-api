@@ -83,7 +83,12 @@ async function sendWebhook(params) {
       method: 'POST',
       headers,
       body: payloadString,
-      timeout: 10000 // 10 second timeout
+      // Native fetch ignores a `timeout` field, so the intended 10s cap never
+      // applied — enforce it for real via AbortSignal. `redirect: 'manual'`
+      // stops a webhook target from 3xx-redirecting the delivery to an internal
+      // host (SSRF); normal 2xx webhook endpoints are unaffected.
+      redirect: 'manual',
+      signal: AbortSignal.timeout(10000)
     });
 
     if (response.ok) {

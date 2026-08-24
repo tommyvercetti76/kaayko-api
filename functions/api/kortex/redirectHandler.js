@@ -589,9 +589,10 @@ async function handleRedirect(req, res, code, options = {}) {
       // Issue (or reuse) a single-use visit token and redirect to the landing page
       try {
         const { issueVisitToken } = require('../alumni/visitTokenService');
-        const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
-                   req.headers['x-real-ip'] ||
-                   req.socket?.remoteAddress || 'unknown';
+        // Same hardened resolver used for click tracking above — the old
+        // leftmost-XFF read let a caller spoof the per-IP dedup and burn an
+        // alumni link's maxUses cap by rotating the header.
+        const ip = getClientIp(req) || 'unknown';
 
         const { token: visitToken, reused } = await issueVisitToken(code, ip, {
           sourceGroup: linkData.metadata.sourceGroup,

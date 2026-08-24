@@ -129,7 +129,7 @@ function ipRateLimit(options = {}) {
     res.setHeader('X-RateLimit-Reset', result.resetAt);
 
     if (!result.allowed) {
-      console.log('[RateLimit] IP limit exceeded:', ip);
+      console.log('[RateLimit] IP limit exceeded');
       return res.status(429).json({
         success: false,
         error: 'Rate limit exceeded',
@@ -176,7 +176,7 @@ function userRateLimit(options = {}) {
     res.setHeader('X-RateLimit-Reset', result.resetAt);
 
     if (!result.allowed) {
-      console.log('[RateLimit] User limit exceeded:', req.user.email);
+      console.log('[RateLimit] User limit exceeded:', req.user.uid);
       return res.status(429).json({
         success: false,
         error: 'Rate limit exceeded',

@@ -5,6 +5,7 @@
 
 const admin = require('firebase-admin');
 const db = admin.firestore();
+const { getClientIp: resolveClientIp } = require('../api/kortex/clientIp');
 
 // Rate limit: requests per IP per time window
 const RATE_LIMITS = {
@@ -40,11 +41,13 @@ function isBot(userAgent) {
  * Get client IP address
  */
 function getClientIp(req) {
-  return req.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
-         req.headers['x-real-ip'] ||
-         req.connection.remoteAddress ||
-         req.socket.remoteAddress ||
-         'unknown';
+  // Hardened resolver: walks X-Forwarded-For right-to-left and returns the first
+  // publicly-routable address, so a caller cannot get a fresh rate-limit bucket
+  // by prepending a fake `X-Forwarded-For` (the old leftmost read was
+  // caller-controlled). Legitimate single-proxy traffic resolves to the same
+  // real client IP as before — only header spoofing is closed. Falls back to
+  // 'unknown' to preserve the string key contract used below.
+  return resolveClientIp(req) || 'unknown';
 }
 
 /**
