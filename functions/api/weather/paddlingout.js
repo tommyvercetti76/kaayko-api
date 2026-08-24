@@ -843,6 +843,58 @@ router.post('/admin/submissions/:id/reject', optionalAuthForAdmin, requireAdmin,
  * (paddle_score_cache) + N parallel Storage reads for images.
  * Typical response: 150–300ms.
  */
+// ── Geocode proxy (cached) ────────────────────────────────────────────────
+// Funnels place-name lookups through ONE server identity with caching, so the
+// site's users can't get rate-limited/blocked by Nominatim's ~1 req/s policy
+// (previously every keystroke hit Nominatim from the visitor's own IP). Returns
+// Nominatim's raw JSON array so the client parsing is unchanged.
+// Registered before GET /:id so "geocode" isn't captured as a spot id.
+const GEOCODE_CACHE = new Map(); // "q|limit" -> { at, data }
+const GEOCODE_TTL_MS = 24 * 60 * 60 * 1000;
+const GEOCODE_MAX_ENTRIES = 500;
+let _lastNominatimAt = 0;
+
+router.get('/geocode', async (req, res) => {
+  const q = String(req.query.q || '').trim();
+  const limit = Math.max(1, Math.min(8, parseInt(req.query.limit, 10) || 1));
+  if (q.length < 2) return res.json([]);
+  const key = q.toLowerCase() + '|' + limit;
+
+  const hit = GEOCODE_CACHE.get(key);
+  if (hit && (Date.now() - hit.at) < GEOCODE_TTL_MS) {
+    res.set('Cache-Control', 'public, max-age=86400');
+    return res.json(hit.data);
+  }
+
+  // Politeness throttle: keep the shared server identity under ~1 req/s.
+  const since = Date.now() - _lastNominatimAt;
+  if (since < 1100) await new Promise(r => setTimeout(r, 1100 - since));
+  _lastNominatimAt = Date.now();
+
+  try {
+    const url = 'https://nominatim.openstreetmap.org/search?q=' + encodeURIComponent(q) +
+      '&format=json&addressdetails=1&limit=' + limit;
+    const r = await fetch(url, {
+      headers: {
+        'User-Agent': 'Kaayko/1.0 (+https://kaayko.com; rohan@kaayko.com)',
+        'Accept-Language': 'en'
+      },
+      signal: AbortSignal.timeout(8000)
+    });
+    if (!r.ok) return res.status(502).json([]);
+    const data = await r.json();
+    GEOCODE_CACHE.set(key, { at: Date.now(), data });
+    if (GEOCODE_CACHE.size > GEOCODE_MAX_ENTRIES) {
+      GEOCODE_CACHE.delete(GEOCODE_CACHE.keys().next().value); // evict oldest
+    }
+    res.set('Cache-Control', 'public, max-age=86400');
+    return res.json(data);
+  } catch (err) {
+    console.error('paddlingOut /geocode error:', err.message);
+    return res.status(504).json([]);
+  }
+});
+
 router.get('/', async (req, res) => {
   const startTime = Date.now();
   console.log('paddlingOut GET /');
