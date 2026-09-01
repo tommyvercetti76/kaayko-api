@@ -1,5 +1,21 @@
 # Paddle Score Algorithm Changelog
 
+## v2.2.1 — 2026-09-01
+
+**Display policy: half-point steps everywhere (product decision, Rohan).**
+One-decimal display (introduced v2.0.0) retracted after seeing it live — arbitrary
+decimals (1.9, 2.2) read as pseudo-precision on a paddling decision. `rating`
+(0.5-snapped) is the displayed number on every surface; the verdict label now
+derives from the SNAPPED rating (server `interpretation` included), so label,
+color, and number can never disagree. User-facing tier boundaries are therefore
+4.0 / 3.0 as displayed. `ratingPrecise` remains in every API response for
+evaluation, research, and the craft layer's internal math — it is simply not
+rendered. Also in this release: methodology page gains the craft-adjustment
+table, trip-prep/spot-facts provenance, and corrected pipeline copy (offset
+suppression); privacy page discloses card-style + boat-type preferences and the
+craft request parameter; terms add an explicit informational-guidance bullet
+for tips/craft/spot notes.
+
 Versioned record of every scoring-semantics change. The running version is
 `ALGORITHM_VERSION` in `functions/api/weather/scoringConstants.js` and rides on
 every score response and cache doc as `algorithmVersion`.

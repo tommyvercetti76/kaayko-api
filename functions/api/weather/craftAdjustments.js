@@ -93,12 +93,14 @@ function applyCraftAdjustment(scoreData, craft) {
 
   const adjustedPrecise = clampRating(basePrecise + delta);
   const ratingPrecise = roundPrecise(adjustedPrecise);
+  const snapped = snapHalf(adjustedPrecise);
 
   return {
     ...scoreData,
-    rating: snapHalf(adjustedPrecise),
+    rating: snapped,
     ratingPrecise,
-    interpretation: getInterpretation(ratingPrecise),
+    // Label from the snapped rating — must always match the number users see
+    interpretation: getInterpretation(snapped),
     baseRatingPrecise: roundPrecise(basePrecise),
     craft: id,
     craftAdjustment: { craft: id, label: profile.label, delta, notes }

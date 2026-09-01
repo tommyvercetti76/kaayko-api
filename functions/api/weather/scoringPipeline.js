@@ -131,7 +131,9 @@ async function scoreFromFeatures({
   const majorPenaltyFired = (penaltyResult.penaltyDetails || []).some(d => (d.amount || 0) >= 1.0);
   if (appliedOffset > 0 && majorPenaltyFired) appliedOffset = 0;
 
-  // Final: precise value first, snap derived from it
+  // Final: precise value computed first (kept for evals/research), displayed
+  // rating snapped to 0.5. The verdict label derives from the SNAPPED rating —
+  // product decision (2026-09-01): the label must always match the number users see.
   const precise = clampRating(calBase - (penaltyResult.totalPenalty || 0) + appliedOffset);
   const ratingPrecise = roundPrecise(precise);
   const rating = snapHalf(precise);
@@ -145,7 +147,7 @@ async function scoreFromFeatures({
   return {
     rating,
     ratingPrecise,
-    interpretation: getInterpretation(ratingPrecise),
+    interpretation: getInterpretation(rating),
     riskClass: prediction.riskClass ?? null,
     explanations: prediction.explanations ?? null,
     confidence: prediction.confidence || 'high',
