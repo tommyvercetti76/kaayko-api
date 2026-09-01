@@ -114,7 +114,7 @@ async function computePaddleScoreForSpot(loc, options = {}) {
     const measuredWaterTemp = marineHour?.water_temp_c ?? null;
     const avgAirToday = weatherData.forecast?.[0]?.day?.avgTempC;
     const airForWaterEstimate = Number.isFinite(avgAirToday) ? avgAirToday : mlFeatures.temperature;
-    const waterTempC = measuredWaterTemp ?? Math.max(2, airForWaterEstimate - 8);
+    const waterTempC = measuredWaterTemp ?? Math.round(Math.max(2, airForWaterEstimate - 8) * 10) / 10;
 
     // Night gate: Kaayko does not score night paddling (see methodology/terms).
     // The score is still computed, but surfaces present it as unavailable and
