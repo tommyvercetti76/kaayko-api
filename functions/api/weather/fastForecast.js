@@ -133,7 +133,11 @@ async function transformToFastForecastFormat(weatherData, locationQuery) {
             );
 
             forecastDay.hourly[hour] = {
-                isDay:         hourData.isDay !== false,   // night gate on the outlook
+                // Night gate. Passed through UNCOERCED: weather payloads cached
+                // before this field existed have no isDay, and `!== false` would
+                // turn "unknown" into "daylight" — which offered a next-daylight
+                // window of 10 PM. Consumers must treat undefined as unknown.
+                isDay:         hourData.isDay,
                 temperature:   hourData.tempC,
                 windSpeed:     hourData.windKPH,
                 windDirection: hourData.windDir,
