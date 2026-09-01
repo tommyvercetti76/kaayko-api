@@ -942,6 +942,7 @@ router.get('/geocode', async (req, res) => {
 });
 
 const { applyCraftAdjustment } = require('./craftAdjustments');
+const { getPreparationTips } = require('./paddleTips');
 
 router.get('/', async (req, res) => {
   const startTime = Date.now();
@@ -1053,6 +1054,14 @@ router.get('/:id', async (req, res) => {
     const [imgSrc] = await Promise.all([fetchSpotImages(id)]);
     spot.imgSrc      = imgSrc;
     spot.paddleScore = applyCraftAdjustment(allScores.get(id) || null, req.query.craft);
+    // Preparation tips — computed from the cached conditions + this spot's real
+    // enrichment; empty array when there's nothing grounded to say.
+    spot.tips = spot.paddleScore ? getPreparationTips({
+      conditions: spot.paddleScore.conditions,
+      craft: req.query.craft,
+      spot: { cellCoverage: data.cellCoverage, localTips: data.localTips },
+      warningMessages: spot.paddleScore.warnings?.messages || []
+    }) : [];
 
     res.set('Cache-Control', 'public, max-age=60');
     return res.json(spot);

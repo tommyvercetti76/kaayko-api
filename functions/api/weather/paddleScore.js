@@ -16,6 +16,7 @@ const PaddleScoreCache = require('../../cache/paddleScoreCache');
 const { requireAdmin } = require('../../middleware/authMiddleware');
 const { isPublicPaddlingSpot } = require('./communitySpotVisibility');
 const { applyCraftAdjustment, CRAFT_IDS } = require('./craftAdjustments');
+const { getPreparationTips } = require('./paddleTips');
 
 const db = getFirestore();
 
@@ -38,6 +39,7 @@ router.get('/', createInputMiddleware('paddleScore'), async (req, res) => {
     let loc;
     let locationName;
     let resolvedSpotId = spotId || null;
+    let spotEnrichment = null; // { cellCoverage, localTips } when the spot doc is in hand
 
     // Coordinate-only requests that land on a known spot must score identically
     // to the spotId path (same cache doc, same calibration offset) — the same
@@ -82,6 +84,7 @@ router.get('/', createInputMiddleware('paddleScore'), async (req, res) => {
       }
       loc = { id: spotId, lat: data.location.latitude, lng: data.location.longitude, name: data.lakeName || spotId };
       locationName = loc.name;
+      spotEnrichment = { cellCoverage: data.cellCoverage || null, localTips: data.localTips || [] };
     } else {
       loc = { id: resolvedSpotId, lat: latitude, lng: longitude, name: `${latitude},${longitude}` };
       locationName = loc.name;
@@ -95,10 +98,17 @@ router.get('/', createInputMiddleware('paddleScore'), async (req, res) => {
       const cached = await cache.get(resolvedSpotId);
       if (cached) {
         console.log(`paddleScore: cache hit for ${resolvedSpotId}`);
+        const adjustedCached = applyCraftAdjustment(cached, craft);
         return res.json({
           success: true,
           location: { name: locationName, coordinates: { latitude: loc.lat, longitude: loc.lng } },
-          paddleScore: applyCraftAdjustment(cached, craft),
+          paddleScore: adjustedCached,
+          tips: getPreparationTips({
+            conditions: cached.conditions,
+            craft,
+            spot: spotEnrichment,
+            warningMessages: cached.warnings?.messages || []
+          }),
           warnings: cached.warnings,
           conditions: cached.conditions,
           metadata: {
@@ -170,6 +180,12 @@ router.get('/', createInputMiddleware('paddleScore'), async (req, res) => {
         algorithmVersion: score.algorithmVersion,
         isGoldStandard: !!score.mlModelUsed
       },
+      tips: getPreparationTips({
+        conditions: score.conditions,
+        craft,
+        spot: spotEnrichment,
+        warningMessages: score.warnings?.messages || []
+      }),
       warnings: score.warnings,
       conditions: score.conditions,
       metadata: {
