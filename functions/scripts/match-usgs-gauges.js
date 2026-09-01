@@ -29,10 +29,20 @@ function haversineKm(lat1, lon1, lat2, lon2) {
   return 2 * R * Math.asin(Math.sqrt(a));
 }
 
+// The keyless tier rate-limits hard enough to fail partway through 17 spots.
+// Get a free key at https://api.waterdata.usgs.gov/signup/ and export USGS_API_KEY.
 async function getJSON(url) {
-  const r = await fetch(url, { headers: { Accept: 'application/geo+json' }, signal: AbortSignal.timeout(30000) });
+  const key = process.env.USGS_API_KEY;
+  const full = key ? `${url}&api_key=${encodeURIComponent(key)}` : url;
+  const r = await fetch(full, { headers: { Accept: 'application/geo+json' }, signal: AbortSignal.timeout(30000) });
   if (!r.ok) throw new Error(`${r.status} ${url}`);
-  return r.json();
+  const d = await r.json();
+  if (d.error) {
+    throw new Error(d.error.code === 'OVER_RATE_LIMIT'
+      ? 'USGS rate limit — set USGS_API_KEY (free: https://api.waterdata.usgs.gov/signup/)'
+      : `USGS ${d.error.code}`);
+  }
+  return d;
 }
 
 function percentile(sorted, p) {

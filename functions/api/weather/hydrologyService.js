@@ -38,14 +38,65 @@ class HydrologyCache {
   }
 }
 
+// The keyless tier is rate-limited hard enough that even 17 spots exhaust it.
+// USGS_API_KEY (free: https://api.waterdata.usgs.gov/signup/) is appended when set.
+function usgsUrl(path) {
+  const key = process.env.USGS_API_KEY;
+  return key ? `${API}${path}&api_key=${encodeURIComponent(key)}` : `${API}${path}`;
+}
+
 async function fetchLatest(gaugeId, parameterCode) {
-  const url = `${API}/collections/latest-continuous/items?monitoring_location_id=${encodeURIComponent(gaugeId)}&parameter_code=${parameterCode}&f=json`;
+  const url = usgsUrl(`/collections/latest-continuous/items?monitoring_location_id=${encodeURIComponent(gaugeId)}&parameter_code=${parameterCode}&f=json`);
   const r = await fetch(url, { headers: { Accept: 'application/geo+json' }, signal: AbortSignal.timeout(8000) });
   if (!r.ok) throw new Error(`USGS ${r.status}`);
   const d = await r.json();
+  if (d.error) throw new Error(`USGS ${d.error.code || 'error'}`);
   const p = d.features?.[0]?.properties;
   if (!p || !Number.isFinite(Number(p.value))) return null;
   return { value: Number(p.value), time: p.time };
+}
+
+/**
+ * MEASURED water temperature (USGS parameter 00010) for a spot that has a
+ * reviewed water-temperature site. Returns null when there is no source, the
+ * reading is stale, or USGS is unavailable — callers then fall back to the
+ * documented estimate and label it as one.
+ *
+ * @param {object} meta - spot.waterTemp: { gaugeId, gaugeName, distanceKm, siteType }
+ */
+async function getWaterTemp(meta) {
+  const gaugeId = meta?.gaugeId;
+  if (!gaugeId) return null;
+
+  const cache = new HydrologyCache();
+  const cacheKey = `wtemp_${gaugeId}`;
+  const cached = await cache.get(cacheKey);
+  if (cached) return cached.unavailable ? null : cached;
+
+  try {
+    const reading = await fetchLatest(gaugeId, '00010');
+    if (!reading) { await cache.set(cacheKey, { unavailable: true }); return null; }
+
+    const ageHours = (Date.now() - Date.parse(reading.time)) / 3600000;
+    if (ageHours > STALE_HOURS) { await cache.set(cacheKey, { unavailable: true }); return null; }
+
+    const payload = {
+      celsius: Math.round(reading.value * 10) / 10,
+      observedAt: reading.time,
+      gaugeId,
+      gaugeName: meta.gaugeName || gaugeId,
+      distanceKm: meta.distanceKm ?? null,
+      siteType: meta.siteType || null,
+      source: 'USGS Water Data API',
+      gaugeUrl: `https://waterdata.usgs.gov/monitoring-location/${gaugeId.replace(/^USGS-/, '')}`
+    };
+    await cache.set(cacheKey, payload);
+    return payload;
+  } catch (err) {
+    console.warn(`getWaterTemp ${gaugeId}: ${err.message}`);
+    await cache.set(cacheKey, { unavailable: true });
+    return null;
+  }
 }
 
 function bandFor(cms, normalsForMonth) {
@@ -125,4 +176,4 @@ async function getHydrology(hydrologyMeta) {
   return payload;
 }
 
-module.exports = { getHydrology, HydrologyCache };
+module.exports = { getHydrology, getWaterTemp, HydrologyCache };

@@ -10,7 +10,7 @@ const { getFirestore, FieldValue, Timestamp } = require('firebase-admin/firestor
 const PaddleScoreCache = require('../cache/paddleScoreCache');
 const { computePaddleScoreForSpot } = require('../api/weather/paddleScoreCompute');
 const { isPublicPaddlingSpot } = require('../api/weather/communitySpotVisibility');
-const { getHydrology } = require('../api/weather/hydrologyService');
+const { getHydrology, getWaterTemp } = require('../api/weather/hydrologyService');
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -31,7 +31,8 @@ async function getLocationsFromFirestore() {
                     lat:  data.location?.latitude,
                     lng:  data.location?.longitude,
                     name: data.lakeName || data.title || doc.id,
-                    hydrologyMeta: data.hydrology || null   // river spots: gauge + normals
+                    hydrologyMeta: data.hydrology || null,  // river spots: gauge + normals
+                    waterTempMeta: data.waterTemp || null   // reviewed USGS 00010 site, when one exists
                 };
             })
             .filter(loc => loc.lat && loc.lng);
@@ -109,10 +110,18 @@ exports.warmPaddleScoreCache = onSchedule({
                     try { hydrologyContext = await getHydrology(loc.hydrologyMeta); }
                     catch { /* score proceeds without the flow gate */ }
                 }
+                // Measured water temperature where a reviewed sensor exists —
+                // cached per gauge, so this adds no per-spot API cost.
+                let waterTempReading = null;
+                if (loc.waterTempMeta) {
+                    try { waterTempReading = await getWaterTemp(loc.waterTempMeta); }
+                    catch { /* falls back to the labelled estimate */ }
+                }
                 return computePaddleScoreForSpot(loc, {
                     calibrationOffsets,
                     previousScore: previousScores.get(loc.id) || null,
-                    hydrologyContext
+                    hydrologyContext,
+                    waterTempReading
                 });
             })
         );

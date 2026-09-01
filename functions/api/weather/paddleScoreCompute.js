@@ -42,6 +42,9 @@ async function computePaddleScoreForSpot(loc, options = {}) {
         limitedWeatherFallback = false,
         previousScore = null,
         hydrologyContext = null,
+        // Measured water temperature from a reviewed USGS 00010 site, when the
+        // spot has one. Real readings always beat the estimator.
+        waterTempReading = null,
         // Marine (wave/swell/sea-surface-temp) is OFF unless a spot is explicitly
         // coastal. WeatherAPI's marine endpoint does not error or snap to the
         // ocean for a landlocked point — it FABRICATES a full marine record.
@@ -111,7 +114,11 @@ async function computePaddleScoreForSpot(loc, options = {}) {
     // DAY's average air temperature, not the current hour. Estimating from
     // instantaneous air made an alpine lake read 2 °C at night (tripping the
     // harshest cold-water penalty) purely because the air had dropped after dark.
-    const measuredWaterTemp = marineHour?.water_temp_c ?? null;
+    // Preference order: a real sensor on this water > marine (coastal only) >
+    // the documented estimate. Only the last is ever labelled an estimate.
+    const measuredWaterTemp = (Number.isFinite(waterTempReading?.celsius) ? waterTempReading.celsius : null)
+        ?? marineHour?.water_temp_c
+        ?? null;
     const avgAirToday = weatherData.forecast?.[0]?.day?.avgTempC;
     const airForWaterEstimate = Number.isFinite(avgAirToday) ? avgAirToday : mlFeatures.temperature;
     const waterTempC = measuredWaterTemp ?? Math.round(Math.max(2, airForWaterEstimate - 8) * 10) / 10;
@@ -178,6 +185,13 @@ async function computePaddleScoreForSpot(loc, options = {}) {
             // Inland water has no measured temperature source — say so rather
             // than presenting an estimate as a reading.
             waterTempEstimated: measuredWaterTemp == null,
+            waterTempSource: waterTempReading ? {
+                gaugeId: waterTempReading.gaugeId,
+                gaugeName: waterTempReading.gaugeName,
+                distanceKm: waterTempReading.distanceKm,
+                observedAt: waterTempReading.observedAt,
+                gaugeUrl: waterTempReading.gaugeUrl
+            } : null,
             precipMm:      mlFeatures.precipMm || 0,
             precipChancePercent: mlFeatures.precipChancePercent || 0,
             isDay,
