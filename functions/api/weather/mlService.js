@@ -87,6 +87,12 @@ async function getPrediction(features) {
     const mlUrl = getMLServiceURL();
     const result = await httpsPost(`${mlUrl}/predict`, features, 10000);
 
+    // A malformed response must fall through to the rule-based fallback — without
+    // this check a missing rating would publish as a hard 1.0 at high confidence.
+    if (!Number.isFinite(result?.rating) || result.rating < 1 || result.rating > 5) {
+      throw new Error(`ML service returned invalid rating: ${result?.rating}`);
+    }
+
     console.log(`ML prediction — rating: ${result.rating}, source: ${result.predictionSource}`);
 
     return {
@@ -160,9 +166,10 @@ function extractMLFeatures(weatherData) {
   };
 }
 
+// Canonical tier thresholds — keep in sync with getInterpretation in paddleScoreCompute.js.
 function interpretRating(rating) {
-  if (rating >= 4) return 'Worth it';
-  if (rating >= 3) return 'Careful';
+  if (rating >= 3.7) return 'Worth it';
+  if (rating >= 2.7) return 'Careful';
   return 'Hard pass';
 }
 

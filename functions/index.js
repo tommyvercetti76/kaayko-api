@@ -147,25 +147,13 @@ exports.api = onRequest({
 }, apiApp);
 
 // ===========================
-// 🕒 SCHEDULED FUNCTIONS - TEMPORARILY DISABLED
+// 🕒 SCHEDULED FUNCTIONS
 // ===========================
-// Scheduled forecast generator (enabled)
-const {
-  earlyMorningForecast,
-  morningForecastUpdate,
-  afternoonForecastUpdate,
-  eveningForecastUpdate,
-  emergencyForecastRefresh,
-  forecastSchedulerHealth
-} = require('./scheduled/forecastScheduler');
-
-// Export scheduled forecast functions as Cloud Function scheduled triggers
-exports.earlyMorningForecast = earlyMorningForecast;
-exports.morningForecastUpdate = morningForecastUpdate;
-exports.afternoonForecastUpdate = afternoonForecastUpdate;
-exports.eveningForecastUpdate = eveningForecastUpdate;
-exports.emergencyForecastRefresh = emergencyForecastRefresh;
-exports.forecastSchedulerHealth = forecastSchedulerHealth;
+// The forecast scheduler pipeline (earlyMorningForecast, morningForecastUpdate,
+// afternoonForecastUpdate, eveningForecastUpdate, emergencyForecastRefresh,
+// forecastSchedulerHealth) was DELETED in algorithm v2.0.0: its cache writes used
+// a key scheme no endpoint read, and its ML calls ran on default features —
+// ~470 wasted external calls/day. Deploying removes the six Cloud Functions.
 
 // Paddle score cache warmer — runs every 15 min, pre-warms scores for all curated spots
 // Deploy: firebase deploy --only functions:warmPaddleScoreCache

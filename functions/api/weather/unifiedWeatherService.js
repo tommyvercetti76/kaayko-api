@@ -20,7 +20,9 @@ class UnifiedWeatherService {
         this.db = admin.firestore();
         this.CACHE_COLLECTION = 'unified_weather_cache';
         this.CACHE_TTL_HOURS = 2; // 2 hours for weather data
-        this.FORECAST_TTL_HOURS = 4; // 4 hours for forecast data
+        // Forecast responses also carry the `current` block + government alerts used by
+        // the paddle score path, so they must not outlive the weather TTL.
+        this.FORECAST_TTL_HOURS = 2;
         
         // In-memory cache for hot data (last 50 requests)
         this.memoryCache = new Map();
@@ -37,7 +39,7 @@ class UnifiedWeatherService {
      */
     async getWeatherData(location, options = {}) {
         const startTime = Date.now();
-        const { includeForecast = false, useCache = true } = options;
+        const { includeForecast = false, useCache = true, limitedFallback = false } = options;
         
         // Normalize location input
         const normalizedLocation = this._normalizeLocation(location);
@@ -57,7 +59,7 @@ class UnifiedWeatherService {
         console.log(`📡 Cache MISS - fetching from WeatherAPI for ${normalizedLocation.display}`);
         
         // Fetch fresh data from primary service
-        const weatherData = await this._fetchFromWeatherAPI(normalizedLocation, includeForecast);
+        const weatherData = await this._fetchFromWeatherAPI(normalizedLocation, includeForecast, limitedFallback);
         
         // Process and standardize
         const standardizedData = this._standardizeWeatherResponse(weatherData);
@@ -289,8 +291,14 @@ class UnifiedWeatherService {
     _generateCacheKey(normalizedLocation, includeForecast) {
         const prefix = normalizedLocation.type === 'coordinates' ? 'coord' : 'loc';
         const suffix = includeForecast ? '_forecast' : '_weather';
-        const version = 'v2'; // Cache version - increment to invalidate old cache
-        return `${prefix}:${normalizedLocation.value.toLowerCase()}${suffix}:${version}`;
+        const version = 'v3'; // Cache version - increment to invalidate old cache
+        // Coordinates are keyed at 3 decimals (~110 m) — full-precision keys made
+        // every nearby request a cache miss and grew the collection unbounded.
+        // The upstream fetch still uses the caller's full-precision coordinates.
+        const value = normalizedLocation.type === 'coordinates'
+            ? `${normalizedLocation.lat.toFixed(3)},${normalizedLocation.lng.toFixed(3)}`
+            : normalizedLocation.value.toLowerCase();
+        return `${prefix}:${value}${suffix}:${version}`;
     }
 
     async _getCachedWeather(cacheKey) {
@@ -363,12 +371,12 @@ class UnifiedWeatherService {
         });
     }
 
-    async _fetchFromWeatherAPI(normalizedLocation, includeForecast) {
+    async _fetchFromWeatherAPI(normalizedLocation, includeForecast, limitedFallback = false) {
         const query = normalizedLocation.value;
-        
+
         // COORDINATE FALLBACK SYSTEM - Fix for WeatherAPI coverage changes
         if (normalizedLocation.type === 'coordinates') {
-            return this._fetchWithCoordinateFallback(normalizedLocation, includeForecast);
+            return this._fetchWithCoordinateFallback(normalizedLocation, includeForecast, limitedFallback);
         }
         
         if (includeForecast) {
@@ -385,7 +393,7 @@ class UnifiedWeatherService {
      * Handles WeatherAPI coverage gaps for remote locations
      * Tries multiple coordinate precisions and nearby searches
      */
-    async _fetchWithCoordinateFallback(normalizedLocation, includeForecast) {
+    async _fetchWithCoordinateFallback(normalizedLocation, includeForecast, limitedFallback = false) {
         const originalLat = normalizedLocation.lat;
         const originalLng = normalizedLocation.lng;
         
@@ -424,7 +432,14 @@ class UnifiedWeatherService {
         } catch (error3) {
             console.log(`  ❌ 3-decimal precision failed: ${error3.message}`);
         }
-        
+
+        // Anonymous batch requests stop here — the nearby/city/geographical strategies
+        // below can burn up to 14 more external calls per uncovered coordinate, which
+        // makes an uncapped batch a cost amplifier for remote/ocean coordinates.
+        if (limitedFallback) {
+            throw new Error(`WeatherAPI coverage not available for ${originalLat},${originalLng} (limited fallback)`);
+        }
+
         // Strategy 4: Try nearby coordinates (±0.05 and ±0.1 degree search)
         const offsets = [
             [0.05, 0], [-0.05, 0], [0, 0.05], [0, -0.05],
@@ -714,6 +729,10 @@ class UnifiedWeatherService {
                 areas: alert.areas
             }));
         }
+
+        // WeatherAPI only returns alerts on forecast.json (&alerts=yes); current.json
+        // responses simply have no alerts key, and hasWarnings stays false for them.
+        standardized.current.hasWarnings = Array.isArray(standardized.alerts) && standardized.alerts.length > 0;
 
         return standardized;
     }

@@ -854,10 +854,41 @@ const GEOCODE_TTL_MS = 24 * 60 * 60 * 1000;
 const GEOCODE_MAX_ENTRIES = 500;
 let _lastNominatimAt = 0;
 
+// Per-IP sliding-window limiter. In-memory (per-instance) — imperfect under
+// scale-out, but it bounds a single client hammering the shared Nominatim identity
+// without paying a Firestore round-trip per typeahead keystroke.
+const GEOCODE_IP_WINDOW_MS = 60 * 1000;
+const GEOCODE_IP_MAX_PER_WINDOW = 30;
+const GEOCODE_IP_HITS = new Map(); // ip -> [timestamps]
+
+function geocodeRateLimited(ip) {
+  const now = Date.now();
+  const hits = (GEOCODE_IP_HITS.get(ip) || []).filter(t => now - t < GEOCODE_IP_WINDOW_MS);
+  if (hits.length >= GEOCODE_IP_MAX_PER_WINDOW) {
+    GEOCODE_IP_HITS.set(ip, hits);
+    return true;
+  }
+  hits.push(now);
+  GEOCODE_IP_HITS.set(ip, hits);
+  if (GEOCODE_IP_HITS.size > 2000) {
+    // Drop stale IPs so the map can't grow unbounded
+    for (const [k, v] of GEOCODE_IP_HITS) {
+      if (v.length === 0 || now - v[v.length - 1] > GEOCODE_IP_WINDOW_MS) GEOCODE_IP_HITS.delete(k);
+    }
+  }
+  return false;
+}
+
 router.get('/geocode', async (req, res) => {
-  const q = String(req.query.q || '').trim();
+  const q = String(req.query.q || '').trim().slice(0, 120);
   const limit = Math.max(1, Math.min(8, parseInt(req.query.limit, 10) || 1));
   if (q.length < 2) return res.json([]);
+
+  const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip;
+  if (geocodeRateLimited(ip)) {
+    return res.status(429).json([]);
+  }
+
   const key = q.toLowerCase() + '|' + limit;
 
   const hit = GEOCODE_CACHE.get(key);

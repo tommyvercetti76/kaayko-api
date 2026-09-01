@@ -6,6 +6,7 @@
 // GET  /paddleScore/metrics      — admin: model accuracy stats (requires x-admin-key)
 
 const express = require('express');
+const crypto = require('crypto');
 const router = express.Router();
 const admin = require('firebase-admin');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
@@ -34,6 +35,26 @@ router.get('/', createInputMiddleware('paddleScore'), async (req, res) => {
 
     let loc;
     let locationName;
+    let resolvedSpotId = spotId || null;
+
+    // Coordinate-only requests that land on a known spot must score identically
+    // to the spotId path (same cache doc, same calibration offset) — the same
+    // water previously differed by up to ±1.0 across surfaces.
+    if (!spotId && Number.isFinite(latitude) && Number.isFinite(longitude)) {
+      try {
+        const spotsSnap = await db.collection('paddlingSpots').get();
+        for (const doc of spotsSnap.docs) {
+          const d = doc.data();
+          if (!isPublicPaddlingSpot(d)) continue;
+          const sLat = d.location?.latitude, sLng = d.location?.longitude;
+          if (Number.isFinite(sLat) && Number.isFinite(sLng) &&
+              haversineKm(latitude, longitude, sLat, sLng) < 0.3) {
+            resolvedSpotId = doc.id;
+            break;
+          }
+        }
+      } catch { /* non-fatal — score as free coordinates */ }
+    }
 
     if (spotId) {
       const doc = await db.collection('paddlingSpots').doc(spotId).get();
@@ -60,18 +81,18 @@ router.get('/', createInputMiddleware('paddleScore'), async (req, res) => {
       loc = { id: spotId, lat: data.location.latitude, lng: data.location.longitude, name: data.lakeName || spotId };
       locationName = loc.name;
     } else {
-      loc = { id: null, lat: latitude, lng: longitude, name: `${latitude},${longitude}` };
+      loc = { id: resolvedSpotId, lat: latitude, lng: longitude, name: `${latitude},${longitude}` };
       locationName = loc.name;
     }
 
-    console.log(`paddleScore request: ${locationName}`);
+    console.log(`paddleScore request: ${locationName}${resolvedSpotId && !spotId ? ` (matched spot ${resolvedSpotId})` : ''}`);
 
     // Check paddle_score_cache for known spots (spotId-keyed)
-    if (spotId) {
+    if (resolvedSpotId) {
       const cache = new PaddleScoreCache();
-      const cached = await cache.get(spotId);
+      const cached = await cache.get(resolvedSpotId);
       if (cached) {
-        console.log(`paddleScore: cache hit for ${spotId}`);
+        console.log(`paddleScore: cache hit for ${resolvedSpotId}`);
         return res.json({
           success: true,
           location: { name: locationName, coordinates: { latitude: loc.lat, longitude: loc.lng } },
@@ -82,6 +103,7 @@ router.get('/', createInputMiddleware('paddleScore'), async (req, res) => {
             source: cached.predictionSource,
             cached: true,
             cachedAt: cached.computedAt,
+            algorithmVersion: cached.algorithmVersion || null,
             response_time_ms: Date.now() - startTime
           }
         });
@@ -90,11 +112,11 @@ router.get('/', createInputMiddleware('paddleScore'), async (req, res) => {
 
     // Load dynamic calibration offset for this spot (if any)
     const calibrationOffsets = new Map();
-    if (spotId) {
+    if (resolvedSpotId) {
       try {
-        const calDoc = await db.collection('paddle_spot_calibrations').doc(spotId).get();
+        const calDoc = await db.collection('paddle_spot_calibrations').doc(resolvedSpotId).get();
         if (calDoc.exists && typeof calDoc.data().biasOffset === 'number') {
-          calibrationOffsets.set(spotId, calDoc.data().biasOffset);
+          calibrationOffsets.set(resolvedSpotId, calDoc.data().biasOffset);
         }
       } catch { /* non-fatal */ }
     }
@@ -111,10 +133,10 @@ router.get('/', createInputMiddleware('paddleScore'), async (req, res) => {
     }
 
     // Write to cache as a side effect for future paddlingOut reads
-    if (spotId) {
+    if (resolvedSpotId) {
       const cache = new PaddleScoreCache();
-      cache.set(spotId, score).catch(err =>
-        console.warn(`paddleScore: failed to write cache for ${spotId}: ${err.message}`)
+      cache.set(resolvedSpotId, score).catch(err =>
+        console.warn(`paddleScore: failed to write cache for ${resolvedSpotId}: ${err.message}`)
       );
     }
 
@@ -123,16 +145,22 @@ router.get('/', createInputMiddleware('paddleScore'), async (req, res) => {
       location: { name: locationName, coordinates: { latitude: loc.lat, longitude: loc.lng } },
       paddleScore: {
         rating: score.rating,
+        ratingPrecise: score.ratingPrecise,
         interpretation: score.interpretation,
         confidence: score.confidence,
         mlModelUsed: score.mlModelUsed,
         predictionSource: score.predictionSource,
+        modelType: score.modelType,
+        riskClass: score.riskClass,
+        explanations: score.explanations,
         originalMLRating: score.originalMLRating,
         calibrationApplied: score.calibrationApplied,
         adjustments: score.adjustments,
         penaltiesApplied: score.penaltiesApplied,
+        penaltyDetails: score.penaltyDetails,
         dynamicOffset: score.dynamicOffset,
-        isGoldStandard: true
+        algorithmVersion: score.algorithmVersion,
+        isGoldStandard: !!score.mlModelUsed
       },
       warnings: score.warnings,
       conditions: score.conditions,
@@ -140,6 +168,7 @@ router.get('/', createInputMiddleware('paddleScore'), async (req, res) => {
         source: score.predictionSource,
         cached: false,
         computedAt: score.computedAt,
+        algorithmVersion: score.algorithmVersion,
         response_time_ms: Date.now() - startTime
       }
     });
@@ -166,7 +195,7 @@ router.get('/', createInputMiddleware('paddleScore'), async (req, res) => {
  */
 router.post('/feedback', async (req, res) => {
   try {
-    const { spotId, actualScore, predictedScore, conditions, userId } = req.body;
+    const { spotId, actualScore, conditions, userId, fingerprint } = req.body;
 
     // Validate required fields
     if (!spotId || typeof spotId !== 'string' || !/^[a-zA-Z0-9_-]+$/.test(spotId)) {
@@ -175,9 +204,33 @@ router.post('/feedback', async (req, res) => {
     if (typeof actualScore !== 'number' || actualScore < 1 || actualScore > 5) {
       return res.status(400).json({ success: false, error: 'actualScore must be a number between 1 and 5' });
     }
-    if (predictedScore !== undefined && (typeof predictedScore !== 'number' || predictedScore < 1 || predictedScore > 5)) {
-      return res.status(400).json({ success: false, error: 'predictedScore must be a number between 1 and 5' });
+
+    const today = new Date().toISOString().split('T')[0];
+    const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip;
+
+    // IP rate limit: max 5 feedback submissions per IP per day (mirrors /publicRating)
+    const ipKey = `fbLimit_${ip}_${today}`;
+    const ipDoc = await db.collection('rate_limits').doc(ipKey).get();
+    if (ipDoc.exists && (ipDoc.data().count || 0) >= 5) {
+      return res.status(429).json({ success: false, error: 'Daily feedback limit reached' });
     }
+
+    // Dedup: one feedback per client per spot per day. Deterministic doc id makes
+    // retries idempotent and flooding a no-op. Client fingerprint preferred, IP hash fallback.
+    const clientKey = (typeof fingerprint === 'string' && fingerprint.length > 0 && fingerprint.length <= 40)
+      ? fingerprint
+      : crypto.createHash('sha256').update(String(ip)).digest('hex').slice(0, 16);
+    const docId = `fb_${clientKey}_${spotId}_${today}`;
+
+    // The prediction being scored against is server-authoritative: read it from
+    // paddle_score_cache rather than trusting a client-supplied pair, which would
+    // allow calibration poisoning. No cached score → feedback stored but excluded
+    // from calibration (aggregator skips non-numeric predictedScore).
+    let serverPredictedScore = null;
+    try {
+      const cached = await new PaddleScoreCache().get(spotId);
+      if (Number.isFinite(cached?.rating)) serverPredictedScore = cached.rating;
+    } catch { /* non-fatal */ }
 
     // Sanitize optional conditions object — only allow known numeric keys
     let safeConditions = {};
@@ -192,15 +245,26 @@ router.post('/feedback', async (req, res) => {
       }
     }
 
-    await db.collection('paddle_predictions_feedback').add({
+    const docRef = db.collection('paddle_predictions_feedback').doc(docId);
+    const alreadyExists = (await docRef.get()).exists;
+
+    await docRef.set({
       spotId,
       userId: typeof userId === 'string' ? userId : null,
       actualScore,
-      predictedScore: typeof predictedScore === 'number' ? predictedScore : null,
+      predictedScore: serverPredictedScore,
       conditions: safeConditions,
       timestamp: FieldValue.serverTimestamp(),
-      sessionDate: new Date().toISOString().split('T')[0]
+      sessionDate: today
     });
+
+    // Only count new submissions against the daily limit
+    if (!alreadyExists) {
+      await db.collection('rate_limits').doc(ipKey).set(
+        { count: FieldValue.increment(1), date: today },
+        { merge: true }
+      );
+    }
 
     return res.json({ success: true, message: 'Feedback recorded. Thank you!' });
 
@@ -452,7 +516,7 @@ router.get('/metrics', requireAdmin, async (req, res) => {
 
 router.post('/batch', async (req, res) => {
   const startTime = Date.now();
-  
+
   try {
     const { locations } = req.body;
 
@@ -481,26 +545,88 @@ router.post('/batch', async (req, res) => {
       });
     }
 
-    // Validate each location
-    const validated = locations.map((loc, idx) => {
-      if (typeof loc.lat !== 'number' || typeof loc.lng !== 'number') {
-        throw new Error(`Location ${idx}: lat/lng must be numbers`);
-      }
-      return { lat: loc.lat, lng: loc.lng };
-    });
+    // IP rate limit: batch fans out to external weather/ML calls, so an anonymous
+    // loop must hit a ceiling. 100/day covers heavy legitimate search use.
+    const today = new Date().toISOString().split('T')[0];
+    const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip;
+    const ipKey = `batchLimit_${ip}_${today}`;
+    const ipDoc = await db.collection('rate_limits').doc(ipKey).get();
+    if (ipDoc.exists && (ipDoc.data().count || 0) >= 100) {
+      return res.status(429).json({ success: false, error: 'Daily batch limit reached' });
+    }
+    db.collection('rate_limits').doc(ipKey).set(
+      { count: FieldValue.increment(1), date: today },
+      { merge: true }
+    ).catch(() => { /* non-fatal */ });
 
-    // Compute all scores in parallel
-    const scorePromises = validated.map(({ lat, lng }) =>
-      computePaddleScoreForSpot(
-        { id: null, lat, lng, name: `${lat},${lng}` },
-        { calibrationOffsets: new Map() }
-      ).catch(err => {
-        console.warn(`Batch score compute failed for ${lat},${lng}:`, err.message);
-        return null;
-      })
+    // Validate each location — finite numbers within coordinate ranges
+    const invalidIdx = locations.findIndex(loc =>
+      !Number.isFinite(loc?.lat) || !Number.isFinite(loc?.lng) ||
+      loc.lat < -90 || loc.lat > 90 || loc.lng < -180 || loc.lng > 180
     );
+    if (invalidIdx !== -1) {
+      return res.status(400).json({
+        success: false,
+        error: `Location ${invalidIdx}: lat/lng must be finite coordinates`,
+        response_time_ms: Date.now() - startTime
+      });
+    }
+    const validated = locations.map(loc => ({ lat: loc.lat, lng: loc.lng }));
 
-    const scores = await Promise.all(scorePromises);
+    // Known-spot short-circuit: coordinates within ~300 m of a curated spot serve
+    // that spot's warmed cache entry instead of recomputing.
+    const cache = new PaddleScoreCache();
+    let knownSpots = [];
+    try {
+      const spotsSnap = await db.collection('paddlingSpots').get();
+      knownSpots = spotsSnap.docs
+        .filter(doc => isPublicPaddlingSpot(doc.data()))
+        .map(doc => {
+          const d = doc.data();
+          return { id: doc.id, lat: d.location?.latitude, lng: d.location?.longitude };
+        })
+        .filter(s => Number.isFinite(s.lat) && Number.isFinite(s.lng));
+    } catch { /* non-fatal — fall through to coordinate scoring */ }
+
+    // Coordinate cache key: 3 decimals (~110 m) so repeated searches over the same
+    // water reuse one computation for the cache TTL window.
+    const coordKey = ({ lat, lng }) =>
+      `coord_${(Math.round(lat * 1000) / 1000).toFixed(3)}_${(Math.round(lng * 1000) / 1000).toFixed(3)}`;
+
+    // Dedupe compute work within the request (repeated/nearby coordinates)
+    const scoreByKey = new Map();
+
+    const resolveScore = async (loc) => {
+      const spot = knownSpots.find(s => haversineKm(loc.lat, loc.lng, s.lat, s.lng) < 0.3);
+      const key = spot ? `spot_${spot.id}` : coordKey(loc);
+      if (scoreByKey.has(key)) return scoreByKey.get(key);
+
+      const promise = (async () => {
+        if (spot) {
+          const cachedSpot = await cache.get(spot.id);
+          if (cachedSpot) return cachedSpot;
+        }
+        const cachedCoord = await cache.get(coordKey(loc));
+        if (cachedCoord) return cachedCoord;
+
+        const computed = await computePaddleScoreForSpot(
+          { id: spot?.id || null, lat: loc.lat, lng: loc.lng, name: `${loc.lat},${loc.lng}` },
+          { calibrationOffsets: new Map(), limitedWeatherFallback: true }
+        );
+        if (computed) {
+          cache.set(spot ? spot.id : coordKey(loc), computed).catch(() => {});
+        }
+        return computed;
+      })().catch(err => {
+        console.warn(`Batch score compute failed for ${loc.lat},${loc.lng}:`, err.message);
+        return null;
+      });
+
+      scoreByKey.set(key, promise);
+      return promise;
+    };
+
+    const scores = await Promise.all(validated.map(resolveScore));
 
     // Map results back to locations
     const results = validated.map((loc, idx) => {
@@ -510,8 +636,10 @@ router.post('/batch', async (req, res) => {
         lng: loc.lng,
         score: score ? score.rating : null,
         rating: score ? score.rating : null,
+        ratingPrecise: score ? (score.ratingPrecise ?? score.rating) : null,
         interpretation: score ? score.interpretation : null,
-        confidence: score ? score.confidence : null
+        confidence: score ? score.confidence : null,
+        algorithmVersion: score ? (score.algorithmVersion ?? null) : null
       };
     });
 

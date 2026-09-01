@@ -161,13 +161,18 @@ function generateSmartWarnings(currentConditions, forecastData, locationData) {
  */
 function analyzeForecastTrends(forecastData, currentConditions) {
   const warnings = [];
-  
-  if (!forecastData?.forecast?.forecastday || forecastData.forecast.forecastday.length === 0) {
+
+  // Standardized weatherData carries `forecast` as a day ARRAY; legacy raw
+  // WeatherAPI shape nests it under forecast.forecastday. Accept both.
+  const days = Array.isArray(forecastData?.forecast)
+    ? forecastData.forecast
+    : forecastData?.forecast?.forecastday;
+  if (!days || days.length === 0) {
     return warnings;
   }
 
-  const today = forecastData.forecast.forecastday[0];
-  const hourlyData = today.hourly || [];
+  const today = days[0];
+  const hourlyData = today.hourly || today.hour || [];
   
   if (hourlyData.length < 6) return warnings;
 

@@ -6,7 +6,7 @@
 
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { logger } = require('firebase-functions');
-const { getFirestore, FieldValue } = require('firebase-admin/firestore');
+const { getFirestore, FieldValue, Timestamp } = require('firebase-admin/firestore');
 const PaddleScoreCache = require('../cache/paddleScoreCache');
 const { computePaddleScoreForSpot } = require('../api/weather/paddleScoreCompute');
 const { isPublicPaddlingSpot } = require('../api/weather/communitySpotVisibility');
@@ -75,9 +75,14 @@ exports.warmPaddleScoreCache = onSchedule({
 }, async () => {
     logger.info('warmPaddleScoreCache: starting');
 
-    const [locations, calibrationOffsets] = await Promise.all([
+    const cacheReader = new PaddleScoreCache();
+    const [locations, calibrationOffsets, previousScores] = await Promise.all([
         getLocationsFromFirestore(),
-        loadCalibrationOffsets()
+        loadCalibrationOffsets(),
+        // Prior cache round: lets the pipeline reuse an ML prediction when the
+        // weather inputs are byte-identical (weather cache TTL 2h vs 15-min cadence
+        // meant ~75-87% of warmer ML calls recomputed identical inputs).
+        cacheReader.getAll().catch(() => new Map())
     ]);
 
     if (locations.length === 0) {
@@ -94,7 +99,10 @@ exports.warmPaddleScoreCache = onSchedule({
         const batch = locations.slice(i, i + BATCH_SIZE);
 
         const batchResults = await Promise.allSettled(
-            batch.map(loc => computePaddleScoreForSpot(loc, { calibrationOffsets }))
+            batch.map(loc => computePaddleScoreForSpot(loc, {
+                calibrationOffsets,
+                previousScore: previousScores.get(loc.id) || null
+            }))
         );
 
         batchResults.forEach((outcome, idx) => {
@@ -139,9 +147,16 @@ exports.aggregatePaddleFeedback = onSchedule({
 
     const db = getFirestore();
 
-    const snapshot = await db.collection('paddle_predictions_feedback').get();
+    // Only aggregate recent feedback — an old poisoned or stale mean must age out
+    // rather than bias a spot's offset forever.
+    const FEEDBACK_WINDOW_DAYS = 90;
+    const cutoff = Timestamp.fromMillis(Date.now() - FEEDBACK_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+
+    const snapshot = await db.collection('paddle_predictions_feedback')
+        .where('timestamp', '>=', cutoff)
+        .get();
     if (snapshot.empty) {
-        logger.info('aggregatePaddleFeedback: no feedback documents, skipping');
+        logger.info('aggregatePaddleFeedback: no feedback documents in window, skipping');
         return;
     }
 
@@ -196,7 +211,9 @@ exports.aggregatePaddleFeedback = onSchedule({
             // bias = mean(actual - predicted)
             // positive bias → model under-predicts → apply positive offset
             // negative bias → model over-predicts → apply negative offset
-            const cappedOffset = Math.max(-1.0, Math.min(1.0, metrics.bias));
+            // Asymmetric cap: positive offsets raise published scores, so they get a
+            // tighter ceiling; negative offsets only make scores more cautious.
+            const cappedOffset = Math.max(-1.0, Math.min(0.5, metrics.bias));
             writeBatch.set(db.collection('paddle_spot_calibrations').doc(spotId), {
                 spotId,
                 biasOffset: cappedOffset,

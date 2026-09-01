@@ -1,15 +1,14 @@
 // functions/api/weather/paddleScoreCompute.js
 //
-// Canonical paddle score computation pipeline.
+// Current-conditions paddle score for a single location: fetches weather + marine,
+// standardizes features, and delegates ALL scoring to scoringPipeline.js (the one
+// core shared with the hourly forecast paths).
 // No Express router, no Firestore reads/writes — pure computation.
 // Imported by paddleScoreWarmer.js (batch) and paddleScore.js (live requests).
 
 const UnifiedWeatherService = require('./unifiedWeatherService');
-const { getPrediction } = require('./mlService');
 const { standardizeForMLModel } = require('./dataStandardization');
-const { calibrateModelPrediction } = require('./modelCalibration');
-const { applyEnhancedPenalties } = require('./paddlePenalties');
-const { getSmartWarnings } = require('./smartWarnings');
+const { scoreFromFeatures, selectMarineHour } = require('./scoringPipeline');
 
 /**
  * Compute a paddle score for a single location.
@@ -17,10 +16,12 @@ const { getSmartWarnings } = require('./smartWarnings');
  * @param {object} loc - { id: string, lat: number, lng: number, name: string }
  * @param {object} options
  * @param {Map<string,number>} [options.calibrationOffsets] - Per-spot bias offsets from feedback loop
+ * @param {boolean} [options.limitedWeatherFallback] - Cap the coordinate-fallback chain (batch/anonymous callers)
+ * @param {object} [options.previousScore] - Prior cached scoreData; reuses its ML prediction when inputs are unchanged
  * @returns {Promise<object|null>} Score payload or null if weather unavailable
  */
 async function computePaddleScoreForSpot(loc, options = {}) {
-    const { calibrationOffsets = new Map() } = options;
+    const { calibrationOffsets = new Map(), limitedWeatherFallback = false, previousScore = null } = options;
 
     if (!loc.lat || !loc.lng) {
         console.warn(`computePaddleScoreForSpot: missing coordinates for ${loc.id}`);
@@ -30,9 +31,11 @@ async function computePaddleScoreForSpot(loc, options = {}) {
     const locationQuery = `${loc.lat},${loc.lng}`;
     const weatherService = new UnifiedWeatherService();
 
-    // Fetch weather and marine data in parallel — saves 200-400ms vs sequential
+    // Fetch weather and marine data in parallel — saves 200-400ms vs sequential.
+    // includeForecast: true is required for government alerts (WeatherAPI only returns
+    // them on forecast.json), which feed the hasWarnings safety penalty.
     const [weatherResult, marineResult] = await Promise.allSettled([
-        weatherService.getWeatherData(locationQuery, { includeForecast: false, useCache: true }),
+        weatherService.getWeatherData(locationQuery, { includeForecast: true, useCache: true, limitedFallback: limitedWeatherFallback }),
         weatherService.getMarineData(locationQuery)
     ]);
 
@@ -45,7 +48,14 @@ async function computePaddleScoreForSpot(loc, options = {}) {
     }
 
     const current = weatherData.current;
-    const marineHour = marineData?.forecast?.forecastday?.[0]?.hour?.[0];
+
+    // Location-local hour drives marine + PoP hourly indexing ("2026-08-31 19:05")
+    const localHourStr = String(weatherData.location?.localTime || '').split(' ')[1];
+    const localHour = Math.max(0, Math.min(23, parseInt(localHourStr, 10) || 0));
+    const marineHour = selectMarineHour(marineData, localHour);
+
+    // PoP: current.json has no chance-of-rain — source it from this hour's forecast
+    const forecastHour = weatherData.forecast?.[0]?.hourly?.[localHour];
 
     // Standardize into ML input — pass ALL available real values
     const mlFeatures = standardizeForMLModel({
@@ -61,81 +71,56 @@ async function computePaddleScoreForSpot(loc, options = {}) {
         hasWarnings:   current.hasWarnings,
         // Precipitation — critical for accuracy in rain events
         precipMm:      current.precipitation?.amountMM ?? 0,
-        precipChancePercent: current.precipitation?.chancePct ?? 0,
+        precipChancePercent: forecastHour?.chance_of_rain ?? 0,
+        hour:          localHour,
         latitude:  loc.lat,
         longitude: loc.lng
-    }, marineData);
+    }, marineData, marineHour);
 
-    // ML prediction (with built-in fallback to rule-based if Cloud Run is down)
-    let prediction;
+    const waterTempC = marineHour?.water_temp_c || Math.max(2, mlFeatures.temperature - 8);
+
+    let score;
     try {
-        prediction = await getPrediction(mlFeatures);
+        score = await scoreFromFeatures({
+            mlFeatures,
+            marineHour,
+            forecast: weatherData.forecast || null,
+            loc,
+            dynamicOffset: calibrationOffsets.get(loc.id) || 0,
+            weatherData,
+            includeWarnings: true,
+            warningsConditions: {
+                temperature: mlFeatures.temperature,
+                windSpeed:   mlFeatures.windSpeed,
+                gustSpeed:   mlFeatures.gustSpeed,
+                humidity:    mlFeatures.humidity,
+                cloudCover:  mlFeatures.cloudCover,
+                uvIndex:     mlFeatures.uvIndex,
+                visibility:  mlFeatures.visibility,
+                waterTemp:   waterTempC
+            },
+            previousMLResult: previousScore ? {
+                mlInputsHash:     previousScore.mlInputsHash,
+                originalMLRating: previousScore.originalMLRating,
+                mlModelUsed:      previousScore.mlModelUsed,
+                predictionSource: previousScore.predictionSource,
+                modelType:        previousScore.modelType,
+                confidence:       previousScore.confidence,
+                riskClass:        previousScore.riskClass,
+                explanations:     previousScore.explanations
+            } : null
+        });
     } catch (err) {
-        console.warn(`computePaddleScoreForSpot: ML prediction failed for ${loc.id}: ${err.message}`);
+        console.warn(`computePaddleScoreForSpot: scoring failed for ${loc.id}: ${err.message}`);
         return null;
     }
 
-    if (!prediction?.success) {
-        return null;
-    }
+    if (!score) return null;
 
-    // Apply model calibration (trend, seasonal, location, wind pattern adjustments)
-    const calibratedPrediction = calibrateModelPrediction(
-        prediction.rating,
-        {
-            temperature: mlFeatures.temperature,
-            windSpeed:   mlFeatures.windSpeed,
-            gustSpeed:   mlFeatures.gustSpeed,
-            humidity:    mlFeatures.humidity,
-            cloudCover:  mlFeatures.cloudCover,
-            uvIndex:     mlFeatures.uvIndex,
-            visibility:  mlFeatures.visibility
-        },
-        weatherData.forecast,
-        { latitude: loc.lat, longitude: loc.lng }
-    );
-
-    // Apply enhanced penalties (wind, temp, wave, precip, visibility, marine)
-    // applyEnhancedPenalties expects { rating: number } as first arg
-    const penaltyResult = applyEnhancedPenalties(
-        { rating: calibratedPrediction.calibratedRating },
-        mlFeatures,
-        marineData
-    );
-
-    // Apply per-spot dynamic calibration offset from feedback loop (defaults to 0)
-    const dynamicOffset = calibrationOffsets.get(loc.id) || 0;
-    let finalRating = penaltyResult.rating + dynamicOffset;
-    finalRating = Math.max(1.0, Math.min(5.0, finalRating));
-    finalRating = Math.round(finalRating * 2) / 2;
-
-    // Generate smart warnings
-    const smartWarnings = getSmartWarnings(
-        {
-            temperature: mlFeatures.temperature,
-            windSpeed:   mlFeatures.windSpeed,
-            gustSpeed:   mlFeatures.gustSpeed,
-            humidity:    mlFeatures.humidity,
-            cloudCover:  mlFeatures.cloudCover,
-            uvIndex:     mlFeatures.uvIndex,
-            visibility:  mlFeatures.visibility,
-            waterTemp:   marineHour?.water_temp_c || (mlFeatures.temperature - 8)
-        },
-        weatherData,
-        { latitude: loc.lat, longitude: loc.lng }
-    );
+    const smartWarnings = score.warnings || [];
 
     return {
-        rating: finalRating,
-        interpretation: getInterpretation(finalRating),
-        confidence: prediction.confidence || 'high',
-        mlModelUsed: prediction.mlModelUsed,
-        predictionSource: prediction.predictionSource,
-        originalMLRating: calibratedPrediction.originalRating,
-        calibrationApplied: calibratedPrediction.adjustments.length > 0,
-        adjustments: calibratedPrediction.adjustments,
-        penaltiesApplied: penaltyResult.penaltiesApplied || [],
-        dynamicOffset,
+        ...score,
         conditions: {
             temperature:   mlFeatures.temperature,                               // °C
             windSpeed:     current.wind?.speedKPH || (mlFeatures.windSpeed * 1.60934), // KPH for display
@@ -145,8 +130,9 @@ async function computePaddleScoreForSpot(loc, options = {}) {
             cloudCover:    mlFeatures.cloudCover,
             uvIndex:       mlFeatures.uvIndex,
             visibility:    mlFeatures.visibility,                                // km
-            waterTemp:     marineHour?.water_temp_c || Math.max(2, mlFeatures.temperature - 8), // °C
+            waterTemp:     waterTempC,                                           // °C
             precipMm:      mlFeatures.precipMm || 0,
+            precipChancePercent: mlFeatures.precipChancePercent || 0,
             hasWarnings:   smartWarnings.length > 0
         },
         warnings: {
@@ -154,15 +140,8 @@ async function computePaddleScoreForSpot(loc, options = {}) {
             count: smartWarnings.length,
             messages: smartWarnings,
             warningType: smartWarnings.length > 0 ? 'weather' : null
-        },
-        computedAt: new Date().toISOString()
+        }
     };
-}
-
-function getInterpretation(rating) {
-    if (rating >= 4) return 'Worth it';
-    if (rating >= 3) return 'Careful';
-    return 'Hard pass';
 }
 
 module.exports = { computePaddleScoreForSpot };

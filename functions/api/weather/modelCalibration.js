@@ -44,12 +44,11 @@ function calibrateModelPrediction(baseRating, currentConditions, forecastData, l
   applyAdj(applyLocationCalibration(currentConditions, locationData));    // 4. Location
   applyAdj(analyzeWindPatterns(currentConditions, forecastData));         // 5. Wind pattern
   
-  // Ensure rating stays within bounds
-  adjustedRating = Math.max(1.0, Math.min(5.0, adjustedRating));
-  
-  // Round to nearest 0.5 for consistent UI increments (1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0)
-  adjustedRating = Math.round(adjustedRating * 2) / 2;
-  
+  // Ensure rating stays within bounds — keep the unsnapped value for the
+  // precision pipeline; the 0.5 snap survives only for legacy consumers.
+  const preciseRating = Math.max(1.0, Math.min(5.0, adjustedRating));
+  adjustedRating = Math.round(preciseRating * 2) / 2;
+
   const totalAdjustment = adjustedRating - baseRating;
   
   console.log('📈 Model calibration complete:', {
@@ -62,6 +61,7 @@ function calibrateModelPrediction(baseRating, currentConditions, forecastData, l
   return {
     originalRating: baseRating,
     calibratedRating: adjustedRating,
+    calibratedRatingPrecise: preciseRating,
     totalAdjustment: totalAdjustment,
     adjustments: adjustments,
     calibrationApplied: true
@@ -113,12 +113,15 @@ function calibrateWaterTemperature(conditions, location) {
  * Analyze forecast trends for stability
  */
 function analyzeForecastTrends(forecastData, currentConditions) {
-  if (!forecastData?.forecast?.forecastday || forecastData.forecast.forecastday.length === 0) {
+  // Accept both the standardized forecast day ARRAY (what the pipeline passes)
+  // and the legacy raw {forecast:{forecastday:[...]}} shape.
+  const days = Array.isArray(forecastData) ? forecastData : forecastData?.forecast?.forecastday;
+  if (!days || days.length === 0) {
     return { adjustment: 0, reason: 'No forecast data available' };
   }
-  
-  const today = forecastData.forecast.forecastday[0];
-  const hourlyData = today.hourly || [];
+
+  const today = days[0];
+  const hourlyData = today.hourly || today.hour || [];
   
   if (hourlyData.length < 3) {
     return { adjustment: 0, reason: 'Insufficient forecast data' };

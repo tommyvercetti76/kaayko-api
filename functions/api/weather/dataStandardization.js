@@ -44,18 +44,20 @@ const DEFAULTS = {
  * @returns {number} Beaufort scale (0-12)
  */
 function calculateBeaufortFromMph(windSpeedMph) {
+  // Beaufort boundaries in MPH (B3 = 8-12, B4 = 13-18, B5 = 19-24, B6 = 25-31).
+  // Must stay in sync with beaufortFromMph in paddlePenalties.js.
   if (windSpeedMph < 1) return 0;
   if (windSpeedMph < 4) return 1;
-  if (windSpeedMph < 7) return 2;
-  if (windSpeedMph < 11) return 3;
-  if (windSpeedMph < 16) return 4;
-  if (windSpeedMph < 22) return 5;
-  if (windSpeedMph < 28) return 6;
-  if (windSpeedMph < 34) return 7;
-  if (windSpeedMph < 41) return 8;
-  if (windSpeedMph < 48) return 9;
-  if (windSpeedMph < 56) return 10;
-  if (windSpeedMph < 64) return 11;
+  if (windSpeedMph < 8) return 2;
+  if (windSpeedMph < 13) return 3;
+  if (windSpeedMph < 19) return 4;
+  if (windSpeedMph < 25) return 5;
+  if (windSpeedMph < 32) return 6;
+  if (windSpeedMph < 39) return 7;
+  if (windSpeedMph < 47) return 8;
+  if (windSpeedMph < 55) return 9;
+  if (windSpeedMph < 64) return 10;
+  if (windSpeedMph < 73) return 11;
   return 12;
 }
 
@@ -88,7 +90,7 @@ function calculateBeaufortFromKph(windSpeedKph) {
  * @param {object} marineData - Optional marine data
  * @returns {object} Standardized features for ML model
  */
-function standardizeForMLModel(rawData, marineData = null) {
+function standardizeForMLModel(rawData, marineData = null, marineHourOverride = null) {
   const {
     // Temperature (accept both C and F)
     temperature,
@@ -170,8 +172,9 @@ function standardizeForMLModel(rawData, marineData = null) {
                           precipProbability !== undefined ? precipProbability * 100 :
                           0;
 
-  // Marine data integration
-  const marineHour = marineData?.forecast?.forecastday?.[0]?.hour?.[0];
+  // Marine data integration — callers pass the local-hour marine slice via
+  // marineHourOverride; hour[0] (midnight) is only the last-resort default.
+  const marineHour = marineHourOverride ?? marineData?.forecast?.forecastday?.[0]?.hour?.[0];
   
   return {
     // Core weather parameters (standardized units)

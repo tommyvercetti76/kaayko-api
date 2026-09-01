@@ -94,10 +94,12 @@ class ForecastCache {
      * Generate consistent hash for lat/lng coordinates
      */
     generateLocationHash(lat, lng) {
-        // Round to 3 decimal places for ~100m accuracy
+        // Round to 3 decimal places for ~100m accuracy.
+        // 'm' marks a negative sign — the old regex stripped '-' entirely, so
+        // (lat, -lng) and (lat, +lng) hemisphere mirrors shared one cache doc.
         const roundedLat = Math.round(lat * 1000) / 1000;
         const roundedLng = Math.round(lng * 1000) / 1000;
-        return `${roundedLat}_${roundedLng}`.replace(/[.-]/g, '_');
+        return `${roundedLat}_${roundedLng}`.replace(/-/g, 'm').replace(/\./g, '_');
     }
 
     /**

@@ -11,12 +11,12 @@ const admin = require('firebase-admin');
 const { logger } = require('firebase-functions');
 const ForecastCache = require('../../cache/forecastCache');
 const UnifiedWeatherService = require('./unifiedWeatherService');
-const mlService = require('./mlService');
-const { standardizeForMLModel, standardizeForPenalties, calculateBeaufortFromKph } = require('./dataStandardization');
-const { applyEnhancedPenalties } = require('./paddlePenalties');
+const { standardizeForMLModel, calculateBeaufortFromKph } = require('./dataStandardization');
 const { createInputMiddleware } = require('./inputStandardization');
-const { calibrateModelPrediction } = require('./modelCalibration');
 const { getSmartWarnings } = require('./smartWarnings');
+const { scoreFromFeatures } = require('./scoringPipeline');
+const { ALGORITHM_VERSION } = require('./scoringConstants');
+const { requireAdmin } = require('../../middleware/authMiddleware');
 
 const db = admin.firestore();
 
@@ -57,33 +57,34 @@ async function transformToFastForecastFormat(weatherData, locationQuery) {
             // Parse the hour from the time string (format: "2025-08-18 14:00")
             const timeParts = hourData.time.split(' ');
             if (timeParts.length !== 2) continue;
-            
+
             const hourStr = timeParts[1].split(':')[0];
             const hour = parseInt(hourStr, 10);
-            
+
             if (isNaN(hour) || hour < 0 || hour > 23) continue;
-            
+
             const KPH_TO_MPH = 0.621371;
             const lat = weatherData.location?.coordinates?.latitude || location.coordinates?.latitude;
             const lng = weatherData.location?.coordinates?.longitude || location.coordinates?.longitude;
 
             // Real gust from API (WeatherAPI hourly has gust_kph)
             const realGustKph = hourData.gust_kph || hourData.gustKph || (hourData.windKPH * 1.3);
-            const realVisKm   = hourData.vis_km   || hourData.visibility || 10;
+            // ?? not || — zero visibility (fog) is real data, not a missing value
+            const realVisKm   = hourData.vis_km   ?? hourData.visibility ?? 10;
             const realPrecipMm = hourData.precip_mm ?? hourData.precipMM ?? 0;
             const realRainChancePct = hourData.chance_of_rain ?? hourData.chanceOfRain ?? 0;
 
-            // Extract water temp from marine data for this hour
-            let waterTemp = null;
+            // Marine hour matched by date + time (not midnight-of-day-0)
+            let marineHour = null;
             if (marineData?.forecast?.forecastday) {
                 const marineDay = marineData.forecast.forecastday.find(d => d.date === dayData.date);
-                const marineHour = marineDay?.hour?.find(h => h.time === hourData.time);
-                if (marineHour?.water_temp_c) waterTemp = marineHour.water_temp_c;
+                marineHour = marineDay?.hour?.find(h => h.time === hourData.time) || null;
             }
-            if (waterTemp === null) waterTemp = Math.max(2, hourData.tempC - 8);
+            const waterTemp = marineHour?.water_temp_c || Math.max(2, hourData.tempC - 8);
 
-            // ML input — real values, no hardcoded defaults
-            const rawInput = {
+            // ML input — real values, no hardcoded defaults. Government alerts are
+            // location-wide, so every hour inherits the current alert state.
+            const mlInputData = standardizeForMLModel({
                 temperature:          hourData.tempC,
                 windSpeedKph:         hourData.windKPH,
                 windDirection:        hourData.windDir,
@@ -94,46 +95,22 @@ async function transformToFastForecastFormat(weatherData, locationQuery) {
                 precipMm:             realPrecipMm,
                 precipChancePercent:  realRainChancePct,
                 gustSpeedKph:         realGustKph,
-                hasWarnings:          false,
+                hasWarnings:          weatherData.current?.hasWarnings ?? false,
+                hour,
                 latitude:  lat,
                 longitude: lng
-            };
+            }, marineData, marineHour);
 
-            const mlInputData = standardizeForMLModel(rawInput, marineData);
-
-            // ML prediction
-            const prediction = await mlService.getPrediction(mlInputData);
-
-            // Calibration (trend, seasonal, location adjustments)
-            const calibratedPrediction = calibrateModelPrediction(
-                prediction.rating,
-                {
-                    temperature: hourData.tempC,
-                    windSpeed:   hourData.windKPH * KPH_TO_MPH,
-                    gustSpeed:   realGustKph      * KPH_TO_MPH,
-                    humidity:    hourData.humidity,
-                    cloudCover:  hourData.cloudCover,
-                    uvIndex:     hourData.uvIndex,
-                    visibility:  realVisKm
-                },
-                weatherData.forecast,
-                { latitude: lat, longitude: lng }
-            );
-
-            // Penalties — THIS is what was missing. Rain, wind, visibility all apply here.
-            const penaltyFeatures = {
-                ...mlInputData,
-                precipMm:            realPrecipMm,
-                precipChancePercent: realRainChancePct,
-                visibilityKm:        realVisKm,
-                waterTemp:           waterTemp
-            };
-            const penaltyResult = applyEnhancedPenalties(
-                { rating: calibratedPrediction.calibratedRating },
-                penaltyFeatures,
-                marineData
-            );
-            const finalRating = penaltyResult.rating;
+            // The shared scoring core — same predict→calibrate→penalize→interpret
+            // path the current-conditions score uses.
+            const score = await scoreFromFeatures({
+                mlFeatures: mlInputData,
+                marineHour,
+                forecast: weatherData.forecast,
+                loc: { lat, lng },
+                includeWarnings: false
+            });
+            if (!score) continue;
 
             // Smart warnings with real data
             const smartWarnings = getSmartWarnings(
@@ -166,26 +143,31 @@ async function transformToFastForecastFormat(weatherData, locationQuery) {
                 warnings:      smartWarnings,
                 beaufortScale: calculateBeaufortFromKph(hourData.windKPH),
                 waterTemp:     waterTemp,
-                marineDataAvailable: !!marineData,
+                marineDataAvailable: !!marineHour,
                 prediction: {
-                    rating:           finalRating,
-                    mlModelUsed:      prediction.mlModelUsed,
-                    predictionSource: prediction.predictionSource,
-                    modelType:        prediction.modelType,
-                    confidence:       prediction.confidence,
-                    isGoldStandard:   true,
-                    v3ModelUsed:      true,
-                    originalMLRating:     calibratedPrediction.originalRating,
-                    calibrationApplied:   calibratedPrediction.adjustments.length > 0,
-                    adjustments:          calibratedPrediction.adjustments,
-                    penaltiesApplied:     penaltyResult.penaltiesApplied
+                    rating:           score.rating,
+                    ratingPrecise:    score.ratingPrecise,
+                    interpretation:   score.interpretation,
+                    mlModelUsed:      score.mlModelUsed,
+                    predictionSource: score.predictionSource,
+                    modelType:        score.modelType,
+                    confidence:       score.confidence,
+                    isGoldStandard:   !!score.mlModelUsed,
+                    v3ModelUsed:      !!score.mlModelUsed,
+                    riskClass:        score.riskClass,
+                    originalMLRating:     score.originalMLRating,
+                    calibrationApplied:   score.calibrationApplied,
+                    adjustments:          score.adjustments,
+                    penaltiesApplied:     score.penaltiesApplied
                 },
-                originalRating:   calibratedPrediction.originalRating,
-                safetyDeduction:  penaltyResult.totalPenalty || 0,
-                apiRating:        finalRating,
-                rating:           finalRating,
-                mlModelUsed:      prediction.mlModelUsed,
-                predictionSource: prediction.predictionSource
+                originalRating:   score.originalMLRating,
+                safetyDeduction:  score.totalPenalty || 0,
+                apiRating:        score.rating,
+                rating:           score.rating,
+                ratingPrecise:    score.ratingPrecise,
+                interpretation:   score.interpretation,
+                mlModelUsed:      score.mlModelUsed,
+                predictionSource: score.predictionSource
             };
         }
         
@@ -207,7 +189,7 @@ async function transformToFastForecastFormat(weatherData, locationQuery) {
         metadata: {
             cached: false,
             processingTimeMs: 0, // Will be set by caller
-            mlServiceUrl: 'https://kaayko-ml-service-87383373015.us-central1.run.app',
+            algorithmVersion: ALGORITHM_VERSION,
             apiVersion: '2.0',
             cacheAge: 0,
             cacheTime: new Date().toISOString(),
@@ -243,18 +225,24 @@ router.get('/', createInputMiddleware('fastForecast'), async (req, res) => {
     try {
         const { latitude, longitude, spotId } = req.standardizedInputs;
 
-        let locationQuery;
-        let locationName;
+        // Resolve spotId to real coordinates — the old passthrough never worked
+        // (spot ids are not WeatherAPI queries and broke the coordinate cache key).
+        let lat = latitude;
+        let lng = longitude;
+        let locationName = `${latitude},${longitude}`;
 
-        // Determine location source  
         if (spotId) {
-            // Handle spotId if needed (implement spot lookup)
-            locationQuery = spotId; // This would need spot lookup implementation
-            locationName = spotId;
-        } else {
-            locationQuery = `${latitude},${longitude}`;
-            locationName = `${latitude},${longitude}`;
+            const doc = await db.collection('paddlingSpots').doc(spotId).get();
+            const spotLat = doc.exists ? doc.data().location?.latitude : null;
+            const spotLng = doc.exists ? doc.data().location?.longitude : null;
+            if (!Number.isFinite(spotLat) || !Number.isFinite(spotLng)) {
+                return res.status(404).json({ success: false, error: 'Unknown spotId', spotId });
+            }
+            lat = spotLat;
+            lng = spotLng;
+            locationName = doc.data().lakeName || spotId;
         }
+        const locationQuery = `${lat},${lng}`;
 
         console.log(`⚡ FastForecast: ${locationQuery}`);
 
@@ -262,17 +250,17 @@ router.get('/', createInputMiddleware('fastForecast'), async (req, res) => {
         let source = 'unknown';
 
         // Check cache for custom coordinates
-        forecast = await cache.getCachedCustomForecast(latitude, longitude);
+        forecast = await cache.getCachedCustomForecast(lat, lng);
         source = 'coordinate_cache';
 
         if (!forecast) {
             // Cache miss - generate fresh forecast using UnifiedWeatherService
             try {
-                logger.info(`Cache miss for coordinates ${latitude},${longitude} - generating forecast`);
-                
+                logger.info(`Cache miss for coordinates ${locationQuery} - generating forecast`);
+
                 const weatherService = new UnifiedWeatherService();
                 const weatherData = await weatherService.getWeatherData(
-                    { lat: latitude, lng: longitude }, 
+                    { lat, lng },
                     { includeForecast: true }
                 );
 
@@ -280,17 +268,19 @@ router.get('/', createInputMiddleware('fastForecast'), async (req, res) => {
                     throw new Error('Invalid weather data - missing current conditions or location');
                 }
 
-                // Transform to the same format as production API
-                forecast = await transformToFastForecastFormat(weatherData);
-                
+                // Transform to the same format as production API.
+                // locationQuery is REQUIRED — without it the marine fetch inside the
+                // transform silently failed and every hour lost marine data.
+                forecast = await transformToFastForecastFormat(weatherData, locationQuery);
+
                 if (forecast.success) {
                     // Update processing time
                     const processingTime = Date.now() - startTime;
                     forecast.metadata.processingTimeMs = processingTime;
                     forecast.metadata.responseTime = `${processingTime}ms`;
-                    
+
                     // Store in cache for future requests
-                    await cache.storeCustomForecast(latitude, longitude, forecast);
+                    await cache.storeCustomForecast(lat, lng, forecast);
                     source = 'api_fresh';
                     
                     // Add cache metadata
@@ -336,8 +326,9 @@ router.get('/', createInputMiddleware('fastForecast'), async (req, res) => {
 
 /**
  * GET /fastForecast/cache/stats - Get cache statistics
+ * Admin-only: performs full collection scans and enumerates cached coordinates.
  */
-router.get('/cache/stats', async (req, res) => {
+router.get('/cache/stats', requireAdmin, async (req, res) => {
     try {
         const cache = new ForecastCache();
         const stats = await cache.getCacheStats();
