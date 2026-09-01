@@ -1,5 +1,65 @@
 # Paddle Score Algorithm Changelog
 
+## v2.3.0 — 2026-09-01
+
+### Marine data removed on inland water (accuracy — this was publishing fiction)
+
+WeatherAPI's marine endpoint does **not** error, and does not snap to the ocean,
+when asked about a landlocked point — it returns a complete, plausible-looking
+marine record. Verified live:
+
+| queried point | returned |
+|---|---|
+| Antero Reservoir, CO (alpine, ~8,900 ft) | 1.4 m waves, 0.7 m swell @ 5.2 s, 28.8 °C water |
+| Jenny Lake, WY (small alpine lake) | 0.7 m waves, 0.8 m swell, 13.3 °C water |
+| White Rock Lake, TX (urban lake) | 0.3 m waves, 0.2 m swell |
+
+Consequences in production: `WAVE_MOD` / `WAVE_LARGE` / `SWELL_STEEP_*` /
+`WIND_CROSS_SWELL` penalties fired on lakes and **rivers** (the Merrimack was
+carrying `SWELL_STEEP_MAJOR`); eight inland spots across Texas, Utah and
+Colorado all reported an identical 28.8 °C water temperature; and the UI told
+users "Moderate waves (4.6 ft)" on an alpine reservoir.
+
+**Marine is now off unless a spot is explicitly coastal** (`marineApplicable`,
+default false; no curated spot sets it). Wave/swell rules simply cannot fire on
+inland water, which is consistent with the pipeline's existing rule: never
+penalize for data we don't have. Also removes one external API call per score.
+
+### Water temperature is an estimate, and now says so
+With marine gone, inland water temperature comes from the documented estimator.
+Two changes: it is derived from the **day's average air temperature** rather
+than the current hour (water has large thermal mass — instantaneous air made an
+alpine lake read 2 °C at night purely because the air had dropped), and
+responses carry `conditions.waterTempEstimated: true` so no surface presents an
+estimate as a reading. River flow and stage remain real, named-gauge USGS data.
+
+### Daylight-only night gate
+`conditions.isDay` and a `night: { isNight, nextDaylight }` block now ride the
+score; hourly forecast rows carry `isDay`. A `NIGHT` tip outranks everything
+else after dark. The forecast page stands the score numeral down at night and
+shows the next daylight window's score instead — nobody should read a green
+"Worth it" at midnight. Methodology and Terms now state plainly that Kaayko
+scores daylight only and does not condone night paddling, and that a daytime
+score never implies the same water is acceptable after dark.
+
+### ML service redeployed with the harvested safety layer
+`expert_rules.py` is live on Cloud Run (revision 00017): the ≤2.5 expert-rule
+safety floor caps the model, `reasons[]` ship with every prediction, and
+prediction logs carry `featuresHash` + `weatherBucket`. Deployed via the
+canary pattern (no traffic → smoke test → migrate). The first attempt failed
+closed with `ModuleNotFoundError` because the Dockerfile copies runtime files by
+name and the new module wasn't listed — production never saw it, and the
+Dockerfile now documents the requirement.
+
+Measured effect at the model boundary: on a genuinely dangerous input
+(26 mph wind, 38 mph gusts, 4 °C water, 2 km visibility) the raw model returned
+**3.0**; the floored service returns **1.0** with explicit reasons. Benign days
+are unchanged.
+
+**Eval (protocol per EVALS.md, run against the deployed pipeline):** MAE 0.727
+(was 0.728), bias −0.056, dangerous-condition recall 0.952, two-tier
+over-optimism 2.7% — no regression on any gate.
+
 ## v2.2.1 — 2026-09-01
 
 **Display policy: half-point steps everywhere (product decision, Rohan).**

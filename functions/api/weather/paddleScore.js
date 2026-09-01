@@ -183,6 +183,7 @@ router.get('/', createInputMiddleware('paddleScore'), async (req, res) => {
         penaltyDetails: score.penaltyDetails,
         dynamicOffset: score.dynamicOffset,
         algorithmVersion: score.algorithmVersion,
+        night: score.night || null,        // daylight-only gate (see methodology)
         isGoldStandard: !!score.mlModelUsed
       },
       tips: getPreparationTips({

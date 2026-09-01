@@ -691,6 +691,7 @@ class UnifiedWeatherService {
         if (weatherData.forecast && weatherData.forecast.forecastday) {
             standardized.forecast = weatherData.forecast.forecastday.map(day => ({
                 date: day.date,
+                astro: day.astro ? { sunrise: day.astro.sunrise, sunset: day.astro.sunset } : null,
                 day: {
                     maxTempC: day.day.maxtemp_c,
                     minTempC: day.day.mintemp_c,
@@ -701,6 +702,7 @@ class UnifiedWeatherService {
                 },
                 hourly: day.hour ? day.hour.map(hour => ({
                     time: hour.time,
+                    isDay: hour.is_day === 1,      // drives the night gate
                     tempC: hour.temp_c,
                     feelsLikeC: hour.feelslike_c,
                     windKPH: hour.wind_kph,

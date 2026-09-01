@@ -55,6 +55,18 @@ function getPreparationTips({ conditions, craft, spot = null, hydrology = null, 
   const craftId = sanitizeCraft(craft);
   const profile = CRAFT_PROFILES[craftId];
 
+  // NIGHT — Kaayko does not score night paddling (methodology + terms).
+  // Always first when it applies: nothing else on the list matters after dark.
+  if (conditions.isDay === false) {
+    tips.push({
+      code: 'NIGHT',
+      priority: 1,
+      icon: 'alert',
+      title: 'After dark — not scored',
+      detail: 'Kaayko scores daylight paddling only. Wait for first light; if you are on the water, head in.'
+    });
+  }
+
   // HYDRATION — rate from heat index, planned for a 2-hour outing
   if (Number.isFinite(tempC)) {
     const hiC = Number.isFinite(humidity)

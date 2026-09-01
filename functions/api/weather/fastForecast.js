@@ -32,15 +32,12 @@ async function transformToFastForecastFormat(weatherData, locationQuery) {
         throw new Error('No forecast data available');
     }
     
-    // Get marine data for consistent penalty application
-    let marineData = null;
-    try {
-        const weatherService = new UnifiedWeatherService();
-        marineData = await weatherService.getMarineData(locationQuery);
-        console.log('🌊 Marine data for fastForecast:', marineData ? 'Available' : 'Not available');
-    } catch (error) {
-        console.log('ℹ️ Marine data not available for fastForecast');
-    }
+    // Marine data is DISABLED for inland water — WeatherAPI fabricates a full
+    // marine record (waves, swell, sea-surface temp) for landlocked points
+    // rather than erroring, which published invented swell on alpine lakes and
+    // rivers. Kaayko is a lake/river product; re-enable per-spot only if a
+    // genuinely coastal spot is ever curated.
+    const marineData = null;
     
     // Group forecast by days (24 hours each). Hours are scored through a
     // CONCURRENT pool — 72 sequential ML calls made every cache miss take tens
@@ -136,6 +133,7 @@ async function transformToFastForecastFormat(weatherData, locationQuery) {
             );
 
             forecastDay.hourly[hour] = {
+                isDay:         hourData.isDay !== false,   // night gate on the outlook
                 temperature:   hourData.tempC,
                 windSpeed:     hourData.windKPH,
                 windDirection: hourData.windDir,

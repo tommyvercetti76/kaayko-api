@@ -11,6 +11,22 @@ const { standardizeForMLModel } = require('./dataStandardization');
 const { scoreFromFeatures, selectMarineHour } = require('./scoringPipeline');
 
 /**
+ * First daylight hour at or after `fromHour` across the standardized forecast.
+ * Returns { date, hour, time } or null when the forecast can't answer.
+ */
+function findNextDaylightHour(weatherData, fromHour) {
+    const days = weatherData.forecast || [];
+    for (let d = 0; d < days.length; d++) {
+        for (const h of days[d].hourly || []) {
+            const hourNum = parseInt(String(h.time).split(' ')[1], 10);
+            if (d === 0 && hourNum <= fromHour) continue;
+            if (h.isDay) return { date: days[d].date, hour: hourNum, time: h.time };
+        }
+    }
+    return null;
+}
+
+/**
  * Compute a paddle score for a single location.
  *
  * @param {object} loc - { id: string, lat: number, lng: number, name: string }
@@ -21,7 +37,21 @@ const { scoreFromFeatures, selectMarineHour } = require('./scoringPipeline');
  * @returns {Promise<object|null>} Score payload or null if weather unavailable
  */
 async function computePaddleScoreForSpot(loc, options = {}) {
-    const { calibrationOffsets = new Map(), limitedWeatherFallback = false, previousScore = null, hydrologyContext = null } = options;
+    const {
+        calibrationOffsets = new Map(),
+        limitedWeatherFallback = false,
+        previousScore = null,
+        hydrologyContext = null,
+        // Marine (wave/swell/sea-surface-temp) is OFF unless a spot is explicitly
+        // coastal. WeatherAPI's marine endpoint does not error or snap to the
+        // ocean for a landlocked point — it FABRICATES a full marine record.
+        // Verified 2026-09-01: Antero Reservoir (8,900 ft, Colorado Rockies)
+        // returned "1.4 m waves, 0.7 m swell @ 5.2 s, 28.8 °C water", which fired
+        // WAVE/SWELL penalties and published "Moderate waves (4.6 ft)" on an
+        // alpine reservoir. Inland water gets no marine data at all — consistent
+        // with the pipeline's "never penalize for data we don't have" rule.
+        marineApplicable = false
+    } = options;
 
     if (!loc.lat || !loc.lng) {
         console.warn(`computePaddleScoreForSpot: missing coordinates for ${loc.id}`);
@@ -36,7 +66,7 @@ async function computePaddleScoreForSpot(loc, options = {}) {
     // them on forecast.json), which feed the hasWarnings safety penalty.
     const [weatherResult, marineResult] = await Promise.allSettled([
         weatherService.getWeatherData(locationQuery, { includeForecast: true, useCache: true, limitedFallback: limitedWeatherFallback }),
-        weatherService.getMarineData(locationQuery)
+        marineApplicable ? weatherService.getMarineData(locationQuery) : Promise.resolve(null)
     ]);
 
     const weatherData = weatherResult.status === 'fulfilled' ? weatherResult.value : null;
@@ -77,7 +107,20 @@ async function computePaddleScoreForSpot(loc, options = {}) {
         longitude: loc.lng
     }, marineData, marineHour);
 
-    const waterTempC = marineHour?.water_temp_c || Math.max(2, mlFeatures.temperature - 8);
+    // Water temperature estimate. Water has enormous thermal mass — it tracks the
+    // DAY's average air temperature, not the current hour. Estimating from
+    // instantaneous air made an alpine lake read 2 °C at night (tripping the
+    // harshest cold-water penalty) purely because the air had dropped after dark.
+    const measuredWaterTemp = marineHour?.water_temp_c ?? null;
+    const avgAirToday = weatherData.forecast?.[0]?.day?.avgTempC;
+    const airForWaterEstimate = Number.isFinite(avgAirToday) ? avgAirToday : mlFeatures.temperature;
+    const waterTempC = measuredWaterTemp ?? Math.max(2, airForWaterEstimate - 8);
+
+    // Night gate: Kaayko does not score night paddling (see methodology/terms).
+    // The score is still computed, but surfaces present it as unavailable and
+    // point at the next daylight hour instead.
+    const isDay = current.solar?.isDay !== false;
+    const nextDaylight = isDay ? null : findNextDaylightHour(weatherData, localHour);
 
     let score;
     try {
@@ -132,10 +175,15 @@ async function computePaddleScoreForSpot(loc, options = {}) {
             uvIndex:       mlFeatures.uvIndex,
             visibility:    mlFeatures.visibility,                                // km
             waterTemp:     waterTempC,                                           // °C
+            // Inland water has no measured temperature source — say so rather
+            // than presenting an estimate as a reading.
+            waterTempEstimated: measuredWaterTemp == null,
             precipMm:      mlFeatures.precipMm || 0,
             precipChancePercent: mlFeatures.precipChancePercent || 0,
+            isDay,
             hasWarnings:   smartWarnings.length > 0
         },
+        night: isDay ? null : { isNight: true, nextDaylight },
         warnings: {
             hasWarnings: smartWarnings.length > 0,
             count: smartWarnings.length,

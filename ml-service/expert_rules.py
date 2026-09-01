@@ -99,11 +99,20 @@ def expert_rule(features: dict) -> dict:
     }
 
 
-def apply_safety_floor(result: dict, features: dict) -> dict:
+def apply_safety_floor(result, features: dict):
     """Cap the ML rating at the expert-rule score when the rules say <= 2.5.
 
     Mutates and returns `result`, attaching reasons + provenance either way.
+
+    Defensive: predict_paddle_rating() can return a bare float on some paths
+    (return_detailed False) and the V3 branch may pass something else entirely.
+    Anything that is not a dict is handed back untouched — the safety floor must
+    never be the reason /predict returns a 500.
     """
+    if not isinstance(result, dict):
+        return result
+    if not isinstance(features, dict):
+        return result
     rule = expert_rule(features)
     result['reasons'] = rule['reasons']
     result['expertRuleScore'] = rule['score']

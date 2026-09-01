@@ -20,6 +20,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application files
 COPY main.py .
 COPY predict_konditions.py .
+# Expert-rule safety floor + reasons/lineage helpers imported by main.py.
+# Files are copied by name here, so ANY new runtime module must be added or the
+# container dies at import with ModuleNotFoundError.
+COPY expert_rules.py .
 
 # Model is NOT baked into the image.
 # predict_konditions.py downloads it from GCS (ML_MODEL_BUCKET / ML_MODEL_OBJECT)
