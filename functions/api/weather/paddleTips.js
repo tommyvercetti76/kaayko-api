@@ -113,14 +113,21 @@ function getPreparationTips({ conditions, craft, spot = null, hydrology = null, 
     });
   }
 
-  // COLD WATER — dress for immersion, not the air
-  if (Number.isFinite(waterC) && waterC < 15) {
+  // COLD WATER — dress for immersion, not the air.
+  // A drysuit is a serious instruction: on an ESTIMATED temperature we only give
+  // it when the water is unambiguously cold (≤12 °C), since the estimate carries
+  // several degrees of error and telling someone to suit up on a warm summer
+  // lake is how a safety product loses the credibility it needs on a cold one.
+  const coldThreshold = conditions.waterTempEstimated === true ? 12 : 15;
+  if (Number.isFinite(waterC) && waterC < coldThreshold) {
     tips.push({
       code: 'COLD_WATER',
       priority: 1,
       icon: 'thermometer',
       title: 'Dress for the water, not the air',
-      detail: 'Wetsuit or drysuit, plus a dry bag with a full change of clothes'
+      detail: conditions.waterTempEstimated === true
+        ? 'Water is likely cold — wetsuit or drysuit, plus a dry bag with a change of clothes'
+        : 'Wetsuit or drysuit, plus a dry bag with a full change of clothes'
     });
   }
 

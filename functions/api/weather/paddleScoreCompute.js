@@ -9,6 +9,7 @@
 const UnifiedWeatherService = require('./unifiedWeatherService');
 const { standardizeForMLModel } = require('./dataStandardization');
 const { scoreFromFeatures, selectMarineHour } = require('./scoringPipeline');
+const { estimateWaterTempC } = require('./waterTempEstimator');
 
 /**
  * First daylight hour at or after `fromHour` across the standardized forecast.
@@ -119,9 +120,21 @@ async function computePaddleScoreForSpot(loc, options = {}) {
     const measuredWaterTemp = (Number.isFinite(waterTempReading?.celsius) ? waterTempReading.celsius : null)
         ?? marineHour?.water_temp_c
         ?? null;
-    const avgAirToday = weatherData.forecast?.[0]?.day?.avgTempC;
-    const airForWaterEstimate = Number.isFinite(avgAirToday) ? avgAirToday : mlFeatures.temperature;
-    const waterTempC = measuredWaterTemp ?? Math.round(Math.max(2, airForWaterEstimate - 8) * 10) / 10;
+
+    // Estimate from a real 30-day mean air temperature (water integrates heat
+    // over weeks). The old same-day `avgAir - 8` put Lake Union at 9.5 °C in
+    // late August against an actual ~21 °C and raised a drysuit warning on a
+    // warm summer lake. Last-resort fallback only if the climate window fails.
+    let estimatedWaterTemp = null;
+    if (measuredWaterTemp == null) {
+        estimatedWaterTemp = await estimateWaterTempC(loc.lat, loc.lng);
+        if (estimatedWaterTemp == null) {
+            const avgAirToday = weatherData.forecast?.[0]?.day?.avgTempC;
+            const airFallback = Number.isFinite(avgAirToday) ? avgAirToday : mlFeatures.temperature;
+            estimatedWaterTemp = Math.round(Math.max(2, airFallback - 8) * 10) / 10;
+        }
+    }
+    const waterTempC = measuredWaterTemp ?? estimatedWaterTemp;
 
     // Night gate: Kaayko does not score night paddling (see methodology/terms).
     // The score is still computed, but surfaces present it as unavailable and
@@ -148,7 +161,8 @@ async function computePaddleScoreForSpot(loc, options = {}) {
                 cloudCover:  mlFeatures.cloudCover,
                 uvIndex:     mlFeatures.uvIndex,
                 visibility:  mlFeatures.visibility,
-                waterTemp:   waterTempC
+                waterTemp:   waterTempC,
+                waterTempEstimated: measuredWaterTemp == null
             },
             previousMLResult: previousScore ? {
                 mlInputsHash:     previousScore.mlInputsHash,

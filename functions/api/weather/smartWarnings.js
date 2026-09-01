@@ -105,17 +105,19 @@ function generateSmartWarnings(currentConditions, forecastData, locationData) {
   // 2. WATER TEMPERATURE WARNINGS (using real marine data when available)
   console.log(`🌡️ Water temp check: ${waterTemp}°C`);
   
+  // An estimated water temperature carries real error bars, so it says so in
+  // the warning rather than posing as a reading. The 18 °C "cool water — wear
+  // thermal protection" tier was removed: 16-18 °C is ordinary, comfortable
+  // summer paddling water, and warning there trained users to ignore us.
+  const waterIsEstimated = currentConditions.waterTempEstimated === true;
+  const est = waterIsEstimated ? ' (estimated)' : '';
   if (waterTemp <= 4) {
-    warnings.push("Extremely cold water - hypothermia risk within minutes");
+    warnings.push(`Extremely cold water${est} - hypothermia risk within minutes`);
   } else if (waterTemp <= 10) {
-    warnings.push("Very cold water - cold water shock and rapid heat loss risk");
+    warnings.push(`Very cold water${est} - cold water shock and rapid heat loss risk`);
   } else if (waterTemp <= 15) {
-    warnings.push("Cold water - hypothermia possible with prolonged exposure");
-  } else if (waterTemp <= 18) {
-    warnings.push("Cool water - wear appropriate thermal protection");
+    warnings.push(`Cold water${est} - hypothermia possible with prolonged exposure`);
   }
-  // Water above 18°C (64°F) is generally safe for recreational paddling
-  // Marine data often shows warmer temperatures than our old estimation
 
   // 3. WIND CONDITIONS (with context)
   if (windSpeed >= 25) {

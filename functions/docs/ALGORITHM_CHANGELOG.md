@@ -1,5 +1,49 @@
 # Paddle Score Algorithm Changelog
 
+## v2.4.0 — 2026-09-01
+
+### Water temperature: measured where possible, physically-modelled where not
+
+v2.3.0 removed fabricated marine data but fell back to `todayAvgAir − 8`, which
+is not how lakes work and produced a second class of false alarm: **Lake Union
+on 31 August estimated 9.2 °C (49 °F) against an actual ~21 °C (70 °F)**, raising
+a "Very cold water" alert and telling paddlers to wear a drysuit on a warm
+summer lake. Over-warning is not free — it trains people to ignore the warning
+that matters.
+
+Three changes:
+
+1. **Measured first.** `hydrologyService.getWaterTemp()` reads USGS parameter
+   00010 from a per-spot, hand-reviewed sensor (30-min cache per gauge, stale
+   readings >24 h rejected). Requires `USGS_API_KEY` (free); populate with
+   `scripts/match-water-temp.js`, reviewing each candidate — proximity is not
+   identity (the nearest 00010 site to Diablo Lake is a creek 8.4 km away).
+
+2. **A real climate window when there's no sensor.** Lake surface temperature
+   integrates heat over weeks, so the estimate now uses a genuine **30-day mean
+   air temperature** (Open-Meteo, free, no key), cached 24 h per ~11 km cell,
+   and **serves the last known good value for up to 14 days if the upstream
+   call fails** — a transient failure must not silently revert to the bad
+   formula. Portfolio effect: alpine lakes 60–62 °F, Seattle 65 °F, Texas
+   lakes ~90 °F — all physically plausible, versus a fabricated flat 28.8 °C or
+   an air-derived 49 °F before.
+
+3. **Honest thresholds.** The 18 °C "cool water — wear thermal protection"
+   warning tier is removed: 16–18 °C is ordinary comfortable paddling water.
+   Estimated values say "(estimated)" in the warning text, and the drysuit tip
+   requires ≤12 °C on an estimate (vs ≤15 °C measured), because a drysuit is a
+   serious instruction and the estimate carries several degrees of error.
+
+`conditions.waterTempEstimated` and `conditions.waterTempSource` (naming the
+gauge) ride on every score; the UI marks the reading "· measured" or "· est".
+
+**Result across the 17 curated spots: cold-water warnings 1 → 0**, with every
+remaining value physically defensible.
+
+**Eval:** unchanged from v2.3.0 (MAE 0.727, dangerous-recall 0.952) — the
+187-label replay supplies its own snapshot water temperatures, so it does not
+exercise the estimator. The portfolio check above is the relevant verification.
+
 ## v2.3.0 — 2026-09-01
 
 ### Marine data removed on inland water (accuracy — this was publishing fiction)
