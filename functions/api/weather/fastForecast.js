@@ -41,19 +41,23 @@ async function transformToFastForecastFormat(weatherData, locationQuery) {
         console.log('ℹ️ Marine data not available for fastForecast');
     }
     
-    // Group forecast by days (24 hours each)
+    // Group forecast by days (24 hours each). Hours are scored through a
+    // CONCURRENT pool — 72 sequential ML calls made every cache miss take tens
+    // of seconds; a pool of 12 brings a miss down to a few seconds.
     const forecastByDays = [];
-    
+    const hourTasks = [];
+
     for (const dayData of forecast.slice(0, 3)) { // Max 3 days
         const forecastDay = {
             date: dayData.date,
             hourly: {}
         };
-        
+        forecastByDays.push(forecastDay);
+
         if (!dayData.hourly || !Array.isArray(dayData.hourly)) {
             continue;
         }
-        
+
         for (const hourData of dayData.hourly) {
             // Parse the hour from the time string (format: "2025-08-18 14:00")
             const timeParts = hourData.time.split(' ');
@@ -64,6 +68,7 @@ async function transformToFastForecastFormat(weatherData, locationQuery) {
 
             if (isNaN(hour) || hour < 0 || hour > 23) continue;
 
+            hourTasks.push(async () => {
             const KPH_TO_MPH = 0.621371;
             const lat = weatherData.location?.coordinates?.latitude || location.coordinates?.latitude;
             const lng = weatherData.location?.coordinates?.longitude || location.coordinates?.longitude;
@@ -111,7 +116,7 @@ async function transformToFastForecastFormat(weatherData, locationQuery) {
                 loc: { lat, lng },
                 includeWarnings: false
             });
-            if (!score) continue;
+            if (!score) return;
 
             // Smart warnings with real data
             const smartWarnings = getSmartWarnings(
@@ -170,11 +175,20 @@ async function transformToFastForecastFormat(weatherData, locationQuery) {
                 mlModelUsed:      score.mlModelUsed,
                 predictionSource: score.predictionSource
             };
+            });   // end hour task
         }
-        
-        forecastByDays.push(forecastDay);
     }
-    
+
+    // Concurrency pool over all 72 hour tasks
+    const POOL = 12;
+    let cursor = 0;
+    await Promise.all(Array.from({ length: Math.min(POOL, hourTasks.length) }, async () => {
+        while (cursor < hourTasks.length) {
+            const task = hourTasks[cursor++];
+            try { await task(); } catch (err) { console.warn(`fastForecast hour task failed: ${err.message}`); }
+        }
+    }));
+
     return {
         success: true,
         location: {

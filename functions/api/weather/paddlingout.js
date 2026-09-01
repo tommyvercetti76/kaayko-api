@@ -1020,9 +1020,10 @@ router.get('/:id', async (req, res) => {
   }
 
   try {
-    const [docSnap, allScores] = await Promise.all([
+    // One keyed cache read — getAll() scanned the whole collection for a single spot
+    const [docSnap, cachedScore] = await Promise.all([
       db.collection('paddlingSpots').doc(id).get(),
-      new PaddleScoreCache().getAll()
+      new PaddleScoreCache().get(id)
     ]);
 
     if (!docSnap.exists) {
@@ -1059,7 +1060,7 @@ router.get('/:id', async (req, res) => {
     ]);
     spot.imgSrc      = imgSrc;
     spot.hydrologyNow = hydrologyNow;
-    spot.paddleScore = applyCraftAdjustment(allScores.get(id) || null, req.query.craft);
+    spot.paddleScore = applyCraftAdjustment(cachedScore || null, req.query.craft);
     // Preparation tips — computed from the cached conditions + this spot's real
     // enrichment; empty array when there's nothing grounded to say.
     spot.tips = spot.paddleScore ? getPreparationTips({
