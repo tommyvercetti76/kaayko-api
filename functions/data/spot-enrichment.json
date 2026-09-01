@@ -1,0 +1,26 @@
+{
+  "meta": {
+    "description": "Reviewed source of truth for curated-spot enrichment. Builders write here; seed-spot-enrichment.js pushes to Firestore (dry-run by default). NEVER invent data: cellCoverage comes from build-cell-coverage.js over downloaded FCC BDC files; localTips are Rohan-authored; waterType is factual from the water body itself.",
+    "bdcVintage": null,
+    "generatedAt": "2026-09-01"
+  },
+  "spots": {
+    "ambazari":   { "waterType": "lake",  "cellCoverage": null, "localTips": [] },
+    "antero":     { "waterType": "lake",  "cellCoverage": null, "localTips": [] },
+    "colorado":   { "waterType": "river", "cellCoverage": null, "localTips": [] },
+    "cottonwood": { "waterType": "lake",  "cellCoverage": null, "localTips": [] },
+    "crescent":   { "waterType": "lake",  "cellCoverage": null, "localTips": [] },
+    "diablo":     { "waterType": "lake",  "cellCoverage": null, "localTips": [] },
+    "jackson":    { "waterType": "lake",  "cellCoverage": null, "localTips": [] },
+    "jenny":      { "waterType": "lake",  "cellCoverage": null, "localTips": [] },
+    "kens":       { "waterType": "lake",  "cellCoverage": null, "localTips": [] },
+    "lewisville": { "waterType": "lake",  "cellCoverage": null, "localTips": [] },
+    "mcdonald":   { "waterType": "lake",  "cellCoverage": null, "localTips": [] },
+    "merrimack":  { "waterType": "river", "cellCoverage": null, "localTips": [] },
+    "powell":     { "waterType": "lake",  "cellCoverage": null, "localTips": [] },
+    "taylorpark": { "waterType": "lake",  "cellCoverage": null, "localTips": [] },
+    "trinity":    { "waterType": "river", "cellCoverage": null, "localTips": [] },
+    "union":      { "waterType": "lake",  "cellCoverage": null, "localTips": [] },
+    "whiterock":  { "waterType": "lake",  "cellCoverage": null, "localTips": [] }
+  }
+}

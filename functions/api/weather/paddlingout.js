@@ -449,17 +449,30 @@ function escapeForEmail(value) {
  * Fetch image URLs for a spot from Firebase Storage.
  * Returns an empty array on any error — images are non-critical.
  */
+// One Storage listing per request (short in-memory TTL), grouped in memory —
+// listing the whole prefix once PER SPOT made the list route O(spots × files).
+let _imageListCache = { at: 0, files: null };
+const IMAGE_LIST_TTL_MS = 60 * 1000;
+
+async function listAllSpotImages() {
+  if (_imageListCache.files && Date.now() - _imageListCache.at < IMAGE_LIST_TTL_MS) {
+    return _imageListCache.files;
+  }
+  const [files] = await bucket.getFiles({ prefix: 'images/paddling_out/' });
+  const names = files.map(f => f.name);
+  _imageListCache = { at: Date.now(), files: names };
+  return names;
+}
+
 async function fetchSpotImages(spotId) {
-  const prefix = 'images/paddling_out/';
   try {
-    const [files] = await bucket.getFiles({ prefix });
-    const matching = files.filter(file => {
-      const fileName = file.name.split('/').pop() || '';
-      return fileName.toLowerCase().startsWith(spotId.toLowerCase());
-    });
-    return matching.map(file => {
-      return publicStorageUrl(file.name);
-    });
+    const names = await listAllSpotImages();
+    return names
+      .filter(name => {
+        const fileName = (name.split('/').pop() || '').toLowerCase();
+        return fileName.startsWith(spotId.toLowerCase());
+      })
+      .map(publicStorageUrl);
   } catch (err) {
     console.error(`fetchSpotImages failed for ${spotId}:`, err.message);
     return [];
@@ -551,6 +564,8 @@ async function submitEntryHandler(req, res) {
       imgSrc,
       imageCount: uploadedImages.length,
       communitySubmission: true,
+      // Enrichment fields are admin-graded, never community-supplied
+      waterType: null,
       submissionStatus: 'pending',
       submittedAt: FieldValue.serverTimestamp(),
       // Approve-to-publish: null goLiveAt means isPublicPaddlingSpot keeps this
@@ -958,7 +973,10 @@ router.get('/', async (req, res) => {
           location:     data.location     || {},
           parkingAvl:   data.parkingAvl   || 'N',
           restroomsAvl: data.restroomsAvl || 'N',
-          communitySubmission: data.communitySubmission === true
+          communitySubmission: data.communitySubmission === true,
+          // Enrichment (absent on unenriched/community spots — clients render nothing)
+          waterType:    data.waterType || null,
+          cellCoverage: data.cellCoverage ? { grade: data.cellCoverage.grade } : null
         };
 
         // Images and paddle score fetched concurrently
@@ -1024,7 +1042,12 @@ router.get('/:id', async (req, res) => {
       location:     data.location     || {},
       parkingAvl:   data.parkingAvl   || 'N',
       restroomsAvl: data.restroomsAvl || 'N',
-      communitySubmission: data.communitySubmission === true
+      communitySubmission: data.communitySubmission === true,
+      // Full enrichment on the detail route (absent fields stay null/undefined)
+      waterType:    data.waterType || null,
+      cellCoverage: data.cellCoverage || null,
+      localTips:    Array.isArray(data.localTips) ? data.localTips : [],
+      launchHint:   data.launchHint || null
     };
 
     const [imgSrc] = await Promise.all([fetchSpotImages(id)]);
