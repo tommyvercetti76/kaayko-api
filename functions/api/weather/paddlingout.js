@@ -943,6 +943,7 @@ router.get('/geocode', async (req, res) => {
 
 const { applyCraftAdjustment } = require('./craftAdjustments');
 const { getPreparationTips } = require('./paddleTips');
+const { getHydrology } = require('./hydrologyService');
 
 router.get('/', async (req, res) => {
   const startTime = Date.now();
@@ -1051,8 +1052,13 @@ router.get('/:id', async (req, res) => {
       launchHint:   data.launchHint || null
     };
 
-    const [imgSrc] = await Promise.all([fetchSpotImages(id)]);
+    // Live hydrology for gauged river spots (cache-first, 30-min TTL)
+    const [imgSrc, hydrologyNow] = await Promise.all([
+      fetchSpotImages(id),
+      data.hydrology ? getHydrology(data.hydrology).catch(() => null) : Promise.resolve(null)
+    ]);
     spot.imgSrc      = imgSrc;
+    spot.hydrologyNow = hydrologyNow;
     spot.paddleScore = applyCraftAdjustment(allScores.get(id) || null, req.query.craft);
     // Preparation tips — computed from the cached conditions + this spot's real
     // enrichment; empty array when there's nothing grounded to say.
@@ -1060,6 +1066,7 @@ router.get('/:id', async (req, res) => {
       conditions: spot.paddleScore.conditions,
       craft: req.query.craft,
       spot: { cellCoverage: data.cellCoverage, localTips: data.localTips },
+      hydrology: hydrologyNow,
       warningMessages: spot.paddleScore.warnings?.messages || []
     }) : [];
 

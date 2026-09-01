@@ -161,6 +161,7 @@ def temporal_cross_validate(df: pd.DataFrame, n_splits: int = 5):
 
     tscv = TimeSeriesSplit(n_splits=n_splits)
     maes, rmses, biases = [], [], []
+    oof_true, oof_pred = [], []   # out-of-fold pairs for the safety gates
 
     for fold, (train_idx, val_idx) in enumerate(tscv.split(X)):
         X_train, X_val = X[train_idx], X[val_idx]
@@ -188,13 +189,28 @@ def temporal_cross_validate(df: pd.DataFrame, n_splits: int = 5):
         bias = float(np.mean(preds - y_val))   # positive = over-predicting
 
         maes.append(mae); rmses.append(rmse); biases.append(bias)
+        oof_true.extend(y_val.tolist()); oof_pred.extend(preds.tolist())
         log.info(f'  Fold {fold+1}: MAE={mae:.3f}  RMSE={rmse:.3f}  bias={bias:+.3f}')
+
+    # ── Safety gates (ported from paddle-llm pipeline/gate_check.py) ─────────
+    # Beyond average error: a promoted model must keep dangerous days out of the
+    # "Worth it" band and must not be structurally over-optimistic.
+    yt = np.array(oof_true); yp = np.array(oof_pred)
+    dangerous = yt <= 2.0
+    dangerous_recall = float(np.mean(yp[dangerous] < 3.7)) if dangerous.any() else 1.0
+    over_optimistic  = float(np.mean((yp >= 3.7) & (yt <= 2.0)))
+    mean_baseline_mae = float(np.mean(np.abs(yt - np.mean(yt))))
+    lift_vs_mean = 1.0 - (float(np.mean(np.abs(yt - yp))) / mean_baseline_mae) if mean_baseline_mae > 0 else 0.0
 
     return {
         'mae':  float(np.mean(maes)),
         'rmse': float(np.mean(rmses)),
         'bias': float(np.mean(biases)),
         'folds': n_splits,
+        'dangerous_recall': dangerous_recall,
+        'over_optimistic_rate': over_optimistic,
+        'lift_vs_mean_baseline': lift_vs_mean,
+        'n_oof': int(len(yt)),
     }
 
 
@@ -271,14 +287,28 @@ def main():
     cv_metrics = temporal_cross_validate(df)
     log.info(f'CV results → MAE={cv_metrics["mae"]:.3f}  RMSE={cv_metrics["rmse"]:.3f}  bias={cv_metrics["bias"]:+.3f}')
 
-    # 3. Quality gate
-    if cv_metrics['mae'] > args.mae_gate:
-        log.error(
-            f'Quality gate FAILED: CV MAE {cv_metrics["mae"]:.3f} > threshold {args.mae_gate}. '
-            'Model not deployed.'
-        )
+    # 3. Quality gates — MAE plus the safety gates ported from paddle-llm's
+    #    promotion check. ALL must pass; a model that misses average error less
+    #    but lets dangerous days score "Worth it" is worse, not better.
+    gates = [
+        ('cv_mae',            cv_metrics['mae'] <= args.mae_gate,
+         f"CV MAE {cv_metrics['mae']:.3f} <= {args.mae_gate}"),
+        ('dangerous_recall',  cv_metrics['dangerous_recall'] >= 0.90,
+         f"dangerous-condition recall {cv_metrics['dangerous_recall']:.3f} >= 0.90"),
+        ('over_optimism',     cv_metrics['over_optimistic_rate'] <= 0.05,
+         f"over-optimistic rate {cv_metrics['over_optimistic_rate']:.4f} <= 0.05"),
+        ('bias',              abs(cv_metrics['bias']) <= 0.2,
+         f"|bias| {abs(cv_metrics['bias']):.3f} <= 0.2"),
+        ('beats_mean',        cv_metrics['lift_vs_mean_baseline'] >= 0.15,
+         f"lift vs mean-baseline {cv_metrics['lift_vs_mean_baseline']:.3f} >= 0.15"),
+    ]
+    failed = [(name, desc) for name, ok, desc in gates if not ok]
+    for name, ok, desc in gates:
+        log.info(f"  gate {name}: {'PASS' if ok else 'FAIL'} ({desc})")
+    if failed:
+        log.error(f'Quality gates FAILED ({", ".join(n for n, _ in failed)}). Model not deployed.')
         sys.exit(1)
-    log.info(f'Quality gate PASSED ✅')
+    log.info('All quality gates PASSED ✅')
 
     # 4. Train final model on all data
     log.info('Training final model on full dataset …')

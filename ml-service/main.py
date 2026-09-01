@@ -12,6 +12,7 @@ from flask_cors import CORS
 import logging
 
 from predict_konditions import predict_paddle_rating
+from expert_rules import apply_safety_floor, features_hash, weather_bucket
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -58,6 +59,11 @@ def log_prediction(request_data: dict, result: dict, source: str):
             'pressure':       request_data.get('pressure'),
         },
         'timestamp': datetime.now(timezone.utc).isoformat(),
+        # Lineage: same inputs → same hash, and a coarse condition bucket so
+        # accuracy can be monitored per weather regime, not just on average.
+        'featuresHash':  features_hash(request_data),
+        'weatherBucket': weather_bucket(request_data),
+        'safetyFloorApplied': bool(result.get('safetyFloorApplied', False)),
     }
     t = threading.Thread(target=_log_prediction_async, args=(payload,), daemon=True)
     t.start()
@@ -89,6 +95,7 @@ def ml_predict():
         if 'current' in data and 'location' in data:
             logger.info('✅ V3 format')
             result = predict_paddle_rating(data)
+            result = apply_safety_floor(result, data.get('current', {}))
             log_prediction(data.get('current', {}), result, 'v3-structured')
 
         # ── Legacy flat format ─────────────────────────────────────────────
@@ -131,6 +138,8 @@ def ml_predict():
                 feelsLike=_opt_float('feelsLike'),
                 precipChance=_opt_float('precipChance'),
             )
+            # Rules safety floor + contributing-factor reasons (see expert_rules.py)
+            result = apply_safety_floor(result, data)
             log_prediction(data, result, 'legacy-flat')
 
         logger.info(f'✅ result: {result}')

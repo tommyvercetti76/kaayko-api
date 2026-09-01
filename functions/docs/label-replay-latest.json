@@ -1,0 +1,27 @@
+{
+  "replayedAt": "2026-09-01T01:28:13.932Z",
+  "n": 187,
+  "mlServiceShare": 1,
+  "mae": 0.728,
+  "bias": -0.055,
+  "tierAgreement": 0.636,
+  "dangerousConditionRecall": 0.952,
+  "twoTierOverOptimismRate": 0.0267,
+  "confusion_labelRows_pipelineCols": {
+    "Hard pass": {
+      "Hard pass": 85,
+      "Careful": 14,
+      "Worth it": 5
+    },
+    "Careful": {
+      "Hard pass": 7,
+      "Careful": 10,
+      "Worth it": 6
+    },
+    "Worth it": {
+      "Hard pass": 16,
+      "Careful": 20,
+      "Worth it": 24
+    }
+  }
+}

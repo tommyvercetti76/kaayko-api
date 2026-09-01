@@ -165,6 +165,9 @@ const {
 exports.warmPaddleScoreCache    = warmPaddleScoreCache;
 exports.aggregatePaddleFeedback = aggregatePaddleFeedback;
 
+// Monthly re-validation of static enrichment data (gauges, FCC vintage, tips age)
+exports.enrichmentFreshness = require('./scheduled/enrichmentFreshness').enrichmentFreshness;
+
 // KORTEX: Weekly analytics digest — every Monday 9am IST (3:30am UTC)
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { runWeeklyDigest } = require("./api/kortex/analyticsAlertService");

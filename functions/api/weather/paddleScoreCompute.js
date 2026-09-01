@@ -21,7 +21,7 @@ const { scoreFromFeatures, selectMarineHour } = require('./scoringPipeline');
  * @returns {Promise<object|null>} Score payload or null if weather unavailable
  */
 async function computePaddleScoreForSpot(loc, options = {}) {
-    const { calibrationOffsets = new Map(), limitedWeatherFallback = false, previousScore = null } = options;
+    const { calibrationOffsets = new Map(), limitedWeatherFallback = false, previousScore = null, hydrologyContext = null } = options;
 
     if (!loc.lat || !loc.lng) {
         console.warn(`computePaddleScoreForSpot: missing coordinates for ${loc.id}`);
@@ -87,6 +87,7 @@ async function computePaddleScoreForSpot(loc, options = {}) {
             forecast: weatherData.forecast || null,
             loc,
             dynamicOffset: calibrationOffsets.get(loc.id) || 0,
+            hydrologyContext,
             weatherData,
             includeWarnings: true,
             warningsConditions: {

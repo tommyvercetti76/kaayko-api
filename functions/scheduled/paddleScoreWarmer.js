@@ -10,6 +10,7 @@ const { getFirestore, FieldValue, Timestamp } = require('firebase-admin/firestor
 const PaddleScoreCache = require('../cache/paddleScoreCache');
 const { computePaddleScoreForSpot } = require('../api/weather/paddleScoreCompute');
 const { isPublicPaddlingSpot } = require('../api/weather/communitySpotVisibility');
+const { getHydrology } = require('../api/weather/hydrologyService');
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -29,7 +30,8 @@ async function getLocationsFromFirestore() {
                     id:   doc.id,
                     lat:  data.location?.latitude,
                     lng:  data.location?.longitude,
-                    name: data.lakeName || data.title || doc.id
+                    name: data.lakeName || data.title || doc.id,
+                    hydrologyMeta: data.hydrology || null   // river spots: gauge + normals
                 };
             })
             .filter(loc => loc.lat && loc.lng);
@@ -99,10 +101,20 @@ exports.warmPaddleScoreCache = onSchedule({
         const batch = locations.slice(i, i + BATCH_SIZE);
 
         const batchResults = await Promise.allSettled(
-            batch.map(loc => computePaddleScoreForSpot(loc, {
-                calibrationOffsets,
-                previousScore: previousScores.get(loc.id) || null
-            }))
+            batch.map(async loc => {
+                // River flow bakes into the craft-neutral base score (cache-first,
+                // 30-min TTL — adds no external calls beyond one per gauge per TTL)
+                let hydrologyContext = null;
+                if (loc.hydrologyMeta) {
+                    try { hydrologyContext = await getHydrology(loc.hydrologyMeta); }
+                    catch { /* score proceeds without the flow gate */ }
+                }
+                return computePaddleScoreForSpot(loc, {
+                    calibrationOffsets,
+                    previousScore: previousScores.get(loc.id) || null,
+                    hydrologyContext
+                });
+            })
         );
 
         batchResults.forEach((outcome, idx) => {

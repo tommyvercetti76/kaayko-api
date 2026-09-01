@@ -227,7 +227,11 @@ function toLegacyStrings(details) {
  * @param {object|null} marineData - optional marine context
  * @returns {object} updated prediction w/ applied penalties & metadata
  */
-function applyEnhancedPenalties(prediction, features, marineData = null) {
+// River flow gate — deterministic, craft-independent, part of the same "safety =
+// rules" doctrine as cold water. Gated behind a constant for instant rollback.
+const ENABLE_FLOW_GATE = true;
+
+function applyEnhancedPenalties(prediction, features, marineData = null, hydrologyContext = null) {
   const normalizedPrediction = typeof prediction === 'number'
     ? { rating: prediction }
     : { ...(prediction || {}) };
@@ -376,6 +380,18 @@ function applyEnhancedPenalties(prediction, features, marineData = null) {
     } else if (vals.waterTempC < THRESHOLDS.waterColdMinor) {
       addPenalty(details, 0.5, "WATER_COLD_MINOR", `Cool water (${vals.waterTempC.toFixed(1)}°C)`);
     }
+  }
+
+  // -----------------------------
+  // 🌊 RIVER FLOW (USGS gauge vs monthly normals)
+  // -----------------------------
+  if (ENABLE_FLOW_GATE && hydrologyContext && !hydrologyContext.stale) {
+    if (hydrologyContext.pctOfNormalBand === 'high') {
+      addPenalty(details, 1.0, "FLOW_HIGH",
+        `River well above normal (${hydrologyContext.pctOfNormal ?? '>90'}th percentile for this month)`);
+    }
+    // FLOW_FLOOD (-2.0) reserved for NWPS flood categories — inert until that
+    // data source ships; never inferred from percentile alone.
   }
 
   // -----------------------------

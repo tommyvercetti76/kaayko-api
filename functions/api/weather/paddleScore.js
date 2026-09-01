@@ -502,10 +502,11 @@ router.get('/metrics', requireAdmin, async (req, res) => {
     }
 
     // Global + all per-spot metrics
-    const [globalDoc, metricsSnapshot, calSnapshot] = await Promise.all([
+    const [globalDoc, metricsSnapshot, calSnapshot, enrichDoc] = await Promise.all([
       db.collection('paddle_model_metrics').doc('global').get(),
       db.collection('paddle_model_metrics').get(),
-      db.collection('paddle_spot_calibrations').get()
+      db.collection('paddle_spot_calibrations').get(),
+      db.collection('enrichment_status').doc('global').get()
     ]);
 
     const perSpot = {};
@@ -520,7 +521,8 @@ router.get('/metrics', requireAdmin, async (req, res) => {
       success: true,
       global: globalDoc.exists ? globalDoc.data() : null,
       perSpot,
-      calibrations
+      calibrations,
+      enrichment: enrichDoc.exists ? enrichDoc.data() : null
     });
 
   } catch (error) {

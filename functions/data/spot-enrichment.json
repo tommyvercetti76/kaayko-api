@@ -5,22 +5,373 @@
     "generatedAt": "2026-09-01"
   },
   "spots": {
-    "ambazari":   { "waterType": "lake",  "cellCoverage": null, "localTips": [] },
-    "antero":     { "waterType": "lake",  "cellCoverage": null, "localTips": [] },
-    "colorado":   { "waterType": "river", "cellCoverage": null, "localTips": [] },
-    "cottonwood": { "waterType": "lake",  "cellCoverage": null, "localTips": [] },
-    "crescent":   { "waterType": "lake",  "cellCoverage": null, "localTips": [] },
-    "diablo":     { "waterType": "lake",  "cellCoverage": null, "localTips": [] },
-    "jackson":    { "waterType": "lake",  "cellCoverage": null, "localTips": [] },
-    "jenny":      { "waterType": "lake",  "cellCoverage": null, "localTips": [] },
-    "kens":       { "waterType": "lake",  "cellCoverage": null, "localTips": [] },
-    "lewisville": { "waterType": "lake",  "cellCoverage": null, "localTips": [] },
-    "mcdonald":   { "waterType": "lake",  "cellCoverage": null, "localTips": [] },
-    "merrimack":  { "waterType": "river", "cellCoverage": null, "localTips": [] },
-    "powell":     { "waterType": "lake",  "cellCoverage": null, "localTips": [] },
-    "taylorpark": { "waterType": "lake",  "cellCoverage": null, "localTips": [] },
-    "trinity":    { "waterType": "river", "cellCoverage": null, "localTips": [] },
-    "union":      { "waterType": "lake",  "cellCoverage": null, "localTips": [] },
-    "whiterock":  { "waterType": "lake",  "cellCoverage": null, "localTips": [] }
+    "ambazari": {
+      "waterType": "lake",
+      "cellCoverage": null,
+      "localTips": []
+    },
+    "antero": {
+      "waterType": "lake",
+      "cellCoverage": null,
+      "localTips": []
+    },
+    "colorado": {
+      "waterType": "river",
+      "cellCoverage": null,
+      "localTips": [],
+      "hydrology": {
+        "gaugeId": "USGS-09185600",
+        "gaugeName": "COLORADO RIVER AT POTASH, UT",
+        "distanceKm": 13.3,
+        "hasStage": true,
+        "monthlyNormals": {
+          "1": {
+            "p10": 60.31,
+            "p25": 63.43,
+            "p50": 73.62,
+            "p75": 85.23,
+            "p90": 96.59
+          },
+          "2": {
+            "p10": 59.75,
+            "p25": 62.58,
+            "p50": 76.6,
+            "p75": 83.46,
+            "p90": 88.32
+          },
+          "3": {
+            "p10": 63.43,
+            "p25": 71.36,
+            "p50": 80.99,
+            "p75": 94.51,
+            "p90": 111.88
+          },
+          "4": {
+            "p10": 64.28,
+            "p25": 78.65,
+            "p50": 102.79,
+            "p75": 168.7,
+            "p90": 267.2
+          },
+          "5": {
+            "p10": 86.22,
+            "p25": 121.69,
+            "p50": 209.12,
+            "p75": 409.89,
+            "p90": 609.09
+          },
+          "6": {
+            "p10": 94.01,
+            "p25": 130.75,
+            "p50": 256.97,
+            "p75": 591.82,
+            "p90": 719.53
+          },
+          "7": {
+            "p10": 56.92,
+            "p25": 67.11,
+            "p50": 91.6,
+            "p75": 179.74,
+            "p90": 366.42
+          },
+          "8": {
+            "p10": 54.09,
+            "p25": 61.8,
+            "p50": 88.49,
+            "p75": 115.11,
+            "p90": 145.04
+          },
+          "9": {
+            "p10": 66.26,
+            "p25": 74.69,
+            "p50": 95.29,
+            "p75": 107.04,
+            "p90": 116.69
+          },
+          "10": {
+            "p10": 80.05,
+            "p25": 88.99,
+            "p50": 104.49,
+            "p75": 120.63,
+            "p90": 129.78
+          },
+          "11": {
+            "p10": 72.21,
+            "p25": 76.67,
+            "p50": 89.48,
+            "p75": 102.22,
+            "p90": 121.79
+          },
+          "12": {
+            "p10": 59.18,
+            "p25": 67.46,
+            "p50": 78.58,
+            "p75": 91.46,
+            "p90": 108.45
+          }
+        },
+        "matchedAt": "2026-09-01",
+        "active": true
+      }
+    },
+    "cottonwood": {
+      "waterType": "lake",
+      "cellCoverage": null,
+      "localTips": []
+    },
+    "crescent": {
+      "waterType": "lake",
+      "cellCoverage": null,
+      "localTips": []
+    },
+    "diablo": {
+      "waterType": "lake",
+      "cellCoverage": null,
+      "localTips": []
+    },
+    "jackson": {
+      "waterType": "lake",
+      "cellCoverage": null,
+      "localTips": []
+    },
+    "jenny": {
+      "waterType": "lake",
+      "cellCoverage": null,
+      "localTips": []
+    },
+    "kens": {
+      "waterType": "lake",
+      "cellCoverage": null,
+      "localTips": []
+    },
+    "lewisville": {
+      "waterType": "lake",
+      "cellCoverage": null,
+      "localTips": []
+    },
+    "mcdonald": {
+      "waterType": "lake",
+      "cellCoverage": null,
+      "localTips": []
+    },
+    "merrimack": {
+      "waterType": "river",
+      "cellCoverage": null,
+      "localTips": [],
+      "hydrology": {
+        "gaugeId": "USGS-01092000",
+        "gaugeName": "MERRIMACK RIVER NEAR GOFFS FALLS, BELOW MANCHESTER, NH",
+        "distanceKm": 12.6,
+        "hasStage": true,
+        "monthlyNormals": {
+          "1": {
+            "p10": 71.61,
+            "p25": 91.68,
+            "p50": 143.42,
+            "p75": 238.07,
+            "p90": 329.32
+          },
+          "2": {
+            "p10": 50.97,
+            "p25": 71.36,
+            "p50": 126.01,
+            "p75": 174.71,
+            "p90": 234.29
+          },
+          "3": {
+            "p10": 100.75,
+            "p25": 143.78,
+            "p50": 199.78,
+            "p75": 288.83,
+            "p90": 413.71
+          },
+          "4": {
+            "p10": 164.66,
+            "p25": 217.69,
+            "p50": 304.41,
+            "p75": 410.59,
+            "p90": 546.8
+          },
+          "5": {
+            "p10": 91.12,
+            "p25": 125.02,
+            "p50": 203.6,
+            "p75": 324.94,
+            "p90": 462.41
+          },
+          "6": {
+            "p10": 41.29,
+            "p25": 55.78,
+            "p50": 85.23,
+            "p75": 165.37,
+            "p90": 247.32
+          },
+          "7": {
+            "p10": 33.7,
+            "p25": 40.21,
+            "p50": 58.62,
+            "p75": 117.37,
+            "p90": 281.16
+          },
+          "8": {
+            "p10": 22.42,
+            "p25": 27.47,
+            "p50": 45.87,
+            "p75": 107.46,
+            "p90": 163.19
+          },
+          "9": {
+            "p10": 17.92,
+            "p25": 22.12,
+            "p50": 37.8,
+            "p75": 88.07,
+            "p90": 124.51
+          },
+          "10": {
+            "p10": 22.49,
+            "p25": 30.58,
+            "p50": 61.59,
+            "p75": 104.06,
+            "p90": 149.71
+          },
+          "11": {
+            "p10": 47.54,
+            "p25": 64.63,
+            "p50": 97.98,
+            "p75": 175.35,
+            "p90": 328.76
+          },
+          "12": {
+            "p10": 61.11,
+            "p25": 97.27,
+            "p50": 148.8,
+            "p75": 216.84,
+            "p90": 425.6
+          }
+        },
+        "matchedAt": "2026-09-01",
+        "reviewNote": "manual override: auto-match picked the Souhegan tributary gauge (town-name collision); mainstem gauge verified live",
+        "active": true
+      }
+    },
+    "powell": {
+      "waterType": "lake",
+      "cellCoverage": null,
+      "localTips": []
+    },
+    "taylorpark": {
+      "waterType": "lake",
+      "cellCoverage": null,
+      "localTips": []
+    },
+    "trinity": {
+      "waterType": "river",
+      "cellCoverage": null,
+      "localTips": [],
+      "hydrology": {
+        "gaugeId": "USGS-08055560",
+        "gaugeName": "Elm Fk Trinity Rv at Spur 348, Irving, TX",
+        "distanceKm": 0.9,
+        "hasStage": true,
+        "monthlyNormals": {
+          "1": {
+            "p10": 2.78,
+            "p25": 3.92,
+            "p50": 6.51,
+            "p75": 20.13,
+            "p90": 125.67
+          },
+          "2": {
+            "p10": 4.3,
+            "p25": 6.02,
+            "p50": 12.23,
+            "p75": 27.48,
+            "p90": 111.79
+          },
+          "3": {
+            "p10": 4.72,
+            "p25": 8.52,
+            "p50": 26.92,
+            "p75": 69.52,
+            "p90": 112.45
+          },
+          "4": {
+            "p10": 4.61,
+            "p25": 8.01,
+            "p50": 25.49,
+            "p75": 69.16,
+            "p90": 167.66
+          },
+          "5": {
+            "p10": 4.67,
+            "p25": 6.87,
+            "p50": 34.4,
+            "p75": 118.29,
+            "p90": 152.94
+          },
+          "6": {
+            "p10": 4.79,
+            "p25": 14.14,
+            "p50": 68.1,
+            "p75": 142.93,
+            "p90": 165.74
+          },
+          "7": {
+            "p10": 4.58,
+            "p25": 5.72,
+            "p50": 10.56,
+            "p75": 83.04,
+            "p90": 154.95
+          },
+          "8": {
+            "p10": 3.79,
+            "p25": 4.65,
+            "p50": 5.72,
+            "p75": 7.43,
+            "p90": 23.6
+          },
+          "9": {
+            "p10": 3.31,
+            "p25": 4.27,
+            "p50": 5.35,
+            "p75": 9.07,
+            "p90": 24.69
+          },
+          "10": {
+            "p10": 2.63,
+            "p25": 3.71,
+            "p50": 4.66,
+            "p75": 8,
+            "p90": 67.68
+          },
+          "11": {
+            "p10": 3.31,
+            "p25": 4.47,
+            "p50": 6.5,
+            "p75": 12.9,
+            "p90": 64.65
+          },
+          "12": {
+            "p10": 2.97,
+            "p25": 4.33,
+            "p50": 7.11,
+            "p75": 13.55,
+            "p90": 68.98
+          }
+        },
+        "matchedAt": "2026-09-01",
+        "active": true
+      }
+    },
+    "union": {
+      "waterType": "lake",
+      "cellCoverage": null,
+      "localTips": []
+    },
+    "whiterock": {
+      "waterType": "lake",
+      "cellCoverage": null,
+      "localTips": []
+    }
   }
 }

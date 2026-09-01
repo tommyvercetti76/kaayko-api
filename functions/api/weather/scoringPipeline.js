@@ -78,7 +78,8 @@ async function scoreFromFeatures({
   weatherData = null,
   includeWarnings = true,
   warningsConditions = null,
-  previousMLResult = null
+  previousMLResult = null,
+  hydrologyContext = null
 }) {
   const mlInputsHash = hashMLInputs(mlFeatures);
 
@@ -122,9 +123,10 @@ async function scoreFromFeatures({
   );
   const calBase = calibrated.calibratedRatingPrecise ?? calibrated.calibratedRating;
 
-  // Safety-gate penalties (marine shape unlocks swell/steepness/thunder codes)
+  // Safety-gate penalties (marine shape unlocks swell/steepness/thunder codes;
+  // hydrologyContext adds the river flow gate for gauged river spots)
   const penaltyMarine = buildPenaltyMarine(marineHour);
-  const penaltyResult = applyEnhancedPenalties({ rating: calBase }, mlFeatures, penaltyMarine);
+  const penaltyResult = applyEnhancedPenalties({ rating: calBase }, mlFeatures, penaltyMarine, hydrologyContext);
 
   // Per-spot dynamic offset — positive offsets never undo the safety gate
   let appliedOffset = dynamicOffset || 0;
