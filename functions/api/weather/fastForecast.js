@@ -17,6 +17,7 @@ const { getSmartWarnings } = require('./smartWarnings');
 const { scoreFromFeatures } = require('./scoringPipeline');
 const { ALGORITHM_VERSION } = require('./scoringConstants');
 const { applyCraftAdjustment, sanitizeCraft } = require('./craftAdjustments');
+const { setPublicCache } = require('../lib/apiResponse');
 const { requireAdmin } = require('../../middleware/authMiddleware');
 
 const db = admin.firestore();
@@ -357,7 +358,9 @@ router.get('/', createInputMiddleware('fastForecast'), async (req, res) => {
         forecast.metadata.timestamp = new Date().toISOString();
 
         logger.info(`✅ Fast forecast served in ${responseTime}ms (source: ${source})`);
-        
+
+        // Hourly outlook is public and changes slowly — let the CDN carry it.
+        setPublicCache(res, 300, 600);
         res.status(200).json(forecast);
 
     } catch (error) {

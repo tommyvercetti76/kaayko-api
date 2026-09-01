@@ -152,4 +152,28 @@ function getPreparationTips({ conditions, craft, spot = null, hydrology = null, 
   return tips.sort((a, b) => a.priority - b.priority).slice(0, 4);
 }
 
-module.exports = { getPreparationTips };
+/**
+ * Render a tip's detail text with its structured values substituted.
+ *
+ * Web clients keep the raw `{token}` + metric `values` and format per the
+ * viewer's unit preference (KaaykoPrefs). API consumers have no such layer, so
+ * server-side surfaces (gptActions, /v1) must render finished text or they ship
+ * a literal "{water}" to the caller.
+ *
+ * @param {object} tip
+ * @param {object} [opts]
+ * @param {boolean} [opts.imperial=false] render in imperial units
+ */
+function renderTipDetail(tip, opts = {}) {
+  let detail = String(tip?.detail || '');
+  const v = tip?.values || {};
+  if (v.waterLiters != null) {
+    const text = opts.imperial
+      ? `~${Math.round(v.waterLiters * 33.814 / 8) * 8} fl oz`
+      : `${Number(v.waterLiters).toFixed(1)} L`;
+    detail = detail.replace('{water}', text);
+  }
+  return detail;
+}
+
+module.exports = { getPreparationTips, renderTipDetail };

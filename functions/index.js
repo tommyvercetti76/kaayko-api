@@ -76,6 +76,11 @@ apiApp.use("/docs", require("./api/core/docs"));
 // 🌍 LOCATION SERVICES
 apiApp.use("/nearbyWater", require("./api/weather/nearbyWater")); // Find nearby lakes/rivers for custom locations
 
+// 📦 VERSIONED PADDLING API (metered): X-API-Key + scope read:paddling.
+// Read-only, stable contract for third parties / a future paid tier. The
+// unversioned routes below stay anonymous for kaayko.com itself.
+apiApp.use("/v1", require("./api/weather/v1PaddlingApi"));
+
 // 🌟 STREAMLINED WEATHER APIs - Enabled
 apiApp.use("/paddleScore", require("./api/weather/paddleScore"));     // ML-POWERED: Paddle condition rating with ML model
 apiApp.use("/fastForecast", require("./api/weather/fastForecast"));   // PUBLIC: Fast cached forecasts for frontend

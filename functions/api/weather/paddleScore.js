@@ -17,6 +17,7 @@ const { requireAdmin } = require('../../middleware/authMiddleware');
 const { isPublicPaddlingSpot } = require('./communitySpotVisibility');
 const { applyCraftAdjustment, CRAFT_IDS } = require('./craftAdjustments');
 const { getPreparationTips } = require('./paddleTips');
+const { setPublicCache } = require('../lib/apiResponse');
 
 const db = getFirestore();
 
@@ -99,6 +100,9 @@ router.get('/', createInputMiddleware('paddleScore'), async (req, res) => {
       if (cached) {
         console.log(`paddleScore: cache hit for ${resolvedSpotId}`);
         const adjustedCached = applyCraftAdjustment(cached, craft);
+        // Public data, 15-min cache turnover upstream — safe for CDN reuse.
+        // Query string (incl. ?craft=) is part of the cache key.
+        setPublicCache(res, 60, 120);
         return res.json({
           success: true,
           location: { name: locationName, coordinates: { latitude: loc.lat, longitude: loc.lng } },
@@ -155,6 +159,7 @@ router.get('/', createInputMiddleware('paddleScore'), async (req, res) => {
     // Craft layer applies AFTER the base score is cached — the cache stays craft-neutral
     const adjusted = applyCraftAdjustment(score, craft) || score;
 
+    setPublicCache(res, 60, 120);
     return res.json({
       success: true,
       location: { name: locationName, coordinates: { latitude: loc.lat, longitude: loc.lng } },
