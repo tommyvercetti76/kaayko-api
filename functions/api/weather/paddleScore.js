@@ -15,6 +15,7 @@ const { computePaddleScoreForSpot } = require('./paddleScoreCompute');
 const PaddleScoreCache = require('../../cache/paddleScoreCache');
 const { requireAdmin } = require('../../middleware/authMiddleware');
 const { isPublicPaddlingSpot } = require('./communitySpotVisibility');
+const { applyCraftAdjustment, CRAFT_IDS } = require('./craftAdjustments');
 
 const db = getFirestore();
 
@@ -32,6 +33,7 @@ router.get('/', createInputMiddleware('paddleScore'), async (req, res) => {
 
   try {
     const { latitude, longitude, spotId } = req.standardizedInputs;
+    const craft = req.query.craft; // optional boat type; kayak/absent = identity
 
     let loc;
     let locationName;
@@ -96,7 +98,7 @@ router.get('/', createInputMiddleware('paddleScore'), async (req, res) => {
         return res.json({
           success: true,
           location: { name: locationName, coordinates: { latitude: loc.lat, longitude: loc.lng } },
-          paddleScore: cached,
+          paddleScore: applyCraftAdjustment(cached, craft),
           warnings: cached.warnings,
           conditions: cached.conditions,
           metadata: {
@@ -140,13 +142,19 @@ router.get('/', createInputMiddleware('paddleScore'), async (req, res) => {
       );
     }
 
+    // Craft layer applies AFTER the base score is cached — the cache stays craft-neutral
+    const adjusted = applyCraftAdjustment(score, craft) || score;
+
     return res.json({
       success: true,
       location: { name: locationName, coordinates: { latitude: loc.lat, longitude: loc.lng } },
       paddleScore: {
-        rating: score.rating,
-        ratingPrecise: score.ratingPrecise,
-        interpretation: score.interpretation,
+        rating: adjusted.rating,
+        ratingPrecise: adjusted.ratingPrecise,
+        interpretation: adjusted.interpretation,
+        baseRatingPrecise: adjusted.baseRatingPrecise,
+        craft: adjusted.craft,
+        craftAdjustment: adjusted.craftAdjustment,
         confidence: score.confidence,
         mlModelUsed: score.mlModelUsed,
         predictionSource: score.predictionSource,
@@ -406,7 +414,7 @@ function sanitizeProfile(p) {
   if (!p || typeof p !== 'object') return { skill: 'beginner', craft: 'kayak', group: 'solo' };
   return {
     skill: sanitizeEnum(p.skill, ['beginner', 'intermediate', 'advanced', 'expert']) || 'beginner',
-    craft: sanitizeEnum(p.craft, ['kayak', 'sup', 'canoe', 'row']) || 'kayak',
+    craft: sanitizeEnum(p.craft, CRAFT_IDS) || 'kayak',
     group: sanitizeEnum(p.group, ['solo', 'partner', 'group', 'with dogs']) || 'solo',
   };
 }
@@ -518,7 +526,7 @@ router.post('/batch', async (req, res) => {
   const startTime = Date.now();
 
   try {
-    const { locations } = req.body;
+    const { locations, craft } = req.body;
 
     // Validate input
     if (!Array.isArray(locations)) {
@@ -628,9 +636,9 @@ router.post('/batch', async (req, res) => {
 
     const scores = await Promise.all(validated.map(resolveScore));
 
-    // Map results back to locations
+    // Map results back to locations (craft layer applied post-cache, one craft per batch)
     const results = validated.map((loc, idx) => {
-      const score = scores[idx];
+      const score = applyCraftAdjustment(scores[idx], craft);
       return {
         lat: loc.lat,
         lng: loc.lng,

@@ -16,6 +16,7 @@ const { createInputMiddleware } = require('./inputStandardization');
 const { getSmartWarnings } = require('./smartWarnings');
 const { scoreFromFeatures } = require('./scoringPipeline');
 const { ALGORITHM_VERSION } = require('./scoringConstants');
+const { applyCraftAdjustment, sanitizeCraft } = require('./craftAdjustments');
 const { requireAdmin } = require('../../middleware/authMiddleware');
 
 const db = admin.firestore();
@@ -299,8 +300,41 @@ router.get('/', createInputMiddleware('fastForecast'), async (req, res) => {
             }
         }
 
+        // Craft layer — applied at response time so the cached forecast stays
+        // craft-neutral. Hour objects carry windSpeed/gustSpeed in KPH; per-hour
+        // penaltyDetails aren't stored, so wave escalation doesn't apply here
+        // (wind + gust sensitivity do — the dominant hourly factors).
+        const craftId = sanitizeCraft(req.query.craft);
+        if (craftId !== 'kayak' && Array.isArray(forecast.forecast)) {
+            forecast = JSON.parse(JSON.stringify(forecast)); // never mutate a cached object
+            for (const day of forecast.forecast) {
+                for (const key of Object.keys(day.hourly || {})) {
+                    const h = day.hourly[key];
+                    const adj = applyCraftAdjustment({
+                        rating: h.rating,
+                        ratingPrecise: h.ratingPrecise ?? h.rating,
+                        conditions: { windSpeed: h.windSpeed, gustSpeed: h.gustSpeed },
+                        penaltyDetails: []
+                    }, craftId);
+                    if (adj && adj.craftAdjustment) {
+                        h.rating = adj.rating;
+                        h.ratingPrecise = adj.ratingPrecise;
+                        h.interpretation = adj.interpretation;
+                        h.craftAdjustment = adj.craftAdjustment;
+                        if (h.prediction) {
+                            h.prediction.rating = adj.rating;
+                            h.prediction.ratingPrecise = adj.ratingPrecise;
+                            h.prediction.interpretation = adj.interpretation;
+                        }
+                    }
+                }
+            }
+            forecast.metadata = forecast.metadata || {};
+            forecast.metadata.craft = craftId;
+        }
+
         const responseTime = Date.now() - startTime;
-        
+
         // Add performance metadata
         forecast.metadata = forecast.metadata || {};
         forecast.metadata.responseTime = `${responseTime}ms`;

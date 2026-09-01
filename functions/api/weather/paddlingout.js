@@ -926,11 +926,14 @@ router.get('/geocode', async (req, res) => {
   }
 });
 
+const { applyCraftAdjustment } = require('./craftAdjustments');
+
 router.get('/', async (req, res) => {
   const startTime = Date.now();
   console.log('paddlingOut GET /');
 
   try {
+    const craft = req.query.craft; // optional; kayak/absent = identity
     const [snapshot, allScores] = await Promise.all([
       db.collection('paddlingSpots').get(),
       new PaddleScoreCache().getAll()
@@ -965,7 +968,7 @@ router.get('/', async (req, res) => {
         ]);
 
         spot.imgSrc     = imgSrc;
-        spot.paddleScore = paddleScore;
+        spot.paddleScore = applyCraftAdjustment(paddleScore, craft);
 
         return spot;
       })
@@ -1026,7 +1029,7 @@ router.get('/:id', async (req, res) => {
 
     const [imgSrc] = await Promise.all([fetchSpotImages(id)]);
     spot.imgSrc      = imgSrc;
-    spot.paddleScore = allScores.get(id) || null;
+    spot.paddleScore = applyCraftAdjustment(allScores.get(id) || null, req.query.craft);
 
     res.set('Cache-Control', 'public, max-age=60');
     return res.json(spot);
