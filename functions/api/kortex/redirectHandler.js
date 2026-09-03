@@ -19,6 +19,7 @@ const { trackClick, updateClickRedirect } = require('./clickTracking');
 const KortexV2 = require('./v2LinkIntents');
 const { respondForStatus } = require('./safetyPages');
 const { DEFAULT_TENANT_ID } = require('./tenantContext');
+const { pickScheduledDestination } = require('./linkSchedule');
 
 const db = admin.firestore();
 
@@ -677,6 +678,15 @@ async function handleRedirect(req, res, code, options = {}) {
       destination = selectDestinationVariant(destinations.web);
     }
 
+    // Time-of-day routing: the server clock in the link's own timezone decides.
+    // A matching window applies to every platform; nothing from the request is
+    // consulted, so a visitor cannot steer this.
+    let scheduleWindow = null;
+    if (linkData.schedule) {
+      const pick = pickScheduledDestination(linkData.schedule);
+      if (pick) { destination = pick.url; scheduleWindow = pick.label; }
+    }
+
     // Track click with full context (generates clickId for attribution).
     // Crawler fetches (link previews, search indexing) are not clicks.
     let clickId = null;
@@ -693,7 +703,8 @@ async function handleRedirect(req, res, code, options = {}) {
           metadata: {
             linkTitle: linkData.title,
             linkMetadata: linkData.metadata,
-            trackingSource: trackingContext.source
+            trackingSource: trackingContext.source,
+            scheduleWindow
           }
         });
         clickId = clickData.clickId;

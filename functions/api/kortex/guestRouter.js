@@ -63,7 +63,8 @@ function publicLink(link) {
     clickCount: link.clickCount || 0,
     lastClickedAt: link.lastClickedAt?.toDate ? link.lastClickedAt.toDate().toISOString() : (link.lastClickedAt || null),
     createdAt: link.createdAt?.toDate ? link.createdAt.toDate().toISOString() : (link.createdAt || null),
-    disabledReason: link.disabledReason || null
+    disabledReason: link.disabledReason || null,
+    schedule: link.schedule || null
   };
 }
 
@@ -159,7 +160,8 @@ router.post('/links', rateLimiter('guestCreate'), async (req, res) => {
       domain: 'kaayko.com',
       pathPrefix: '/l',
       source: 'qr',
-      metadata: { createdVia: 'guest' }
+      metadata: { createdVia: 'guest' },
+      schedule: body.schedule !== undefined ? body.schedule : undefined
     });
 
     recordAudit({
@@ -294,6 +296,7 @@ router.patch('/links/:code', guest.requireGuestSession, async (req, res) => {
         return res.status(400).json({ success: false, error: 'A destination URL is required', code: 'VALIDATION_ERROR' });
       }
     }
+    if (body.schedule !== undefined) updates.schedule = body.schedule; // object sets, null clears
     if (updates.enabled === true && link.disabledReason === 'guest_expired') updates.disabledReason = null;
     if (!Object.keys(updates).length) {
       return res.status(400).json({ success: false, error: 'Nothing to update', code: 'VALIDATION_ERROR' });

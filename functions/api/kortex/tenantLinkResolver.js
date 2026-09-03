@@ -18,6 +18,7 @@ const router = express.Router();
 const { runSecurityChecks, isCanaryCode } = require('./linkSecurityService');
 const { getClientIp } = require('./clientIp');
 const { respondForStatus } = require('./safetyPages');
+const { pickScheduledDestination } = require('./linkSchedule');
 
 // ============================================================================
 // CONSTANTS
@@ -253,6 +254,12 @@ router.get('/:tenantSlug/:code', async (req, res, next) => {
       destination = link.destinations.ios;
     } else if (link.destinations?.android && /Android/i.test(userAgent)) {
       destination = link.destinations.android;
+    }
+
+    // Time-of-day routing (server clock, link timezone) wins for every platform.
+    if (link.schedule) {
+      const pick = pickScheduledDestination(link.schedule);
+      if (pick) destination = pick.url;
     }
 
     if (!destination) {

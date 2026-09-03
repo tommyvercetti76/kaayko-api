@@ -402,11 +402,17 @@ async function resolveLink({ code, namespace, host, path, query = {}, req = null
     updatedAt: FieldValue.serverTimestamp()
   }).catch(err => console.error('[KortexV2] click count update failed:', err));
 
-  const destination = buildDestinationForIntent({
+  let destination = buildDestinationForIntent({
     link: { ...link, ...v2 },
     tenant,
     clickId
   });
+
+  // Time-of-day routing applies to plain external destinations.
+  if (v2.destinationType === 'external_url' && link.schedule) {
+    const pick = require('./linkSchedule').pickScheduledDestination(link.schedule);
+    if (pick) destination = pick.url;
+  }
 
   return {
     link: {
