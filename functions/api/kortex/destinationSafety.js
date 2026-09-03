@@ -411,6 +411,10 @@ function shouldHoldUnknownDomain({ tenantId, tenant, actorIsSuperAdmin, purpose 
   if (actorIsSuperAdmin) return false;
   if (purpose === 'rescan') return false; // re-scans only ever block, never hold
   if (!tenantId || tenantId === DEFAULT_TENANT_ID) return false;
+  // Guest (no-account) workspaces are never held: a held QR with nobody to
+  // notify is a broken promise. Their protection is the block checks, the
+  // nightly re-scan and the abuse limits instead.
+  if (tenant?.kind === 'guest') return false;
   const pref = tenant?.settings?.reviewUnknownDomains;
   if (pref === true) return true;
   if (pref === false) return false;

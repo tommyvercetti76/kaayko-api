@@ -120,9 +120,11 @@ async function provisionSelfServeTenant(params) {
   const tenantDoc = {
     id: tenantId,
     slug: tenantId,
+    kind: 'account',
     name: org,
     domain: 'kaayko.com',
     pathPrefix: '/l',
+    linkNamespace: 'kaayko',
     plan: 'starter',
     enabled: true,
     provisionedVia: 'self-serve',

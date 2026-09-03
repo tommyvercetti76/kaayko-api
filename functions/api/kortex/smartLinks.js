@@ -108,6 +108,17 @@ router.get('/admin/api-key', honeypot);
 router.post('/admin/bulk-import', honeypot);
 router.get('/export-all-data', honeypot);
 
+// ============================================================================
+// GUEST (no-account) TIER — access-code workspaces, mounted before /:code
+// ============================================================================
+router.use('/guest', require('./guestRouter'));
+
+// Public QR image for any live link: /kortex/qr/<code>.png|svg
+router.get('/qr/:file', rateLimiter('publicQr'), (req, res) => require('./qrService').serveLinkQr(req, res).catch(err => {
+  console.error('[QR] render failed:', err);
+  res.status(500).json({ success: false, error: 'QR render failed' });
+}));
+
 async function getTenantConfig(tenantId) {
   if (!tenantId || tenantId === DEFAULT_TENANT_ID) {
     return {

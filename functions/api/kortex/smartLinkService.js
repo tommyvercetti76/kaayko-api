@@ -286,9 +286,12 @@ async function createShortLink(data) {
   if (!shortCode) {
     const { generateSecureCode } = require('./tenantLinkResolver');
     const useSecureCode = tenantId !== DEFAULT_TENANT_ID;
+    // Guest (no-account) links live on kaayko.com/l/ with an unguessable
+    // `kx-` code so a workspace id never leaks into the public URL.
+    const isGuestTenant = tenantDocData?.kind === 'guest';
     let attempts = 0;
     do {
-      shortCode = useSecureCode ? generateSecureCode(tenantId) : generateShortCode();
+      shortCode = isGuestTenant ? generateSecureCode('kx') : useSecureCode ? generateSecureCode(tenantId) : generateShortCode();
       const existingLink = await db.collection('short_links').doc(shortCode).get();
       if (!existingLink.exists) break;
       attempts++;
@@ -299,15 +302,20 @@ async function createShortLink(data) {
     }
   }
 
-  // Construct short URL — tenant links use alumni.kaayko.com namespace
+  // Construct short URL — tenant links use the alumni.kaayko.com namespace,
+  // except guest workspaces and tenants that opt into the kaayko.com/l/ form.
   let shortUrl, qrCodeUrl;
-  if (tenantId !== DEFAULT_TENANT_ID) {
+  const usesAlumniNamespace = tenantId !== DEFAULT_TENANT_ID
+    && tenantDocData?.kind !== 'guest'
+    && tenantDocData?.linkNamespace !== 'kaayko';
+  if (usesAlumniNamespace) {
     // Tenant-namespaced: alumni.kaayko.com/<slug>/<code> (reuse tenant doc from above)
     const tenantSlug = tenantDocData ? (tenantDocData.slug || tenantId) : tenantId;
     shortUrl = `https://alumni.kaayko.com/${tenantSlug}/${publicCode || shortCode}`;
     qrCodeUrl = `https://alumni.kaayko.com/${tenantSlug}/qr/${shortCode}.png`;
   } else {
-    // Default Kaayko links: kaayko.com/l/<code>
+    // Default Kaayko links: kaayko.com/l/<code>. The QR image is served by
+    // GET /qr/<code>.png (hosting rewrite → api) for any live link.
     const shortDomain = domain.startsWith('http') ? domain : `https://${domain}`;
     shortUrl = `${shortDomain}${pathPrefix}/${publicCode || shortCode}`;
     qrCodeUrl = `${shortDomain}/qr/${shortCode}.png`;

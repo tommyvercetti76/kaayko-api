@@ -1,6 +1,30 @@
 {
   "indexes": [
     {
+      "collectionGroup": "tenants",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "kind", "order": "ASCENDING" },
+        { "fieldPath": "guest.expiresAtMs", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "short_links",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "tenantId", "order": "ASCENDING" },
+        { "fieldPath": "disabledReason", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "short_links",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "tenantId", "order": "ASCENDING" },
+        { "fieldPath": "enabled", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "short_links",
       "queryScope": "COLLECTION",
       "fields": [

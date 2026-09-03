@@ -93,9 +93,44 @@ async function trackQRScan(code) {
   }
 }
 
+const QR_FILE_PATTERN = /^([a-zA-Z0-9_-]{3,80})\.(png|svg)$/;
+
+/**
+ * Serve the QR image for a live short link: GET /qr/<code>.png|svg
+ * (kaayko.com/qr/… via the hosting rewrite, and /api/kortex/qr/…).
+ * The QR encodes the public short URL, so nothing secret is involved; a
+ * link that is missing, disabled, held or blocked answers 404.
+ */
+async function serveLinkQr(req, res) {
+  const match = QR_FILE_PATTERN.exec(String(req.params.file || ''));
+  if (!match) return res.status(404).json({ success: false, error: 'Not found' });
+  const [, code, format] = match;
+
+  const snap = await db.collection('short_links').doc(code).get();
+  if (!snap.exists) return res.status(404).json({ success: false, error: 'Not found' });
+  const link = snap.data() || {};
+  if (link.enabled === false || link.status === 'held' || link.status === 'blocked') {
+    return res.status(404).json({ success: false, error: 'Not found' });
+  }
+
+  const size = Math.max(128, Math.min(1024, Number(req.query.size) || 512));
+  const target = link.shortUrl || `https://kaayko.com/l/${code}`;
+  res.set('Cache-Control', 'public, max-age=86400');
+  res.set('X-Content-Type-Options', 'nosniff');
+
+  if (format === 'svg') {
+    const svg = await generateQRSvg(target, { size, margin: 2 });
+    return res.type('image/svg+xml').send(svg);
+  }
+  const dataUrl = await generateQR(target, { size, margin: 2 });
+  const png = Buffer.from(dataUrl.split(',')[1], 'base64');
+  return res.type('image/png').send(png);
+}
+
 module.exports = {
   generateQR,
   generateQRSvg,
   canUseBrandedQR,
-  trackQRScan
+  trackQRScan,
+  serveLinkQr
 };

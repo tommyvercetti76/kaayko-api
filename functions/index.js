@@ -215,4 +215,20 @@ exports.kortexLinkRescan = onSchedule({
   console.log(`[KortexSafety] Re-scan done: scanned=${result.scanned} blocked=${result.blocked.length} errors=${result.errors}`);
 });
 
+// KORTEX: guest (no-account) workspaces expire after a year without a
+// check-in; their links are disabled, never deleted, and revive on the next
+// successful access-code entry.
+const { expireGuestWorkspaces } = require("./api/kortex/guestJobs");
+
+exports.kortexGuestHousekeeping = onSchedule({
+  schedule: "45 3 * * *",
+  timeZone: "Asia/Kolkata",
+  memory: "256MiB",
+  timeoutSeconds: 300
+}, async () => {
+  console.log("[KortexGuest] Expiring dormant guest workspaces...");
+  const result = await expireGuestWorkspaces({ limit: 200 });
+  console.log(`[KortexGuest] Done: expired=${result.expired} linksDisabled=${result.linksDisabled}`);
+});
+
 console.log("✅ Kaayko API v2 - PUBLIC: fastForecast + paddlingOut | PREMIUM: forecast ($$) | SMARTLINKS: admin portal");

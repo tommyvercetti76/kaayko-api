@@ -65,8 +65,15 @@ function tally(items) {
  * @param {object} linkData   The short_links document data, or null if missing
  * @returns {Promise<object>} Aggregate report
  */
-async function getLinkAnalytics(code, linkData) {
+async function getLinkAnalytics(code, linkData, options = {}) {
   const snap = await db.collection('click_events').where('linkCode', '==', code).get();
+
+  // Plan window: the free tier sees the last `windowDays` of events, paid
+  // tiers the full retained history. Lifetime totals stay on the link doc.
+  const windowDays = Number.isFinite(Number(options.windowDays)) && Number(options.windowDays) > 0
+    ? Math.min(Number(options.windowDays), RETENTION_DAYS)
+    : RETENTION_DAYS;
+  const windowStartMs = Date.now() - windowDays * 86400000;
 
   const events = snap.docs
     .map(d => d.data())
@@ -85,7 +92,7 @@ async function getLinkAnalytics(code, linkData) {
       // the resolver. It is stored on every event but has never been surfaced.
       redirectMs: (e.redirectTimestamp?.toMillis ? e.redirectTimestamp.toMillis() : null),
     }))
-    .filter(e => e.ms)
+    .filter(e => e.ms && e.ms >= windowStartMs)
     .sort((a, b) => a.ms - b.ms);
 
   const unavailable = [];
@@ -95,7 +102,7 @@ async function getLinkAnalytics(code, linkData) {
     return {
       code,
       totals: { events: 0, storedClickCount: linkData?.clickCount ?? null, drift: null },
-      window: { retentionDays: RETENTION_DAYS, firstEvent: null, lastEvent: null },
+      window: { retentionDays: windowDays, firstEvent: null, lastEvent: null },
       timeline: [],
       unique: null,
       breakdowns: {},
@@ -256,11 +263,11 @@ async function getLinkAnalytics(code, linkData) {
       drift,
       driftNote: drift && drift > 0
         ? `The link's lifetime counter is ${drift} higher than the events retained. ` +
-          `Events older than ${RETENTION_DAYS} days have expired.`
+          `Events older than ${windowDays} days are outside this window.`
         : null,
     },
     window: {
-      retentionDays: RETENTION_DAYS,
+      retentionDays: windowDays,
       firstEvent: new Date(events[0].ms).toISOString(),
       lastEvent: new Date(events[total - 1].ms).toISOString(),
       daysWithTraffic: perDay.size,

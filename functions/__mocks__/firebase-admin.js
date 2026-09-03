@@ -24,6 +24,21 @@ const mockState = globalThis.__KAAYKO_FIREBASE_ADMIN_MOCK_STATE__ ||
 const mockDocData = mockState.docData;     // docPath → data
 const mockCollectionData = mockState.collectionData; // collectionPath → [ { id, data() } ]
 
+// Firestore addresses nested fields with dotted paths in update() and where()
+// ("guest.failedAttempts"). Mirror that so services can use the real API shape.
+function getPath(obj, field) {
+  return String(field).split('.').reduce((o, k) => (o == null ? undefined : o[k]), obj);
+}
+function setPath(obj, field, value) {
+  const keys = String(field).split('.');
+  let cur = obj;
+  for (let i = 0; i < keys.length - 1; i++) {
+    cur[keys[i]] = { ...(cur[keys[i]] || {}) };
+    cur = cur[keys[i]];
+  }
+  cur[keys[keys.length - 1]] = value;
+}
+
 const mockDocRef = (path) => ({
   id: path.split('/').pop(),
   path,
@@ -31,8 +46,17 @@ const mockDocRef = (path) => ({
     const data = mockDocData[path];
     return { exists: !!data, data: () => data || {}, id: path.split('/').pop(), ref: mockDocRef(path) };
   }),
-  set: jest.fn(async (data) => { mockDocData[path] = data; }),
-  update: jest.fn(async (data) => { mockDocData[path] = { ...mockDocData[path], ...data }; }),
+  set: jest.fn(async (data, options) => {
+    mockDocData[path] = options && options.merge ? { ...(mockDocData[path] || {}), ...data } : data;
+  }),
+  update: jest.fn(async (data) => {
+    const current = { ...(mockDocData[path] || {}) };
+    for (const [key, value] of Object.entries(data)) {
+      if (key.includes('.')) setPath(current, key, value);
+      else current[key] = value;
+    }
+    mockDocData[path] = current;
+  }),
   delete: jest.fn(async () => { delete mockDocData[path]; }),
   collection: jest.fn((sub) => mockCollectionRef(`${path}/${sub}`))
 });
@@ -67,7 +91,7 @@ const mockCollectionRef = (path) => {
           }));
       }
       for (const filter of filters) {
-        docs = docs.filter(doc => doc.data()?.[filter.field] === filter.value);
+        docs = docs.filter(doc => getPath(doc.data(), filter.field) === filter.value);
       }
       if (resultLimit !== null) {
         docs = docs.slice(0, resultLimit);

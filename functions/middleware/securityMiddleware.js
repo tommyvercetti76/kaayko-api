@@ -19,7 +19,14 @@ const RATE_LIMITS = {
   // Firestore hiccupped.
   tenantProvision: { max: 5, window: 60 * 60 * 1000, failClosed: true }, // 5 signups per hour per IP
   appeal: { max: 5, window: 60 * 60 * 1000, failClosed: true }, // 5 appeals per hour per IP
-  linkCreate: { max: 120, window: 60 * 60 * 1000 } // IP backstop for authenticated link creation
+  linkCreate: { max: 120, window: 60 * 60 * 1000 }, // IP backstop for authenticated link creation
+  // Guest (no-account) tier. Creation is generous enough for a real person
+  // making a handful of QR codes and tight enough to make bulk abuse slow.
+  guestCreate: { max: 12, window: 60 * 60 * 1000, failClosed: true }, // 12 links per hour per IP
+  guestSession: { max: 15, window: 15 * 60 * 1000, failClosed: true }, // 15 code attempts per 15 min per IP
+  guestRecover: { max: 5, window: 60 * 60 * 1000, failClosed: true }, // 5 recovery mails per hour per IP
+  guestClaim: { max: 10, window: 60 * 60 * 1000, failClosed: true },
+  publicQr: { max: 120, window: 60 * 1000 } // QR image renders per minute per IP
 };
 
 // Bot detection patterns

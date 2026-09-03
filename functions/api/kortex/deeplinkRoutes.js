@@ -27,8 +27,11 @@ const { resolveContext } = require('./attributionService');
 const db = admin.firestore();
 
 // Security configuration
+// 240/min per real client IP: a classroom or office behind one NAT scanning
+// the same poster must never be refused, while a single-source flood still
+// hits a ceiling. The limiter now keys on the forwarded client address.
 const SECURITY_CONFIG = {
-  MAX_REQUESTS_PER_MINUTE: 30,
+  MAX_REQUESTS_PER_MINUTE: 240,
   CACHE_DURATION: 300, // 5 minutes
   COOKIE_MAX_AGE: 30 * 60 * 1000, // 30 minutes
   REQUEST_TIMEOUT: 10000
@@ -182,6 +185,13 @@ async function logDeeplinkEvent(eventType, data) {
  * - kaayko.com/l/lake/trinity → Smart link (structured)
  * - kaayko.com/l/antero456    → Legacy location link
  */
+// QR image for any live link: kaayko.com/qr/<code>.png|svg (hosting rewrite → api).
+// This is the URL stored on every link as qrCodeUrl.
+router.get("/qr/:file", (req, res) => require('./qrService').serveLinkQr(req, res).catch(err => {
+  console.error('[QR] render failed:', err);
+  res.status(500).json({ success: false, error: 'QR render failed' });
+}));
+
 router.get("/l/:id", async (req, res) => {
   try {
     const linkId = req.params.id;
