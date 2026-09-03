@@ -373,3 +373,21 @@ describe('Public QR image', () => {
     expect((await request(redirectApp).get('/qr/bad%20name.png').set(...UA)).status).toBe(404);
   });
 });
+
+describe('Capabilities', () => {
+  test('reports email delivery off until a provider key exists, plus the free limits', async () => {
+    const off = await request(app).get('/kortex/guest/capabilities').set(...UA);
+    expect(off.status).toBe(200);
+    expect(off.body.email).toBe(false);
+    expect(off.body.lifetimeDays).toBe(365);
+    expect(off.body.linkLimit).toBeGreaterThan(0);
+    expect(off.body.analyticsDays).toBe(7);
+    expect(off.body.sessionHours).toBe(12);
+    expect(off.body.maxWindows).toBe(8);
+    expect(off.headers['cache-control']).toMatch(/max-age/);
+
+    process.env.SENDGRID_API_KEY = 'SG.test';
+    const on = await request(app).get('/kortex/guest/capabilities').set(...UA);
+    expect(on.body.email).toBe(true);
+  });
+});

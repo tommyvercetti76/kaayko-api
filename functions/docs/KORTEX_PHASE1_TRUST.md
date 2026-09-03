@@ -151,3 +151,14 @@ Any link can carry `schedule: { timezone, windows: [{ label, start, end, url }] 
 - Landing page: "Options → Send people somewhere else at night" (night URL,
   start/end times, zone auto-filled from the browser); editable in the
   workspace detail. Tests: `__tests__/kortex-schedule.test.js`.
+
+## Capabilities endpoint (what the page may promise)
+
+`GET /api/kortex/guest/capabilities` is public and cheap. It reports
+`email` (true only when `SENDGRID_API_KEY` is set), `lifetimeDays`,
+`linkLimit`, `analyticsDays`, `sessionHours` and `maxWindows`, all read from
+the same config the limits use. The landing page asks it on load and hides
+every email-dependent control (email at creation, "email me the code",
+"lost your code?" recovery) until email delivery is real, so a first-time
+user is never offered something that would silently do nothing. Adding the
+SendGrid key reveals those controls without a page change.

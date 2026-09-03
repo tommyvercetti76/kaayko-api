@@ -12,6 +12,7 @@
  *   POST   /rotate                 new access code (returned once)
  *   POST   /recover                email a fresh code to a workspace's address (always 202)
  *   POST   /claim                  attach a signed-in (paid path) user to a guest workspace
+ *   GET    /capabilities           what the server can do right now (email delivery, limits)
  *
  * Everything a guest can touch is scoped to the workspace on the session
  * token; a link that belongs to anyone else answers 404.
@@ -34,6 +35,7 @@ const { rateLimiter } = require('../../middleware/securityMiddleware');
 const { requireAuth } = require('../../middleware/authMiddleware');
 const email = require('../../services/emailDelivery');
 const { PLAN_LIMITS } = require('../billing/planLimits');
+const { MAX_WINDOWS } = require('./linkSchedule');
 
 const router = express.Router();
 const db = admin.firestore();
@@ -210,6 +212,24 @@ router.post('/links', rateLimiter('guestCreate'), async (req, res) => {
     }
     return guestError(res, error);
   }
+});
+
+// ─── Capabilities ─────────────────────────────────────────────────────────────
+// Public and cheap. The page asks this before showing anything that depends on
+// optional infrastructure (email delivery), so nothing is promised that the
+// server cannot deliver right now. Numbers come from the same config the
+// limits use, so the copy on the page can never drift from the behaviour.
+router.get('/capabilities', (req, res) => {
+  res.set('Cache-Control', 'public, max-age=300');
+  return res.json({
+    success: true,
+    email: email.isConfigured(),
+    lifetimeDays: guest.guestLifetimeDays(),
+    linkLimit: guest.guestLinkLimit(),
+    analyticsDays: ANALYTICS_WINDOW_DAYS,
+    sessionHours: Math.round(guest.SESSION_TTL_MS / 3600e3),
+    maxWindows: MAX_WINDOWS
+  });
 });
 
 // ─── Session ──────────────────────────────────────────────────────────────────
