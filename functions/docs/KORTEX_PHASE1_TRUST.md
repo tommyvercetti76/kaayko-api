@@ -130,3 +130,24 @@ Added after the first review: a free user never creates a Firebase user.
   any live link; this is the `qrCodeUrl` stored on links.
 - Firestore indexes added: `tenants (kind, guest.expiresAtMs)`,
   `short_links (tenantId, disabledReason)`, `short_links (tenantId, enabled)`.
+
+## Time-of-day routing (night / day destinations)
+
+Any link can carry `schedule: { timezone, windows: [{ label, start, end, url }] }`
+(IANA zone; `HH:MM` 24-hour; up to 8 windows; a window may wrap midnight).
+
+- Evaluation (`api/kortex/linkSchedule.js`): the SERVER clock is converted to
+  the link's zone with ICU (`Intl.DateTimeFormat`), so daylight-saving is
+  correct forever without a data file. The first matching window's URL is
+  used for every platform; no match → normal destinations. Nothing from the
+  request (headers, query, cookies) is consulted, so it cannot be spoofed.
+- Applied in `redirectHandler.js` (kaayko.com/l/), `tenantLinkResolver.js`
+  (alumni host) and the API resolver for plain external links. The matched
+  window label is stored on the click event (`metadata.scheduleWindow`).
+- Window URLs run through the destination safety engine on create and edit,
+  exactly like destinations. Only the owner (guest session or tenant admin)
+  can set or clear a schedule (`schedule: null`); public-API updates accept it
+  through the field allowlist.
+- Landing page: "Options → Send people somewhere else at night" (night URL,
+  start/end times, zone auto-filled from the browser); editable in the
+  workspace detail. Tests: `__tests__/kortex-schedule.test.js`.
