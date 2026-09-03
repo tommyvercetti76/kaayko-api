@@ -656,27 +656,37 @@ router.get('/tenants', requireAuth, rateLimiter('tenants'), async (req, res) => 
       return res.json({
         success: true,
         role: 'super-admin',
+        profile: { role: 'super-admin', requireEmailVerification: false },
         tenants
       });
     }
-    
+
+    // The login page stores this so the SPA can show the verification banner
+    // for self-serve accounts without another round trip.
+    const profileView = {
+      role: role || 'admin',
+      requireEmailVerification: profile.requireEmailVerification === true
+    };
+
     // Regular admins only see their assigned tenant(s)
     const tenantId = profile.tenantId || 'kaayko-default';
     const tenantDoc = await db.collection('tenants').doc(tenantId).get();
-    
+
     if (!tenantDoc.exists) {
       // Fallback to default tenant
       return res.json({
         success: true,
+        profile: profileView,
         tenants: [
           { id: 'kaayko-default', name: 'Kaayko (Default)', domain: 'kaayko.com', pathPrefix: '/l' }
         ]
       });
     }
-    
+
     const tenant = tenantDoc.data();
     return res.json({
       success: true,
+      profile: profileView,
       tenants: [{
         id: tenantDoc.id,
         name: tenant.name,
