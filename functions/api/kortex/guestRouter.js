@@ -390,7 +390,19 @@ router.post('/claim', rateLimiter('guestClaim'), requireAuth, async (req, res) =
         code: 'ALREADY_HAS_TENANT'
       });
     }
-    const { tenantId, tenant } = await guest.verifyAccessCode(req.body?.accessCode);
+    // Proof of possession: the access code, or a live guest session (which
+    // could only have been minted from the code).
+    let owned;
+    if (req.body?.accessCode) {
+      owned = await guest.verifyAccessCode(req.body.accessCode);
+    } else {
+      const viaSession = await guest.resolveGuestSession(req);
+      if (!viaSession) {
+        return res.status(400).json({ success: false, error: 'Enter the access code of the workspace to claim', code: 'VALIDATION_ERROR' });
+      }
+      owned = { tenantId: viaSession.tenantId, tenant: viaSession.tenant };
+    }
+    const { tenantId, tenant } = owned;
     const name = String(req.body?.name || '').trim().slice(0, 80) || tenant.name || 'My workspace';
     const nowMs = Date.now();
 

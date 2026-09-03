@@ -283,6 +283,27 @@ describe('Claiming into an account (paid path)', () => {
     const res = await request(app).post('/kortex/guest/claim').set(...UA).send({ accessCode: created.body.accessCode });
     expect(res.status).toBe(401);
   });
+
+  test('a live guest session on the device is enough proof to claim; no proof is refused', async () => {
+    const created = await createFirst();
+
+    const noProof = await request(app).post('/kortex/guest/claim').set(...UA)
+      .set('Authorization', 'Bearer VALID_USER_TOKEN').send({});
+    expect(noProof.status).toBe(400);
+    expect(admin._mocks.docData[`tenants/${created.body.workspace.id}`].kind).toBe('guest');
+
+    const res = await request(app).post('/kortex/guest/claim').set(...UA)
+      .set('Authorization', 'Bearer VALID_USER_TOKEN')
+      .set('X-Kortex-Guest-Session', created.body.session)
+      .send({ name: 'Claimed via session' });
+    expect(res.status).toBe(200);
+    expect(admin._mocks.docData[`tenants/${created.body.workspace.id}`].kind).toBe('account');
+
+    // Once the account owns a workspace, claiming another is refused.
+    const again = await request(app).post('/kortex/guest/claim').set(...UA)
+      .set('Authorization', 'Bearer VALID_USER_TOKEN').send({ accessCode: created.body.accessCode });
+    expect(again.status).toBe(409);
+  });
 });
 
 describe('Limits and housekeeping', () => {

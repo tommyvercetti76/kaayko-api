@@ -93,3 +93,40 @@ Roles per tenant + invites, custom domains, click caps / expiry fallback,
 QR served per link, static QR page, retention clamp + TTL, CSV export,
 UTM decode, guest links, pixel attribution, Stripe price IDs / pricing
 reconciliation, transactional email.
+
+## Free tier without accounts (guest workspaces)
+
+Added after the first review: a free user never creates a Firebase user.
+
+- **Create**: `POST /kortex/guest/links` (no auth) → link + QR + a one-time
+  **access code** `KX-XXXXXX-XXXX-XXXX-XXXX-XXXX` + a 12-hour session token.
+  Sending `session` on later calls adds links to the same workspace (25 max).
+  Optional `email` mails the code (queued to `pending_emails` until
+  `SENDGRID_API_KEY` is set).
+- **Re-access**: `POST /kortex/guest/session` with the code → session token.
+  Then `GET /kortex/guest/workspace`, `GET/PATCH/DELETE /kortex/guest/links/:code`,
+  `GET /kortex/guest/links/:code/analytics` (last 7 days + lifetime totals).
+- **Lost code**: `POST /kortex/guest/recover` (email) always answers 202; a
+  matching workspace gets a NEW code by mail (the old one dies). Attaching an
+  email later (`POST /kortex/guest/email`) also rotates the code.
+- **Lifetime**: `KORTEX_GUEST_LIFETIME_DAYS` (365) from the last check-in;
+  every successful code entry renews. `kortexGuestHousekeeping` (daily) disables
+  links of dormant workspaces (`disabledReason: guest_expired`); the next code
+  entry re-enables them. Nothing is deleted.
+- **Upgrade**: a signed-in user (Google / Apple / email account) calls
+  `POST /kortex/guest/claim` with the code; the workspace becomes their tenant
+  and the code stops working.
+- **Security**: 80-bit secret, peppered SHA-256 at rest (never the code),
+  constant-time compare, generic error + jitter, lockout after 8 failures per
+  workspace, fail-closed per-IP limits (12 creates/h, 15 code tries/15 min,
+  5 recoveries/h), honeypot field, destination safety on every create/edit,
+  session tokens HMAC-bound to the code version. Guest links use `kx-` codes
+  on kaayko.com/l/; the workspace id never appears in a public URL.
+- **Secrets**: `KORTEX_ACCESS_PEPPER` and `KORTEX_GUEST_SESSION_SECRET` are
+  preferred; without them both derive from `KORTEX_LINK_SIGNING_SECRET`, then
+  `ADMIN_PASSPHRASE` (set in prod). Rotating the underlying secret invalidates
+  every access code, so treat it like a password-hash pepper.
+- **Public QR**: `GET /qr/<code>.png|svg` (hosting rewrite `/qr/**` → api) for
+  any live link; this is the `qrCodeUrl` stored on links.
+- Firestore indexes added: `tenants (kind, guest.expiresAtMs)`,
+  `short_links (tenantId, disabledReason)`, `short_links (tenantId, enabled)`.
