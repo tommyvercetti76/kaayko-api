@@ -260,6 +260,45 @@ function requirePermission(requiredPermissions) {
 }
 
 /**
+ * Require a verified email address before a write.
+ *
+ * Only accounts provisioned through self-serve signup carry
+ * `admin_users.requireEmailVerification = true`; hand-provisioned tenants,
+ * super-admins and the X-Admin-Key path are unaffected, so nothing that works
+ * today stops working. The check reads `email_verified` from the ID token, so a
+ * user who just verified needs a refreshed token (the SPA banner does this).
+ * @middleware - Must be used after requireAuth
+ */
+function requireVerifiedEmail(req, res, next) {
+  if (!req.user) {
+    return res.status(401).json({ success: false, error: 'Unauthorized', code: 'AUTH_REQUIRED' });
+  }
+  if (req.user.authMethod === 'admin-key' || req.user.role === 'super-admin') return next();
+  if (req.user.profile?.requireEmailVerification !== true) return next();
+  if (req.user.emailVerified === true) return next();
+  return res.status(403).json({
+    success: false,
+    error: 'Email not verified',
+    message: 'Verify your email address to create or change links. Check your inbox for the verification link.',
+    code: 'EMAIL_NOT_VERIFIED'
+  });
+}
+
+/**
+ * Require the global super-admin role.
+ * @middleware - Must be used after requireAuth
+ */
+function requireSuperAdmin(req, res, next) {
+  if (!req.user) {
+    return res.status(401).json({ success: false, error: 'Unauthorized', code: 'AUTH_REQUIRED' });
+  }
+  if (req.user.role !== 'super-admin') {
+    return res.status(403).json({ success: false, error: 'Forbidden', message: 'Super-admin only', code: 'SUPER_ADMIN_ONLY' });
+  }
+  next();
+}
+
+/**
  * Optional auth - attaches user if token is valid, but doesn't require it
  * @middleware
  */
@@ -325,6 +364,8 @@ module.exports = {
   requireAdmin,
   requireRole,
   requirePermission,
+  requireVerifiedEmail,
+  requireSuperAdmin,
   optionalAuth,
   optionalAuthForAdmin
 };

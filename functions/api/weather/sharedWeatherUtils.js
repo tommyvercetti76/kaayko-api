@@ -9,13 +9,34 @@ const { WEATHER_CONFIG } = require('../../config/weatherConfig');
 /**
  * Shared rate limiting middleware
  */
-function createRateLimitMiddleware(maxRequests = 30, windowMs = 60000) {
+function createRateLimitMiddleware(maxRequests = 30, windowMs = 60000, keyFn = null) {
   const rateLimitMap = new Map();
+  const MAX_TRACKED_KEYS = 10000;
+
+  // Behind Firebase Hosting `req.ip` is the proxy address, so keying on it made
+  // this one shared bucket for every visitor. Resolve the real client from the
+  // forwarded chain (right-to-left, spoof-resistant) and only fall back to the
+  // socket address for direct calls.
+  const resolveKey = keyFn || ((req) => {
+    try {
+      const { getClientIp } = require('../kortex/clientIp');
+      return getClientIp(req) || req.ip || req.connection?.remoteAddress || 'unknown';
+    } catch (_) {
+      return req.ip || req.connection?.remoteAddress || 'unknown';
+    }
+  });
 
   return function rateLimitMiddleware(req, res, next) {
-    const clientIP = req.ip || req.connection.remoteAddress || 'unknown';
+    const clientIP = resolveKey(req);
     const now = Date.now();
-    
+
+    // Bound memory on long-lived instances: drop expired buckets once the map grows.
+    if (rateLimitMap.size > MAX_TRACKED_KEYS) {
+      for (const [key, data] of rateLimitMap) {
+        if (now > data.resetTime) rateLimitMap.delete(key);
+      }
+    }
+
     if (!rateLimitMap.has(clientIP)) {
       rateLimitMap.set(clientIP, { count: 0, resetTime: now + windowMs });
     }

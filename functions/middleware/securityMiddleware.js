@@ -12,7 +12,14 @@ const RATE_LIMITS = {
   login: { max: 5, window: 15 * 60 * 1000 }, // 5 attempts per 15 minutes
   tenantRegistration: { max: 3, window: 60 * 60 * 1000 }, // 3 per hour
   tenants: { max: 20, window: 60 * 1000 }, // 20 per minute
-  api: { max: 100, window: 60 * 1000 } // 100 per minute for general API
+  api: { max: 100, window: 60 * 1000 }, // 100 per minute for general API
+  // Public write surfaces added in the trust pass. `failClosed` returns 503 when
+  // the limiter store is unreachable instead of letting the request through —
+  // an account-creation or appeal endpoint must never become unlimited because
+  // Firestore hiccupped.
+  tenantProvision: { max: 5, window: 60 * 60 * 1000, failClosed: true }, // 5 signups per hour per IP
+  appeal: { max: 5, window: 60 * 60 * 1000, failClosed: true }, // 5 appeals per hour per IP
+  linkCreate: { max: 120, window: 60 * 60 * 1000 } // IP backstop for authenticated link creation
 };
 
 // Bot detection patterns
@@ -66,7 +73,9 @@ function rateLimiter(limitType = 'api') {
       
       if (rateLimitDoc.exists) {
         const data = rateLimitDoc.data();
-        const windowStart = data.windowStart.toMillis();
+        const windowStart = typeof data.windowStart?.toMillis === 'function'
+          ? data.windowStart.toMillis()
+          : new Date(data.windowStart || 0).getTime();
         
         // Check if we're still in the same window
         if (now - windowStart < limit.window) {
@@ -113,7 +122,16 @@ function rateLimiter(limitType = 'api') {
       
     } catch (error) {
       console.error('[Security] Rate limiter error:', error);
-      // Don't block on errors
+      const limit = RATE_LIMITS[limitType] || RATE_LIMITS.api;
+      if (limit.failClosed) {
+        return res.status(503).json({
+          success: false,
+          error: 'Service temporarily unavailable',
+          message: 'Please try again in a moment.',
+          code: 'RATE_LIMIT_UNAVAILABLE'
+        });
+      }
+      // Legacy limit types keep their fail-open behaviour.
       next();
     }
   };

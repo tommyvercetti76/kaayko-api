@@ -7,6 +7,10 @@ const admin = require('firebase-admin');
 const campaignPublicResolver = require('../api/campaigns/campaignPublicResolver');
 const deepLinksRouter = require('../api/kortex/deeplinkRoutes');
 
+// The redirect path scores a missing User-Agent as a bot and answers 404, so
+// resolver requests must look like a browser.
+const BROWSER_UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Safari/604.1';
+
 let app;
 
 beforeAll(() => {
@@ -26,7 +30,9 @@ function seedTenant(tenantId, domain) {
   admin._mocks.docData[`tenants/${tenantId}`] = {
     name: tenantId,
     domain,
-    enabled: true
+    enabled: true,
+    // Paid tier: a real 302. Starter tenants get the "Powered by Kortex" interstitial (200).
+    plan: 'pro'
   };
 }
 
@@ -77,7 +83,9 @@ describe('Kortex Campaign Resolver — public namespace routing', () => {
 
     const res = await request(app)
       .get('/a/wa-group-1')
-      .set('Host', 'tenant-a.test');
+      .set('Host', 'tenant-a.test')
+      .set('User-Agent', BROWSER_UA)
+      .set('Accept-Language', 'en');
 
     expect(res.status).toBe(302);
     expect(res.headers.location).toContain('https://tenant-a.test/landing');
@@ -86,7 +94,9 @@ describe('Kortex Campaign Resolver — public namespace routing', () => {
   test('GET /:campaignSlug/:code returns 404 for unknown domain', async () => {
     const res = await request(app)
       .get('/a/wa-group-1')
-      .set('Host', 'unknown-domain.test');
+      .set('Host', 'unknown-domain.test')
+      .set('User-Agent', BROWSER_UA)
+      .set('Accept-Language', 'en');
 
     expect(res.status).toBe(404);
     expect(res.text).toContain('Campaign Not Found');
@@ -97,7 +107,9 @@ describe('Kortex Campaign Resolver — public namespace routing', () => {
 
     const res = await request(app)
       .get('/a/wa-group-1')
-      .set('Host', 'tenant-a.test');
+      .set('Host', 'tenant-a.test')
+      .set('User-Agent', BROWSER_UA)
+      .set('Accept-Language', 'en');
 
     expect(res.status).toBe(404);
     expect(res.text).toContain('Campaign Not Found');
@@ -109,7 +121,9 @@ describe('Kortex Campaign Resolver — public namespace routing', () => {
 
     const res = await request(app)
       .get('/a/wa-group-1')
-      .set('Host', 'tenant-a.test');
+      .set('Host', 'tenant-a.test')
+      .set('User-Agent', BROWSER_UA)
+      .set('Accept-Language', 'en');
 
     expect(res.status).toBe(410);
     expect(res.text).toContain('Campaign Unavailable');
@@ -122,7 +136,9 @@ describe('Kortex Campaign Resolver — public namespace routing', () => {
 
     const res = await request(app)
       .get('/a/wa-group-1')
-      .set('Host', 'tenant-a.test');
+      .set('Host', 'tenant-a.test')
+      .set('User-Agent', BROWSER_UA)
+      .set('Accept-Language', 'en');
 
     expect(res.status).toBe(410);
     expect(res.text).toContain('Link Unavailable');
@@ -138,7 +154,9 @@ describe('Kortex Campaign Resolver — public namespace routing', () => {
 
     const res = await request(app)
       .get('/a/shared-code')
-      .set('Host', 'tenant-a.test');
+      .set('Host', 'tenant-a.test')
+      .set('User-Agent', BROWSER_UA)
+      .set('Accept-Language', 'en');
 
     expect(res.status).toBe(404);
     expect(res.text).toContain('Link Not Found');
@@ -155,7 +173,9 @@ describe('Kortex Campaign Resolver — public namespace routing', () => {
 
     const res = await request(app)
       .get('/l/lklegacy1')
-      .set('Host', 'kaayko.com');
+      .set('Host', 'kaayko.com')
+      .set('User-Agent', BROWSER_UA)
+      .set('Accept-Language', 'en');
 
     expect(res.status).toBe(302);
     expect(res.headers.location).toContain('https://example.com/legacy');

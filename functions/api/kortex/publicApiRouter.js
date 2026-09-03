@@ -23,13 +23,49 @@ const { requireApiKey } = require('../../middleware/apiKeyMiddleware');
 const { getLinkAnalytics } = require('./clickTracking');
 const { getAttributionStats } = require('./attributionService');
 const { tenantRateLimit } = require('./rateLimitService');
+const { pickCreateInput, pickUpdateInput } = require('./validation/linkInput');
+const { recordAudit } = require('./auditLog');
+const { triggerWebhooks, EVENT_TYPES } = require('./webhookService');
 
-// Apply tenant-based rate limiting to all public API routes
-// API keys already have per-key rate limiting, this is an additional tenant-level limit
-router.use(tenantRateLimit({
-  maxRequests: 1000, // 1000 requests per minute per tenant
-  windowSeconds: 60
-}));
+// Per-route guard: authenticate the API key, THEN apply the tenant-level limit.
+// A router-wide `router.use(tenantRateLimit)` ran before requireApiKey, so
+// req.apiClient was never set and the tenant limit silently skipped every call.
+const TENANT_LIMIT = { maxRequests: 1000, windowSeconds: 60 };
+const withKey = (scopes) => [requireApiKey(scopes), tenantRateLimit(TENANT_LIMIT)];
+
+// Same 404 whether the code does not exist or belongs to another tenant, so the
+// public API is not an existence oracle across tenants.
+function notFound(res) {
+  return res.status(404).json({ success: false, error: 'Link not found' });
+}
+
+function createError(res, error) {
+  if (error.code === 'ALREADY_EXISTS') {
+    return res.status(409).json({ success: false, error: error.message, code: error.code, existing: error.existing });
+  }
+  if (error.code === 'DESTINATION_BLOCKED') {
+    return res.status(422).json({ success: false, error: error.message, code: error.code, reasons: error.reasons || [] });
+  }
+  if (error.code === 'INVALID_URL' || error.code === 'VALIDATION_ERROR' || error.code === 'INVALID_CODE') {
+    return res.status(422).json({ success: false, error: error.message, code: error.code });
+  }
+  if (error.code === 'DOMAIN_NOT_WHITELISTED' || error.code === 'DOMAIN_NOT_ALLOWED' || error.code === 'PLAN_LIMIT_EXCEEDED') {
+    return res.status(403).json({ success: false, error: error.message, code: error.code });
+  }
+  return res.status(400).json({ success: false, error: error.message || 'Failed to create link', code: error.code || 'CREATE_FAILED' });
+}
+
+function fireLinkCreated(link, tenantId) {
+  triggerWebhooks({
+    tenantId,
+    eventType: EVENT_TYPES.LINK_CREATED,
+    payload: {
+      event: 'link.created',
+      link: { code: link.code, shortUrl: link.shortUrl, title: link.title, destinations: link.destinations, status: link.status, createdBy: link.createdBy, createdAt: link.createdAt },
+      timestamp: new Date().toISOString()
+    }
+  }).catch(err => console.error('[PublicAPI] webhook trigger error:', err));
+}
 
 // ============================================================================
 // PUBLIC API ENDPOINTS (API Key Authentication)
@@ -41,11 +77,11 @@ router.use(tenantRateLimit({
  * 
  * Requires API key with 'create:links' scope
  */
-router.post('/smartlinks', requireApiKey(['create:links']), async (req, res) => {
+router.post('/smartlinks', ...withKey(['create:links']), async (req, res) => {
   try {
-    // Tenant is automatically inferred from API key
+    // Tenant is inferred from the API key; only allowlisted fields come from the body.
     const linkData = {
-      ...req.body,
+      ...pickCreateInput(req.body),
       tenantId: req.apiClient.tenantId,
       tenantName: req.apiClient.tenantName,
       createdBy: req.apiClient.name || req.apiClient.keyId,
@@ -53,28 +89,21 @@ router.post('/smartlinks', requireApiKey(['create:links']), async (req, res) => 
     };
 
     const link = await LinkService.createShortLink(linkData);
+    recordAudit({ req, action: 'link.created', code: link.code, tenantId: req.apiClient.tenantId, after: link });
+    fireLinkCreated(link, req.apiClient.tenantId);
 
     res.status(201).json({
       success: true,
       link,
-      message: `Short link created: ${link.shortUrl}`
+      status: link.status,
+      message: link.status === 'held'
+        ? `Short link created and held for review: ${link.shortUrl}`
+        : `Short link created: ${link.shortUrl}`
     });
 
   } catch (error) {
     console.error('[PublicAPI] Create link error:', error);
-
-    if (error.code === 'ALREADY_EXISTS') {
-      return res.status(409).json({
-        success: false,
-        error: error.message,
-        existing: error.existing
-      });
-    }
-
-    res.status(400).json({
-      success: false,
-      error: error.message || 'Failed to create link'
-    });
+    return createError(res, error);
   }
 });
 
@@ -85,7 +114,7 @@ router.post('/smartlinks', requireApiKey(['create:links']), async (req, res) => 
  * Requires API key with 'read:links' scope
  * Results automatically scoped to API key's tenant
  */
-router.get('/smartlinks', requireApiKey(['read:links']), async (req, res) => {
+router.get('/smartlinks', ...withKey(['read:links']), async (req, res) => {
   try {
     const { enabled, limit, offset } = req.query;
 
@@ -125,18 +154,14 @@ router.get('/smartlinks', requireApiKey(['read:links']), async (req, res) => {
  * 
  * Requires API key with 'read:links' scope
  */
-router.get('/smartlinks/:code', requireApiKey(['read:links']), async (req, res) => {
+router.get('/smartlinks/:code', ...withKey(['read:links']), async (req, res) => {
   try {
     const { code } = req.params;
     const link = await LinkService.getShortLink(code);
 
     // Verify link belongs to API key's tenant
     if (link.tenantId !== req.apiClient.tenantId) {
-      return res.status(403).json({
-        success: false,
-        error: 'Access denied',
-        message: 'Link belongs to different tenant'
-      });
+      return notFound(res);
     }
 
     res.json({ success: true, link });
@@ -166,20 +191,21 @@ router.get('/smartlinks/:code', requireApiKey(['read:links']), async (req, res) 
  */
 const validateUpdateRequest = require('./validation/updateLinkRequest');
 
-router.put('/smartlinks/:code', requireApiKey(['update:links']), validateUpdateRequest, async (req, res) => {
+router.put('/smartlinks/:code', ...withKey(['update:links']), validateUpdateRequest, async (req, res) => {
   try {
     const { code } = req.params;
     
     // First verify link belongs to tenant
     const existingLink = await LinkService.getShortLink(code);
     if (existingLink.tenantId !== req.apiClient.tenantId) {
-      return res.status(403).json({
-        success: false,
-        error: 'Access denied'
-      });
+      return notFound(res);
     }
 
-    const link = await LinkService.updateShortLink(code, req.body);
+    const link = await LinkService.updateShortLink(code, {
+      ...pickUpdateInput(req.body),
+      updatedBy: req.apiClient.name || req.apiClient.keyId
+    });
+    recordAudit({ req, action: 'link.updated', code, tenantId: req.apiClient.tenantId, before: existingLink, after: link });
 
     res.json({ success: true, link });
 
@@ -187,10 +213,16 @@ router.put('/smartlinks/:code', requireApiKey(['update:links']), validateUpdateR
     console.error('[PublicAPI] Update link error:', error);
 
     if (error.code === 'NOT_FOUND') {
-      return res.status(404).json({
-        success: false,
-        error: 'Link not found'
-      });
+      return notFound(res);
+    }
+    if (error.code === 'DESTINATION_BLOCKED') {
+      return res.status(422).json({ success: false, error: error.message, code: error.code, reasons: error.reasons || [] });
+    }
+    if (error.code === 'INVALID_URL' || error.code === 'VALIDATION_ERROR') {
+      return res.status(422).json({ success: false, error: error.message, code: error.code });
+    }
+    if (error.code === 'DOMAIN_NOT_WHITELISTED' || error.code === 'DOMAIN_NOT_ALLOWED') {
+      return res.status(403).json({ success: false, error: error.message, code: error.code });
     }
 
     res.status(500).json({
@@ -208,20 +240,18 @@ router.put('/smartlinks/:code', requireApiKey(['update:links']), validateUpdateR
  */
 const validateDeleteRequest = require('./validation/deleteLinkRequest');
 
-router.delete('/smartlinks/:code', requireApiKey(['delete:links']), validateDeleteRequest, async (req, res) => {
+router.delete('/smartlinks/:code', ...withKey(['delete:links']), validateDeleteRequest, async (req, res) => {
   try {
     const { code } = req.params;
 
     // Verify link belongs to tenant
     const existingLink = await LinkService.getShortLink(code);
     if (existingLink.tenantId !== req.apiClient.tenantId) {
-      return res.status(403).json({
-        success: false,
-        error: 'Access denied'
-      });
+      return notFound(res);
     }
 
     const result = await LinkService.deleteShortLink(code);
+    recordAudit({ req, action: 'link.deleted', code, tenantId: req.apiClient.tenantId, before: existingLink });
 
     res.json({ success: true, ...result });
 
@@ -248,7 +278,7 @@ router.delete('/smartlinks/:code', requireApiKey(['delete:links']), validateDele
  * 
  * Requires API key with 'read:stats' scope
  */
-router.get('/smartlinks/:code/stats', requireApiKey(['read:stats']), async (req, res) => {
+router.get('/smartlinks/:code/stats', ...withKey(['read:stats']), async (req, res) => {
   try {
     const { code } = req.params;
     const { startDate, endDate } = req.query;
@@ -256,10 +286,7 @@ router.get('/smartlinks/:code/stats', requireApiKey(['read:stats']), async (req,
     // Verify link belongs to tenant
     const link = await LinkService.getShortLink(code);
     if (link.tenantId !== req.apiClient.tenantId) {
-      return res.status(403).json({
-        success: false,
-        error: 'Access denied'
-      });
+      return notFound(res);
     }
 
     // Get analytics
@@ -289,17 +316,14 @@ router.get('/smartlinks/:code/stats', requireApiKey(['read:stats']), async (req,
  * 
  * Requires API key with 'read:stats' scope
  */
-router.get('/smartlinks/:code/attribution', requireApiKey(['read:stats']), async (req, res) => {
+router.get('/smartlinks/:code/attribution', ...withKey(['read:stats']), async (req, res) => {
   try {
     const { code } = req.params;
 
     // Verify link belongs to tenant
     const link = await LinkService.getShortLink(code);
     if (link.tenantId !== req.apiClient.tenantId) {
-      return res.status(403).json({
-        success: false,
-        error: 'Access denied'
-      });
+      return notFound(res);
     }
 
     const stats = await getAttributionStats(code);
@@ -326,7 +350,7 @@ router.get('/smartlinks/:code/attribution', requireApiKey(['read:stats']), async
  */
 const validateBatchRequest = require('./validation/batchLinkRequest');
 
-router.post('/smartlinks/batch', requireApiKey(['create:links']), validateBatchRequest, async (req, res) => {
+router.post('/smartlinks/batch', ...withKey(['create:links']), validateBatchRequest, async (req, res) => {
   try {
     const { links } = req.body;
 
@@ -350,17 +374,21 @@ router.post('/smartlinks/batch', requireApiKey(['create:links']), validateBatchR
     for (const linkData of links) {
       try {
         const link = await LinkService.createShortLink({
-          ...linkData,
+          ...pickCreateInput(linkData),
           tenantId: req.apiClient.tenantId,
           tenantName: req.apiClient.tenantName,
           createdBy: req.apiClient.name || req.apiClient.keyId,
           apiKeyId: req.apiClient.keyId
         });
+        recordAudit({ req, action: 'link.created', code: link.code, tenantId: req.apiClient.tenantId, after: link, extra: { batch: true } });
+        fireLinkCreated(link, req.apiClient.tenantId);
         results.push({ success: true, link });
       } catch (error) {
         errors.push({
           success: false,
           error: error.message,
+          code: error.code || null,
+          reasons: error.reasons || undefined,
           linkData: linkData
         });
       }

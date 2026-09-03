@@ -4,6 +4,10 @@ const request = require('supertest');
 const admin = require('firebase-admin');
 const { buildTestApp } = require('./helpers/testApp');
 const campaignPublicResolver = require('../api/campaigns/campaignPublicResolver');
+
+// The redirect path scores a missing User-Agent as a bot (+70) and answers 404,
+// so resolver requests must look like a browser.
+const BROWSER_UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Safari/604.1';
 const deepLinksRouter = require('../api/kortex/deeplinkRoutes');
 
 let campaignApp;
@@ -31,7 +35,10 @@ function seedTenant(tenantId, domain) {
   admin._mocks.docData[`tenants/${tenantId}`] = {
     name: tenantId,
     domain,
-    enabled: true
+    enabled: true,
+    // Paid tier: a real 302. Starter tenants are served the "Powered by Kortex"
+    // interstitial (HTTP 200), which these redirect assertions do not cover.
+    plan: 'pro'
   };
 }
 
@@ -156,7 +163,9 @@ describe('Kortex Hardening — campaign expiry enforcement', () => {
 
     const res = await request(resolverApp)
       .get('/a/wa-1')
-      .set('Host', 'tenant-a.test');
+      .set('Host', 'tenant-a.test')
+      .set('User-Agent', BROWSER_UA)
+      .set('Accept-Language', 'en');
 
     expect(res.status).toBe(410);
     expect(res.text).toContain('Campaign Expired');
@@ -177,7 +186,9 @@ describe('Kortex Hardening — campaign expiry enforcement', () => {
 
     const res = await request(resolverApp)
       .get('/a/wa-1')
-      .set('Host', 'tenant-a.test');
+      .set('Host', 'tenant-a.test')
+      .set('User-Agent', BROWSER_UA)
+      .set('Accept-Language', 'en');
 
     expect(res.status).toBe(302);
     expect(res.headers.location).toContain('https://tenant-a.test/landing');
@@ -196,7 +207,9 @@ describe('Kortex Hardening — campaign expiry enforcement', () => {
 
     const res = await request(resolverApp)
       .get('/a/wa-1')
-      .set('Host', 'tenant-a.test');
+      .set('Host', 'tenant-a.test')
+      .set('User-Agent', BROWSER_UA)
+      .set('Accept-Language', 'en');
 
     expect(res.status).toBe(302);
   });
@@ -227,7 +240,9 @@ describe('Kortex Hardening — max-uses enforcement', () => {
 
     const res = await request(resolverApp)
       .get('/a/wa-1')
-      .set('Host', 'tenant-a.test');
+      .set('Host', 'tenant-a.test')
+      .set('User-Agent', BROWSER_UA)
+      .set('Accept-Language', 'en');
 
     expect(res.status).toBe(410);
     expect(res.text).toContain('Link Limit Reached');
@@ -253,7 +268,9 @@ describe('Kortex Hardening — max-uses enforcement', () => {
 
     const res = await request(resolverApp)
       .get('/a/wa-1')
-      .set('Host', 'tenant-a.test');
+      .set('Host', 'tenant-a.test')
+      .set('User-Agent', BROWSER_UA)
+      .set('Accept-Language', 'en');
 
     expect(res.status).toBe(302);
   });
@@ -278,7 +295,9 @@ describe('Kortex Hardening — max-uses enforcement', () => {
 
     const res = await request(resolverApp)
       .get('/a/wa-1')
-      .set('Host', 'tenant-a.test');
+      .set('Host', 'tenant-a.test')
+      .set('User-Agent', BROWSER_UA)
+      .set('Accept-Language', 'en');
 
     expect(res.status).toBe(302);
   });

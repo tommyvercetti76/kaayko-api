@@ -14,8 +14,40 @@ const { generateShortCode, isValidShortCode } = require('./smartLinkValidation')
 const { DEFAULT_TENANT_ID } = require('./tenantContext');
 const { assertDestinationAllowed } = require('./domainPolicy');
 const { PLAN_LIMITS } = require('../billing/planLimits');
+const safety = require('./destinationSafety');
+const { LINK_STATUS, effectiveStatus } = require('./safetyPages');
 
 const db = admin.firestore();
+
+/**
+ * Run the destination safety assessment shared by every create/update path.
+ * Throws DESTINATION_BLOCKED on a block verdict; returns { status, safety } otherwise.
+ */
+async function assessForWrite(destinations, { tenantId, tenantDocData, actorIsSuperAdmin, purpose, actor }) {
+  const assessment = await safety.assessDestinations(destinations, {
+    tenantId,
+    tenant: tenantDocData,
+    actorIsSuperAdmin: actorIsSuperAdmin === true,
+    purpose
+  });
+  if (assessment.verdict === safety.VERDICT.BLOCK) {
+    const err = new Error(`Destination refused: ${assessment.reasons.map(r => r.detail).join('; ')}`);
+    err.code = 'DESTINATION_BLOCKED';
+    err.reasons = assessment.reasons.map(r => ({ code: r.code, platform: r.platform, detail: r.detail }));
+    throw err;
+  }
+  return {
+    status: safety.statusForVerdict(assessment.verdict),
+    safety: safety.buildSafetyRecord(assessment, { purpose, actor: actor || null })
+  };
+}
+
+/** Learn the domains of a link that went live so later tenants are not held on them. */
+function learnDomains(safetyRecord, tenantId) {
+  for (const domain of safetyRecord?.domains || []) {
+    safety.markDomainKnown(domain, { source: 'link', tenantId }).catch(() => {});
+  }
+}
 
 const ALUMNI_METADATA_KEYS = new Set([
   'campaign',
@@ -242,6 +274,13 @@ async function createShortLink(data) {
     }
   }
 
+  // Destination safety — private hosts, blocklists, Safe Browsing, domain
+  // reputation. Blocks throw; unknown domains for new tenants come back 'held'.
+  const safetyOutcome = await assessForWrite(
+    { web: webDestination, ios: iosDestination, android: androidDestination },
+    { tenantId, tenantDocData, actorIsSuperAdmin: data.actorIsSuperAdmin, purpose: 'create', actor: createdBy }
+  );
+
   // Determine short code: use provided or generate secure tenant-prefixed code
   let shortCode = providedCode;
   if (!shortCode) {
@@ -326,6 +365,8 @@ async function createShortLink(data) {
     lastClickedAt: null, // Track last click timestamp
     lastInstallAt: null, // Track last install timestamp
     enabled, // Active/inactive status
+    status: safetyOutcome.status, // active | held | blocked (safety / review state)
+    safety: safetyOutcome.safety,
     createdBy, // Audit trail: who created this
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp()
@@ -333,6 +374,8 @@ async function createShortLink(data) {
 
   // Save to Firestore
   await db.collection('short_links').doc(shortCode).set(linkDoc);
+
+  if (safetyOutcome.status === LINK_STATUS.ACTIVE) learnDomains(safetyOutcome.safety, tenantId);
 
   // Return FULL enriched link data
   return {
@@ -344,6 +387,8 @@ async function createShortLink(data) {
     domain,
     pathPrefix,
     publicCode: publicCode || shortCode,
+    status: safetyOutcome.status,
+    safety: safetyOutcome.safety,
     destinationType,
     campaignId,
     requiresAuth,
@@ -513,21 +558,40 @@ async function updateShortLink(code, updates) {
 
   const currentData = linkDoc.data() || {};
 
-  // Destination domain policy on update — mirrors createShortLink.
-  if (destinations && destinations.web) {
+  // Destination domain policy + safety on update — mirrors createShortLink.
+  if (destinations) {
     const linkTenantId = currentData.tenantId || DEFAULT_TENANT_ID;
-    let allowedDomains = null;
+    let tenantDocData = null;
     if (linkTenantId !== DEFAULT_TENANT_ID) {
       const tdoc = await db.collection('tenants').doc(linkTenantId).get();
-      allowedDomains = tdoc.exists ? (tdoc.data().settings?.allowedDomains || null) : null;
+      tenantDocData = tdoc.exists ? tdoc.data() : null;
     }
-    assertDestinationAllowed({
-      webDestination: destinations.web,
+    if (destinations.web) {
+      assertDestinationAllowed({
+        webDestination: destinations.web,
+        tenantId: linkTenantId,
+        allowedDomains: tenantDocData?.settings?.allowedDomains || null,
+        bypass: updates.bypassDomainCheck === true
+      });
+    }
+
+    const safetyOutcome = await assessForWrite(destinations, {
       tenantId: linkTenantId,
-      allowedDomains,
-      bypass: updates.bypassDomainCheck === true
+      tenantDocData,
+      actorIsSuperAdmin: updates.actorIsSuperAdmin,
+      purpose: 'update',
+      actor: updates.updatedBy || null
     });
+    updateData.safety = safetyOutcome.safety;
+    // An operator block survives edits; safety-derived states follow the new destination.
+    if (currentData.blockedBy === 'operator' && effectiveStatus(currentData) === LINK_STATUS.BLOCKED) {
+      updateData.status = LINK_STATUS.BLOCKED;
+    } else {
+      updateData.status = safetyOutcome.status;
+      if (safetyOutcome.status === LINK_STATUS.ACTIVE) learnDomains(safetyOutcome.safety, linkTenantId);
+    }
   }
+  if (updates.updatedBy) updateData.updatedBy = updates.updatedBy;
 
   if (metadata !== undefined) {
     const currentDestinations = currentData.destinations || {};
@@ -578,6 +642,68 @@ async function updateShortLink(code, updates) {
     id: updated.id,
     ...updated.data()
   };
+}
+
+/**
+ * Change a link's review/safety status (approve, block, release).
+ * Used by the review routes and never by client-supplied fields.
+ */
+async function setLinkStatus(code, status, { reason = null, actor = null, blockedBy = null } = {}) {
+  if (![LINK_STATUS.ACTIVE, LINK_STATUS.HELD, LINK_STATUS.BLOCKED].includes(status)) {
+    const error = new Error('Invalid link status');
+    error.code = 'VALIDATION_ERROR';
+    throw error;
+  }
+  const linkRef = db.collection('short_links').doc(code);
+  const linkDoc = await linkRef.get();
+  if (!linkDoc.exists) {
+    const error = new Error('Short code not found');
+    error.code = 'NOT_FOUND';
+    throw error;
+  }
+  const current = linkDoc.data() || {};
+  const update = {
+    status,
+    updatedAt: FieldValue.serverTimestamp(),
+    reviewedAt: FieldValue.serverTimestamp(),
+    reviewedBy: actor || null,
+    reviewReason: reason || null,
+    blockedBy: status === LINK_STATUS.BLOCKED ? (blockedBy || 'operator') : null
+  };
+  if (status === LINK_STATUS.ACTIVE && current.safety) {
+    update.safety = { ...current.safety, verdict: 'allow', reviewed: true };
+    learnDomains(current.safety, current.tenantId || DEFAULT_TENANT_ID);
+  }
+  await linkRef.update(update);
+
+  // Keep the campaign_links record in step for campaign mirrors.
+  if (current.isCampaignLink && current.campaignId && current.publicCode) {
+    db.collection('campaign_links').doc(`${current.campaignId}_${current.publicCode}`)
+      .update({ reviewStatus: status, updatedAt: FieldValue.serverTimestamp() })
+      .catch(() => {});
+  }
+
+  const updated = await linkRef.get();
+  return { before: current, link: { id: updated.id, ...updated.data() } };
+}
+
+/**
+ * Links waiting for review or blocked, optionally scoped to a tenant.
+ */
+async function listLinksByStatus(statuses, { tenantId = null, limit = 100 } = {}) {
+  const safeLimit = Math.max(1, Math.min(Number(limit) || 100, 500));
+  const out = [];
+  for (const status of statuses) {
+    let query = db.collection('short_links').where('status', '==', status);
+    if (tenantId) query = query.where('tenantId', '==', tenantId);
+    const snapshot = await query.limit(safeLimit).get();
+    snapshot.docs.forEach(doc => {
+      const data = doc.data();
+      delete data.uniqueUsers;
+      out.push({ id: doc.id, ...data });
+    });
+  }
+  return out.sort((a, b) => (b.safety?.checkedAtMs || 0) - (a.safety?.checkedAtMs || 0));
 }
 
 /**
@@ -646,6 +772,8 @@ module.exports = {
   getShortLink,       // Get single link
   updateShortLink,    // Update link
   deleteShortLink,    // Delete link
+  setLinkStatus,      // Review: approve / block / release
+  listLinksByStatus,  // Review queue
   getLinkStats,       // Get global statistics
   getLinkStatsForTenant
 };

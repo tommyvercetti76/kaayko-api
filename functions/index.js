@@ -188,4 +188,31 @@ exports.kortexWeeklyDigest = onSchedule({
   console.log(`[KortexDigest] Done. Processed ${results.length} tenants.`);
 });
 
+// KORTEX: destination safety — refresh the free threat feeds every 6 hours and
+// re-check live links daily so a destination that turns malicious after
+// creation is switched off without anyone noticing first.
+const { syncThreatFeeds, rescanActiveLinks } = require("./api/kortex/safetyJobs");
+
+exports.kortexThreatFeedSync = onSchedule({
+  schedule: "15 */6 * * *",
+  timeZone: "Asia/Kolkata",
+  memory: "512MiB",
+  timeoutSeconds: 300
+}, async () => {
+  console.log("[KortexSafety] Syncing threat feeds...");
+  const summary = await syncThreatFeeds();
+  console.log(`[KortexSafety] Feed sync done: ${summary.totalHosts} hosts, written=${summary.written}`);
+});
+
+exports.kortexLinkRescan = onSchedule({
+  schedule: "30 4 * * *",
+  timeZone: "Asia/Kolkata",
+  memory: "512MiB",
+  timeoutSeconds: 540
+}, async () => {
+  console.log("[KortexSafety] Re-scanning live links...");
+  const result = await rescanActiveLinks({ limit: 400 });
+  console.log(`[KortexSafety] Re-scan done: scanned=${result.scanned} blocked=${result.blocked.length} errors=${result.errors}`);
+});
+
 console.log("✅ Kaayko API v2 - PUBLIC: fastForecast + paddlingOut | PREMIUM: forecast ($$) | SMARTLINKS: admin portal");

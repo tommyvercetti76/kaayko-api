@@ -16,6 +16,8 @@ const admin = require('firebase-admin');
 const db = admin.firestore();
 const router = express.Router();
 const { runSecurityChecks, isCanaryCode } = require('./linkSecurityService');
+const { getClientIp } = require('./clientIp');
+const { respondForStatus } = require('./safetyPages');
 
 // ============================================================================
 // CONSTANTS
@@ -70,7 +72,8 @@ function isValidTenantSlug(slug) {
 // ============================================================================
 
 function generateClickFingerprint(req) {
-  const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || 'unknown';
+  // Hardened resolver (right-to-left forwarded chain); the old leftmost read was caller-controlled.
+  const ip = getClientIp(req) || req.ip || 'unknown';
   const ua = req.headers['user-agent'] || '';
   const accept = req.headers['accept-language'] || '';
   const raw = `${ip}|${ua}|${accept}`;
@@ -179,7 +182,8 @@ router.get('/:tenantSlug/:code', async (req, res, next) => {
   }
 
   // Rate limit per IP
-  const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || 'unknown';
+  // Hardened resolver (right-to-left forwarded chain); the old leftmost read was caller-controlled.
+  const ip = getClientIp(req) || req.ip || 'unknown';
   if (!checkResolveRateLimit(ip)) {
     return res.status(429).json({ error: 'Too many requests. Try again in a minute.' });
   }
@@ -216,6 +220,9 @@ router.get('/:tenantSlug/:code', async (req, res, next) => {
     if (link.enabled === false) {
       return res.status(410).send(gonePage('Link Disabled', 'This link has been deactivated by the administrator.'));
     }
+
+    // Safety / review state (held → review page, blocked → 410)
+    if (respondForStatus(res, link, code)) return;
 
     // Check expiry
     if (link.expiresAt) {

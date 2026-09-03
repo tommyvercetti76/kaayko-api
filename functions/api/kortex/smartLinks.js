@@ -30,7 +30,44 @@ const LinkService = require('./smartLinkService');
 const KortexV2 = require('./v2LinkIntents');
 
 // Import authentication middleware
-const { requireAuth, requireAdmin, optionalAuth } = require('../../middleware/authMiddleware');
+const { requireAuth, requireAdmin, requireVerifiedEmail, requireSuperAdmin } = require('../../middleware/authMiddleware');
+
+// Trust pass: input allowlists, audit log, self-serve provisioning, safety jobs
+const { pickCreateInput, pickUpdateInput } = require('./validation/linkInput');
+const { recordAudit, listAudit } = require('./auditLog');
+const { provisionSelfServeTenant } = require('./provisioning');
+const { userRateLimit } = require('./rateLimitService');
+const { LINK_STATUS, effectiveStatus } = require('./safetyPages');
+const safetyJobs = require('./safetyJobs');
+const { getClientIp } = require('./clientIp');
+
+function hashIpForStorage(ip) {
+  if (!ip) return null;
+  const salt = process.env.KORTEX_IP_SALT || 'kortex-ip-salt';
+  return crypto.createHash('sha256').update(`${salt}:${ip}`).digest('hex').slice(0, 16);
+}
+
+function linkWriteError(res, error, fallback) {
+  if (error.code === 'NOT_FOUND') {
+    return res.status(404).json({ success: false, error: 'Link not found', code: 'NOT_FOUND' });
+  }
+  if (error.code === 'ALREADY_EXISTS') {
+    return res.status(409).json({ success: false, error: error.message, code: 'ALREADY_EXISTS', existing: error.existing });
+  }
+  if (error.code === 'DESTINATION_BLOCKED') {
+    return res.status(422).json({ success: false, error: error.message, code: error.code, reasons: error.reasons || [] });
+  }
+  if (error.code === 'INVALID_URL' || error.code === 'VALIDATION_ERROR' || error.code === 'INVALID_CODE') {
+    return res.status(422).json({ success: false, error: error.message, code: error.code });
+  }
+  if (error.code === 'DOMAIN_NOT_WHITELISTED' || error.code === 'DOMAIN_NOT_ALLOWED' || error.code === 'PLAN_LIMIT_EXCEEDED') {
+    return res.status(403).json({ success: false, error: error.message, code: error.code });
+  }
+  if (error.message?.includes('tenant') || error.message?.includes('Access denied') || error.code?.startsWith('TENANT')) {
+    return res.status(403).json({ success: false, error: 'Tenant access denied', message: error.message, code: 'TENANT_ACCESS_DENIED' });
+  }
+  return null;
+}
 
 // Import tenant context
 const {
@@ -100,17 +137,6 @@ async function getTenantConfig(tenantId) {
     name: tenant.name || tenantDoc.id,
     domain: tenant.domain || 'kaayko.com',
     pathPrefix: tenant.pathPrefix || '/l'
-  };
-}
-
-function publicLinkView(link) {
-  return {
-    code: link.code,
-    shortUrl: link.shortUrl,
-    title: link.title || '',
-    description: link.description || '',
-    enabled: link.enabled !== false,
-    expiresAt: link.expiresAt || null
   };
 }
 
@@ -231,12 +257,22 @@ router.get('/links/:code/resolve', async (req, res) => {
     return res.json({ success: true, ...resolved });
   } catch (error) {
     console.error('[KortexV2] Link resolve error:', error);
-    const status = error.code === 'NOT_FOUND' ? 404 : error.code === 'TENANT_NOT_FOUND' ? 404 : 500;
+    const gone = new Set(['LINK_DISABLED', 'LINK_EXPIRED', 'LINK_BLOCKED']);
+    const status = error.code === 'NOT_FOUND' || error.code === 'TENANT_NOT_FOUND' ? 404
+      : gone.has(error.code) ? 410
+      : error.code === 'LINK_HELD' ? 409
+      : 500;
+    const messages = {
+      LINK_DISABLED: 'This link has been disabled.',
+      LINK_EXPIRED: 'This link has expired.',
+      LINK_BLOCKED: 'This link has been disabled for safety reasons.',
+      LINK_HELD: 'This link is under review and not yet live.'
+    };
     return res.status(status).json({
       success: false,
-      error: status === 404 ? 'Link not found' : 'Failed to resolve link',
+      error: status === 404 ? 'Link not found' : status === 500 ? 'Failed to resolve link' : (messages[error.code] || 'Link unavailable'),
       code: error.code || 'RESOLVE_FAILED',
-      message: 'An unexpected error occurred'
+      message: messages[error.code] || 'An unexpected error occurred'
     });
   }
 });
@@ -250,7 +286,9 @@ router.post('/events', rateLimiter('api'), async (req, res) => {
     });
   } catch (error) {
     console.error('[KortexV2] Event tracking error:', error);
-    const status = error.code === 'INVALID_EVENT_TYPE' ? 400 : 500;
+    const status = error.code === 'INVALID_EVENT_TYPE' || error.code === 'LINK_CODE_REQUIRED' ? 400
+      : error.code === 'NOT_FOUND' ? 404
+      : 500;
     return res.status(status).json({
       success: false,
       error: error.message || 'Failed to track event',
@@ -259,31 +297,35 @@ router.post('/events', rateLimiter('api'), async (req, res) => {
   }
 });
 
-router.post('/tenant-links', requireAuth, requireAdmin, async (req, res) => {
+router.post('/tenant-links', requireAuth, requireAdmin, requireVerifiedEmail, userRateLimit({ maxRequests: 60, windowSeconds: 3600 }), async (req, res) => {
   try {
     const tenantContext = await getTenantFromRequest(req);
     const tenantConfig = await getTenantConfig(tenantContext.tenantId);
+    const input = pickCreateInput(req.body);
     const link = await KortexV2.createTenantLink({
       tenant: {
         id: tenantConfig.id,
         name: tenantConfig.name,
         domain: tenantConfig.domain,
         pathPrefix: tenantConfig.pathPrefix,
-        slug: req.body.tenantSlug || tenantConfig.id,
-        alumniDomain: req.body.alumniDomain
+        slug: input.tenantSlug || tenantConfig.id,
+        alumniDomain: input.alumniDomain
       },
       actor: req.user,
-      data: req.body
+      data: { ...input, actorIsSuperAdmin: tenantContext.isSuperAdmin }
     });
+    recordAudit({ req, action: 'link.created', code: link.code, tenantId: tenantConfig.id, after: link, extra: { path: 'tenant-links' } });
 
     return res.status(201).json({
       success: true,
-      link
+      link,
+      status: link.status
     });
   } catch (error) {
     console.error('[KortexV2] Tenant link create error:', error);
-    const status = error.code === 'ALREADY_EXISTS' ? 409 : error.code === 'VALIDATION_ERROR' ? 400 : 500;
-    return res.status(status).json({
+    const handled = linkWriteError(res, error);
+    if (handled) return handled;
+    return res.status(500).json({
       success: false,
       error: error.message || 'Failed to create tenant link',
       code: error.code || 'TENANT_LINK_CREATE_FAILED'
@@ -412,7 +454,7 @@ router.get('/tenants/:tenantId/analytics', requireAuth, requireAdmin, async (req
 // MIGRATION ENDPOINT - TEMPORARY (Run once to add tenant fields)
 // ============================================================================
 
-router.get('/admin/migrate', requireAuth, requireAdmin, async (req, res) => {
+router.get('/admin/migrate', requireAuth, requireSuperAdmin, async (req, res) => {
   try {
     const { migrateExistingLinksToDefaultTenant } = require('./tenantContext');
     const result = await migrateExistingLinksToDefaultTenant();
@@ -534,6 +576,42 @@ router.post('/tenants/register', rateLimiter('tenantRegistration'), async (req, 
   } catch (error) {
     console.error('[TenantReg] Landing register error:', error);
     return res.status(500).json({ success: false, error: 'Registration failed. Please try again.' });
+  }
+});
+
+// ============================================================================
+// SELF-SERVE PROVISIONING — creates the tenant + admin profile for a freshly
+// signed-up Firebase user. The browser creates the Auth user, sends its ID
+// token here, then sends the verification email; writes stay gated until the
+// address is verified (requireVerifiedEmail).
+// ============================================================================
+
+router.post('/tenants/provision', rateLimiter('tenantProvision'), requireAuth, async (req, res) => {
+  try {
+    if (req.user.role === 'super-admin') {
+      return res.status(400).json({ success: false, error: 'Super-admin accounts do not self-provision', code: 'NOT_APPLICABLE' });
+    }
+    const { name, organization, useCase } = req.body || {};
+    const result = await provisionSelfServeTenant({
+      uid: req.user.uid,
+      email: req.user.email,
+      emailVerified: req.user.emailVerified === true,
+      displayName: name,
+      organization,
+      useCase,
+      req
+    });
+    return res.status(result.existing ? 200 : 201).json({
+      success: true,
+      ...result,
+      next: { verifyEmail: result.user.requireEmailVerification === true && req.user.emailVerified !== true }
+    });
+  } catch (error) {
+    if (error.code === 'VALIDATION_ERROR') {
+      return res.status(400).json({ success: false, error: error.message, code: error.code });
+    }
+    console.error('[Provision] failed:', error);
+    return res.status(500).json({ success: false, error: 'Could not create your workspace. Please try again.', code: 'PROVISION_FAILED' });
   }
 });
 
@@ -1063,32 +1141,218 @@ router.delete('/webhooks/:id', requireAuth, requireAdmin, async (req, res) => {
 });
 
 // ============================================================================
+// REVIEW QUEUE, APPEALS, SAFETY JOBS (Must be BEFORE /:code)
+// ============================================================================
+
+/**
+ * GET /kortex/review — links that are held for review or blocked.
+ * Tenant admins see their own; super-admins see everything (or one tenant via header).
+ */
+router.get('/review', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const tenantContext = await getTenantFromRequest(req);
+    const scopeAll = tenantContext.isSuperAdmin && (req.query.allTenants === 'true' || tenantContext.tenantId === DEFAULT_TENANT_ID);
+    const requested = String(req.query.status || '').trim();
+    const statuses = requested && [LINK_STATUS.HELD, LINK_STATUS.BLOCKED].includes(requested)
+      ? [requested]
+      : [LINK_STATUS.HELD, LINK_STATUS.BLOCKED];
+    const links = await LinkService.listLinksByStatus(statuses, {
+      tenantId: scopeAll ? null : tenantContext.tenantId,
+      limit: req.query.limit
+    });
+    return res.json({ success: true, links, total: links.length, statuses });
+  } catch (error) {
+    console.error('[Review] list error:', error);
+    return linkWriteError(res, error) || res.status(500).json({ success: false, error: 'Failed to load review queue' });
+  }
+});
+
+async function applyReviewDecision(req, res, status, action, options = {}) {
+  try {
+    const { code } = req.params;
+    const reason = String(req.body?.reason || '').trim().slice(0, 500) || null;
+    const { before, link } = await LinkService.setLinkStatus(code, status, {
+      reason,
+      actor: req.user.email || req.user.uid,
+      blockedBy: options.blockedBy || null
+    });
+    await recordAudit({ req, action, code, tenantId: link.tenantId, before, after: link, reason });
+    if (status === LINK_STATUS.BLOCKED) {
+      db.collection('security_alerts').add({
+        type: 'destination_blocked',
+        severity: 'high',
+        code,
+        tenantId: link.tenantId || null,
+        reason,
+        by: req.user.email || req.user.uid,
+        timestamp: FieldValue.serverTimestamp()
+      }).catch(() => {});
+    }
+    return res.json({ success: true, link, previousStatus: effectiveStatus(before) });
+  } catch (error) {
+    console.error(`[Review] ${action} error:`, error);
+    return linkWriteError(res, error) || res.status(500).json({ success: false, error: `Failed to ${action}` });
+  }
+}
+
+router.post('/review/:code/approve', requireAuth, requireSuperAdmin, (req, res) =>
+  applyReviewDecision(req, res, LINK_STATUS.ACTIVE, 'link.approved'));
+router.post('/review/:code/block', requireAuth, requireSuperAdmin, (req, res) =>
+  applyReviewDecision(req, res, LINK_STATUS.BLOCKED, 'link.blocked', { blockedBy: 'operator' }));
+router.post('/review/:code/hold', requireAuth, requireSuperAdmin, (req, res) =>
+  applyReviewDecision(req, res, LINK_STATUS.HELD, 'link.held'));
+
+/**
+ * POST /kortex/appeals — public form behind held/blocked pages.
+ * Always answers 202 so it cannot be used to enumerate codes.
+ */
+router.post('/appeals', rateLimiter('appeal'), async (req, res) => {
+  try {
+    const code = String(req.body?.code || '').trim().slice(0, 80);
+    const email = String(req.body?.email || '').trim().toLowerCase().slice(0, 200);
+    const message = String(req.body?.message || '').trim().slice(0, 2000);
+
+    if (!/^[a-zA-Z0-9_-]{3,80}$/.test(code)) {
+      return res.status(400).json({ success: false, error: 'A valid link code is required', code: 'VALIDATION_ERROR' });
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ success: false, error: 'A valid email address is required', code: 'VALIDATION_ERROR' });
+    }
+    if (message.length < 10) {
+      return res.status(400).json({ success: false, error: 'Tell us a little more (at least 10 characters)', code: 'VALIDATION_ERROR' });
+    }
+
+    const linkDoc = await db.collection('short_links').doc(code).get();
+    if (linkDoc.exists) {
+      const link = linkDoc.data() || {};
+      await db.collection('kortex_appeals').add({
+        code,
+        tenantId: link.tenantId || DEFAULT_TENANT_ID,
+        linkStatus: effectiveStatus(link),
+        email,
+        message,
+        status: 'open',
+        ipHash: hashIpForStorage(getClientIp(req)),
+        userAgent: String(req.get('user-agent') || '').slice(0, 300),
+        createdAt: FieldValue.serverTimestamp(),
+        createdAtMs: Date.now()
+      });
+      recordAudit({ req, action: 'link.appealed', code, tenantId: link.tenantId || DEFAULT_TENANT_ID, extra: { email } });
+    }
+    return res.status(202).json({ success: true, message: 'Thanks. A reviewer will look at this link and reply by email.' });
+  } catch (error) {
+    console.error('[Appeals] submit error:', error);
+    return res.status(500).json({ success: false, error: 'Could not submit the appeal right now' });
+  }
+});
+
+router.get('/appeals', requireAuth, requireSuperAdmin, async (req, res) => {
+  try {
+    const status = String(req.query.status || 'open');
+    const snapshot = await db.collection('kortex_appeals').where('status', '==', status).limit(200).get();
+    const appeals = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+      .sort((a, b) => (b.createdAtMs || 0) - (a.createdAtMs || 0));
+    return res.json({ success: true, appeals, total: appeals.length });
+  } catch (error) {
+    console.error('[Appeals] list error:', error);
+    return res.status(500).json({ success: false, error: 'Failed to load appeals' });
+  }
+});
+
+router.post('/appeals/:id/resolve', requireAuth, requireSuperAdmin, async (req, res) => {
+  try {
+    const ref = db.collection('kortex_appeals').doc(req.params.id);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ success: false, error: 'Appeal not found' });
+    const resolution = String(req.body?.resolution || '').trim().slice(0, 1000) || null;
+    await ref.update({
+      status: 'resolved',
+      resolution,
+      resolvedBy: req.user.email || req.user.uid,
+      resolvedAt: FieldValue.serverTimestamp()
+    });
+    recordAudit({ req, action: 'appeal.resolved', code: doc.data().code, tenantId: doc.data().tenantId, reason: resolution });
+    return res.json({ success: true });
+  } catch (error) {
+    console.error('[Appeals] resolve error:', error);
+    return res.status(500).json({ success: false, error: 'Failed to resolve appeal' });
+  }
+});
+
+/** Manual triggers for the scheduled safety jobs (super-admin). */
+router.post('/security/feeds/sync', requireAuth, requireSuperAdmin, async (req, res) => {
+  try {
+    const summary = await safetyJobs.syncThreatFeeds();
+    recordAudit({ req, action: 'safety.feeds_synced', extra: summary });
+    return res.json({ success: true, summary });
+  } catch (error) {
+    console.error('[Safety] feed sync error:', error);
+    return res.status(500).json({ success: false, error: 'Feed sync failed' });
+  }
+});
+
+router.post('/security/rescan', requireAuth, requireSuperAdmin, async (req, res) => {
+  try {
+    const result = await safetyJobs.rescanActiveLinks({
+      limit: req.body?.limit,
+      tenantId: req.body?.tenantId ? String(req.body.tenantId) : null
+    });
+    recordAudit({ req, action: 'safety.rescan', extra: { scanned: result.scanned, blocked: result.blocked.length, errors: result.errors } });
+    return res.json({ success: true, result });
+  } catch (error) {
+    console.error('[Safety] rescan error:', error);
+    return res.status(500).json({ success: false, error: 'Re-scan failed' });
+  }
+});
+
+/** Audit trail for one link (tenant-scoped). */
+router.get('/:code/audit', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { code } = req.params;
+    const link = await LinkService.getShortLink(code);
+    const tenantContext = await getTenantFromRequest(req);
+    if (!tenantContext.isSuperAdmin) {
+      assertTenantAccess(req.user, link.tenantId || DEFAULT_TENANT_ID);
+    }
+    const entries = await listAudit({ code, limit: req.query.limit });
+    return res.json({ success: true, code, entries, total: entries.length });
+  } catch (error) {
+    console.error('[Audit] list error:', error);
+    return linkWriteError(res, error) || res.status(500).json({ success: false, error: 'Failed to load audit trail' });
+  }
+});
+
+// ============================================================================
 // CREATE SHORT LINK (Protected - Requires Authentication)
 // ============================================================================
 
-router.post('/', requireAuth, requireAdmin, async (req, res) => {
+router.post('/', rateLimiter('linkCreate'), requireAuth, requireAdmin, requireVerifiedEmail, userRateLimit({ maxRequests: 60, windowSeconds: 3600 }), async (req, res) => {
   try {
     const tenantContext = await getTenantFromRequest(req);
     const tenantConfig = await getTenantConfig(tenantContext.tenantId);
 
-    // Domain policy + plan quota are enforced in the service layer (smartLinkService)
-    // so every creation path — admin, public API, batch, tenant-links — shares one rule.
-    // Super-admins may bypass the domain whitelist with destinationCategory==='custom'.
-    const isCustomBypass = tenantContext.isSuperAdmin && req.body.destinationCategory === 'custom';
+    // Only allowlisted fields come from the client; tenant, creator, safety
+    // verdict and status are always derived server-side.
+    const input = pickCreateInput(req.body);
 
-    // Add creator info and tenant-owned domain settings.
-    // Client-supplied domain/pathPrefix are ignored for non-super-admin tenant safety.
+    // Domain policy + plan quota + destination safety are enforced in the
+    // service layer so every creation path shares one rule. Super-admins may
+    // bypass the Kaayko domain whitelist with destinationCategory==='custom'.
+    const isCustomBypass = tenantContext.isSuperAdmin && input.destinationCategory === 'custom';
+
     const linkData = {
-      ...req.body,
+      ...input,
       bypassDomainCheck: isCustomBypass,
+      actorIsSuperAdmin: tenantContext.isSuperAdmin,
       createdBy: req.user.email || req.user.uid,
       tenantId: tenantConfig.id,
       tenantName: tenantConfig.name,
       domain: tenantConfig.domain,
       pathPrefix: tenantConfig.pathPrefix
     };
-    
+
     const link = await LinkService.createShortLink(linkData);
+    recordAudit({ req, action: 'link.created', code: link.code, tenantId: tenantConfig.id, after: link });
     
     // Send email notification to admin (async, don't block response)
     sendLinkCreatedNotification(link, req.user).then(result => {
@@ -1121,39 +1385,18 @@ router.post('/', requireAuth, requireAdmin, async (req, res) => {
       console.error('⚠️ Webhook trigger error:', err);
     });
     
-    res.json({ 
-      success: true, 
+    res.json({
+      success: true,
       link,
-      message: `Short link created: ${link.shortUrl}`
+      status: link.status,
+      message: link.status === LINK_STATUS.HELD
+        ? `Short link created and held for a quick review: ${link.shortUrl}`
+        : `Short link created: ${link.shortUrl}`
     });
   } catch (error) {
     console.error('[SmartLinks] Error creating short link:', error);
-    
-    if (error.code === 'ALREADY_EXISTS') {
-      return res.status(409).json({
-        success: false,
-        error: error.message,
-        code: 'ALREADY_EXISTS',
-        existing: error.existing
-      });
-    }
-
-    if (error.code === 'INVALID_URL' || error.code === 'VALIDATION_ERROR' || error.code === 'INVALID_CODE') {
-      return res.status(422).json({
-        success: false,
-        error: error.message,
-        code: error.code
-      });
-    }
-
-    if (error.code === 'DOMAIN_NOT_WHITELISTED' || error.code === 'DOMAIN_NOT_ALLOWED') {
-      return res.status(403).json({ success: false, error: error.message, code: error.code });
-    }
-
-    if (error.code === 'PLAN_LIMIT_EXCEEDED') {
-      return res.status(403).json({ success: false, error: error.message, code: 'PLAN_LIMIT_EXCEEDED' });
-    }
-
+    const handled = linkWriteError(res, error);
+    if (handled) return handled;
     res.status(400).json({
       success: false,
       error: error.message || 'Failed to create link'
@@ -1203,12 +1446,15 @@ router.get('/', requireAuth, requireAdmin, async (req, res) => {
 // GET LINK BY CODE (Must be AFTER specific routes like /health, /stats, /r/:code)
 // ============================================================================
 
-router.get('/:code', optionalAuth, async (req, res) => {
+router.get('/:code', requireAuth, async (req, res) => {
   try {
     const { code } = req.params;
     const link = await LinkService.getShortLink(code);
-    const safeLink = canReadLink(req.user, link) ? link : publicLinkView(link);
-    res.json({ success: true, link: safeLink });
+    // Other tenants get the same 404 as a missing code: no metadata oracle.
+    if (!canReadLink(req.user, link)) {
+      return res.status(404).json({ success: false, error: 'Short code not found' });
+    }
+    res.json({ success: true, link });
   } catch (error) {
     console.error('[SmartLinks] Error fetching link:', error);
     
@@ -1230,21 +1476,27 @@ router.get('/:code', optionalAuth, async (req, res) => {
 // UPDATE LINK (Protected - Requires Admin Role)
 // ============================================================================
 
-router.put('/:code', requireAuth, requireAdmin, async (req, res) => {
+router.put('/:code', requireAuth, requireAdmin, requireVerifiedEmail, async (req, res) => {
   try {
     const { code } = req.params;
-    const updates = req.body;
+    const updates = pickUpdateInput(req.body);
     const existingLink = await LinkService.getShortLink(code);
     const tenantContext = await getTenantFromRequest(req);
     if (!tenantContext.isSuperAdmin) {
       assertTenantAccess(req.user, existingLink.tenantId || DEFAULT_TENANT_ID);
     }
 
-    // Domain policy is enforced in the service layer. Super-admins may bypass the
-    // whitelist with destinationCategory==='custom'.
+    // Domain policy + safety are enforced in the service layer. Super-admins may
+    // bypass the Kaayko whitelist with destinationCategory==='custom'.
     const isCustomBypass = tenantContext.isSuperAdmin && updates.destinationCategory === 'custom';
 
-    const link = await LinkService.updateShortLink(code, { ...updates, bypassDomainCheck: isCustomBypass });
+    const link = await LinkService.updateShortLink(code, {
+      ...updates,
+      bypassDomainCheck: isCustomBypass,
+      actorIsSuperAdmin: tenantContext.isSuperAdmin,
+      updatedBy: req.user.email || req.user.uid
+    });
+    recordAudit({ req, action: 'link.updated', code, tenantId: existingLink.tenantId || DEFAULT_TENANT_ID, before: existingLink, after: link });
 
     // Fire link.updated webhook (async, non-blocking).
     triggerWebhooks({
@@ -1257,34 +1509,11 @@ router.put('/:code', requireAuth, requireAdmin, async (req, res) => {
       }
     }).catch(err => console.error('⚠️ Webhook trigger error (update):', err));
 
-    res.json({ success: true, link });
+    res.json({ success: true, link, status: link.status });
   } catch (error) {
     console.error('[SmartLinks] Error updating link:', error);
-    
-    if (error.code === 'NOT_FOUND') {
-      return res.status(404).json({
-        success: false,
-        error: 'Link not found',
-        code: 'NOT_FOUND'
-      });
-    }
-
-    if (error.code === 'INVALID_URL' || error.code === 'VALIDATION_ERROR') {
-      return res.status(422).json({
-        success: false,
-        error: error.message,
-        code: error.code
-      });
-    }
-
-    if (error.code === 'DOMAIN_NOT_WHITELISTED' || error.code === 'DOMAIN_NOT_ALLOWED') {
-      return res.status(403).json({ success: false, error: error.message, code: error.code });
-    }
-
-    if (error.message?.includes('tenant') || error.message?.includes('Access denied') || error.code?.startsWith('TENANT')) {
-      return tenantAccessError(res, error);
-    }
-
+    const handled = linkWriteError(res, error);
+    if (handled) return handled;
     res.status(500).json({
       success: false,
       error: 'Failed to update link'
@@ -1306,6 +1535,7 @@ router.delete('/:code', requireAuth, requireAdmin, async (req, res) => {
     }
 
     const result = await LinkService.deleteShortLink(code);
+    recordAudit({ req, action: 'link.deleted', code, tenantId: existingLink.tenantId || DEFAULT_TENANT_ID, before: existingLink });
 
     // Fire link.deleted webhook (async, non-blocking).
     triggerWebhooks({
@@ -1347,7 +1577,7 @@ router.delete('/:code', requireAuth, requireAdmin, async (req, res) => {
 router.post('/events/:type', rateLimiter('api'), async (req, res) => {
   try {
     const { type } = req.params;
-    const { linkId, userId, platform, metadata = {} } = req.body;
+    const { linkId, userId, platform, metadata = {}, clickId } = req.body;
 
     if (!ALLOWED_PUBLIC_EVENT_TYPES.has(type)) {
       return res.status(400).json({
@@ -1373,29 +1603,54 @@ router.post('/events/:type', rateLimiter('api'), async (req, res) => {
       });
     }
 
+    // Unauthenticated callers must present the clickId Kortex appended to the
+    // destination; without it anyone could inflate any tenant's counters.
+    if (!clickId || typeof clickId !== 'string' || clickId.length > 64) {
+      return res.status(400).json({
+        success: false,
+        error: 'clickId is required (Kortex appends it to the destination URL)',
+        code: 'CLICK_ID_REQUIRED'
+      });
+    }
+
+    const clickRef = db.collection('click_events').doc(clickId);
+    const clickDoc = await clickRef.get();
+    if (!clickDoc.exists || clickDoc.data().linkCode !== linkId) {
+      return res.status(404).json({
+        success: false,
+        error: 'No click matches this clickId for the given link',
+        code: 'CLICK_NOT_FOUND'
+      });
+    }
+
     // Track event in analytics collection
     const eventData = {
       type,
       linkId,
+      clickId,
       tenantId: link.tenantId || DEFAULT_TENANT_ID,
-      userId: userId || null,
-      platform: platform || 'unknown',
-      metadata,
+      userId: userId ? String(userId).slice(0, 200) : null,
+      platform: platform ? String(platform).slice(0, 40) : 'unknown',
+      metadata: metadata && typeof metadata === 'object' ? metadata : {},
       timestamp: FieldValue.serverTimestamp()
     };
 
     await db.collection('link_analytics').add(eventData);
 
-    // Update link stats if it's an install event
-    if (type === 'install') {
-      await db.collection('short_links').doc(linkId).update({
-        installCount: FieldValue.increment(1)
-      });
+    // Update link stats if it's an install event (once per click)
+    let attributed = false;
+    if (type === 'install' && clickDoc.data().installAttributed !== true) {
+      await Promise.all([
+        db.collection('short_links').doc(linkId).update({ installCount: FieldValue.increment(1) }),
+        clickRef.update({ installAttributed: true, installTimestamp: FieldValue.serverTimestamp() })
+      ]);
+      attributed = true;
     }
 
-    res.json({ 
-      success: true, 
-      message: `${type} event tracked` 
+    res.json({
+      success: true,
+      attributed,
+      message: `${type} event tracked`
     });
 
   } catch (error) {

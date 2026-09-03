@@ -17,8 +17,17 @@ const { getClientIp } = require('./clientIp');
 const { FieldValue } = require('firebase-admin/firestore');
 const { trackClick, updateClickRedirect } = require('./clickTracking');
 const KortexV2 = require('./v2LinkIntents');
+const { respondForStatus } = require('./safetyPages');
+const { DEFAULT_TENANT_ID } = require('./tenantContext');
 
 const db = admin.firestore();
+
+// Search engines are let through the bot gate and served the real destination
+// (a 302, never the interstitial) so links stay indexable; like social crawlers
+// their fetch is not recorded as a click.
+function isSearchCrawler(userAgent = '') {
+  return /googlebot|bingbot|duckduckbot|baiduspider|yandexbot|yandex\.com\/bots|slurp|applebot|petalbot/i.test(String(userAgent));
+}
 const ALUMNI_POLL_TITLE = 'What would bring you back to your school?';
 const ALUMNI_POLL_DESCRIPTION_FALLBACK = 'One tap. Anonymous. No signup. Closes in 6 days.';
 const ALUMNI_POLL_OG_IMAGE = 'https://kaayko.com/og/diya.png?v=20260420c';
@@ -242,7 +251,9 @@ function renderSocialPreviewPage({ code, title, description, imageUrl }) {
  * @returns {'ios'|'android'|'web'} Platform identifier
  */
 async function isStarterLink(tenantId) {
-  if (!tenantId || tenantId === 'kaayko-default') return true;
+  // Kaayko's own links (paddling QR codes, store links) are the house tenant,
+  // not a free-tier customer: they get a clean 302, never the "Powered by" page.
+  if (!tenantId || tenantId === DEFAULT_TENANT_ID) return false;
   try {
     const snap = await db.collection('tenants').doc(tenantId).get();
     if (!snap.exists) return true;
@@ -438,8 +449,9 @@ async function handleRedirect(req, res, code, options = {}) {
 
     // Bot detection — block headless browsers and automation tools
     const { detectBot, isCanaryCode } = require('./linkSecurityService');
+    const isCrawler = isSocialCrawler(userAgent) || isSearchCrawler(userAgent);
     const botCheck = detectBot(req);
-    if (botCheck.isBot && !isSocialCrawler(userAgent)) {
+    if (botCheck.isBot && !isCrawler) {
       return res.status(404).send(errorPage(404, 'Not Found', 'This page does not exist.'));
     }
 
@@ -473,6 +485,11 @@ async function handleRedirect(req, res, code, options = {}) {
         'This link has been disabled by its creator.'
       ));
     }
+
+    // Case 2a: Safety / review state — held links show a review page (200,
+    // noindex), blocked links a 410. Read fresh on every request, so a block
+    // takes effect immediately.
+    if (respondForStatus(res, linkData, code)) return;
 
     // Case 2b: Tenant churned — 30-day grace period then deactivation
     const churnedAt = linkData.tenantChurnedAt || null;
@@ -660,9 +677,10 @@ async function handleRedirect(req, res, code, options = {}) {
       destination = selectDestinationVariant(destinations.web);
     }
 
-    // Track click with full context (generates clickId for attribution)
+    // Track click with full context (generates clickId for attribution).
+    // Crawler fetches (link previews, search indexing) are not clicks.
     let clickId = null;
-    if (options.trackAnalytics) {
+    if (options.trackAnalytics && !isCrawler) {
       try {
         const clickData = await trackClick({
           linkCode: code,
@@ -688,13 +706,15 @@ async function handleRedirect(req, res, code, options = {}) {
     }
 
     // Track basic click metrics (async, non-blocking)
-    db.collection('short_links')
-      .doc(code)
-      .update({
-        clickCount: FieldValue.increment(1),
-        lastClickedAt: FieldValue.serverTimestamp()
-      })
-      .catch(err => console.error('[Redirect] Click count update failed:', err));
+    if (!isCrawler) {
+      db.collection('short_links')
+        .doc(code)
+        .update({
+          clickCount: FieldValue.increment(1),
+          lastClickedAt: FieldValue.serverTimestamp()
+        })
+        .catch(err => console.error('[Redirect] Click count update failed:', err));
+    }
 
     // Preserve tracking context across redirects. Mobile deep links also receive clickId.
     if (clickId || Object.keys(trackingContext.utm).length) {
@@ -728,7 +748,7 @@ async function handleRedirect(req, res, code, options = {}) {
     // "Powered by Kortex" interstitial for Starter-tier links (PLG viral loop)
     const tenantId = linkData.tenantId || 'kaayko-default';
     const isStarterTier = await isStarterLink(tenantId);
-    if (isStarterTier && !isSocialCrawler(userAgent)) {
+    if (isStarterTier && !isCrawler) {
       return res.status(200).set('Content-Type', 'text/html; charset=utf-8').send(
         poweredByPage(destination, linkData.title || code)
       );

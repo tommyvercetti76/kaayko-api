@@ -23,8 +23,38 @@
 const admin = require('firebase-admin');
 const { FieldValue } = require('firebase-admin/firestore');
 const { validateLinkCreate, validateLinkUpdate, validateLinkCode } = require('./campaignValidation');
+const safety = require('../kortex/destinationSafety');
 
 const db = admin.firestore();
+
+/**
+ * Campaign links write the short_links mirror directly, so they run the same
+ * destination safety assessment as every other creation path here.
+ * Throws DESTINATION_BLOCKED; returns { status, safety } for the mirror.
+ */
+async function assessCampaignDestinations(destinations, { campaign, actor, purpose }) {
+  let tenantDoc = null;
+  if (campaign.tenantId && campaign.tenantId !== 'kaayko-default') {
+    const snap = await db.collection('tenants').doc(campaign.tenantId).get();
+    tenantDoc = snap.exists ? snap.data() : null;
+  }
+  const assessment = await safety.assessDestinations(destinations, {
+    tenantId: campaign.tenantId,
+    tenant: tenantDoc,
+    actorIsSuperAdmin: actor?.role === 'super-admin',
+    purpose
+  });
+  if (assessment.verdict === safety.VERDICT.BLOCK) {
+    const err = new Error(`Destination refused: ${assessment.reasons.map(r => r.detail).join('; ')}`);
+    err.code = 'DESTINATION_BLOCKED';
+    err.reasons = assessment.reasons;
+    throw err;
+  }
+  return {
+    status: safety.statusForVerdict(assessment.verdict),
+    safety: safety.buildSafetyRecord(assessment, { purpose, actor: actor?.email || actor?.uid || null })
+  };
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -63,6 +93,8 @@ function buildShortLinkMirror(campaign, link) {
     requiresAuth: link.metadata?.requiresAuth === 'true' || link.metadata?.requiresAuth === true,
     conversionGoal: link.metadata?.conversionGoal || null,
     enabled: link.status === 'active',
+    status: link.reviewStatus || 'active',
+    safety: link.safety || null,
     isCampaignLink: true,
     updatedAt: FieldValue.serverTimestamp()
   };
@@ -116,6 +148,8 @@ async function createCampaignLink({ campaign, actor, data }) {
     throw err;
   }
 
+  const safetyOutcome = await assessCampaignDestinations(validated.destinations, { campaign, actor, purpose: 'create' });
+
   const now = FieldValue.serverTimestamp();
   const link = {
     tenantId: campaign.tenantId,
@@ -123,6 +157,8 @@ async function createCampaignLink({ campaign, actor, data }) {
     code: validated.code,
     shortLinkCode: slCode,
     status: 'active',
+    reviewStatus: safetyOutcome.status,
+    safety: safetyOutcome.safety,
     destinations: validated.destinations,
     utm: validated.utm,
     metadata: validated.metadata,
@@ -191,6 +227,13 @@ async function updateCampaignLink({ campaign, link, actor, data }) {
     updatedBy: actor.uid
   };
 
+  let safetyOutcome = null;
+  if (validated.destinations !== undefined) {
+    safetyOutcome = await assessCampaignDestinations(validated.destinations, { campaign, actor, purpose: 'update' });
+    updates.reviewStatus = safetyOutcome.status;
+    updates.safety = safetyOutcome.safety;
+  }
+
   // Build the updated link shape for mirror
   const mergedLink = { ...link, ...validated };
 
@@ -200,6 +243,10 @@ async function updateCampaignLink({ campaign, link, actor, data }) {
   // Sync only the mirror fields that changed
   const mirrorUpdates = {};
   if (validated.destinations !== undefined) mirrorUpdates.destinations = validated.destinations;
+  if (safetyOutcome) {
+    mirrorUpdates.status = safetyOutcome.status;
+    mirrorUpdates.safety = safetyOutcome.safety;
+  }
   if (validated.utm !== undefined) mirrorUpdates.utm = validated.utm;
   if (validated.metadata !== undefined) {
     mirrorUpdates.metadata = {

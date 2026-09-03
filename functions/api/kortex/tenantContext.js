@@ -43,7 +43,8 @@ function getUserTenantIds(user) {
  * @param {Object} req.apiClient - API key client (from requireApiKey middleware)
  * @returns {Promise<{tenantId: string, tenantName: string|null, isSuperAdmin: boolean}>}
  */
-async function getTenantFromRequest(req) {
+async function getTenantFromRequest(req, options = {}) {
+  const { allowDefaultFallback = true } = options;
   // Priority 1: Explicit tenant header (for super-admins switching tenants)
   const headerTenantId = req.headers['x-kaayko-tenant-id'];
   if (headerTenantId) {
@@ -90,11 +91,19 @@ async function getTenantFromRequest(req) {
     };
   }
 
-  // Priority 4: Default tenant (backward compatibility)
+  // Priority 4: Default tenant (backward compatibility). Routes that must never
+  // act on Kaayko's own tenant by accident (billing, provisioning) pass
+  // allowDefaultFallback:false and get a coded error instead.
+  if (!allowDefaultFallback) {
+    const error = new Error('No tenant is associated with this account');
+    error.code = 'TENANT_REQUIRED';
+    throw error;
+  }
   return {
     tenantId: DEFAULT_TENANT_ID,
     tenantName: 'Kaayko',
-    isSuperAdmin: false
+    isSuperAdmin: false,
+    viaFallback: true
   };
 }
 

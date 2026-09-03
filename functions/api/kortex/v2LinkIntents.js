@@ -248,20 +248,21 @@ async function recordEvent(type, payload = {}, req = null) {
 
   const linkCode = payload.linkCode || payload.code || null;
 
-  // Anti-poisoning: never trust a caller-supplied tenantId for a real link.
-  // When a linkCode is given and the link exists, derive tenantId from the stored
-  // link so an anonymous caller can't attribute events to a competitor's tenant.
-  let tenantId = payload.tenantId || DEFAULT_TENANT_ID;
-  if (linkCode) {
-    try {
-      const linkDoc = await db.collection('short_links').doc(linkCode).get();
-      if (linkDoc.exists) {
-        tenantId = linkDoc.data().tenantId || DEFAULT_TENANT_ID;
-      }
-    } catch (_) {
-      // Lookup failure is non-fatal; fall back to the best-effort tenantId.
-    }
+  // Anti-poisoning: the tenant is always derived from the stored link. A caller
+  // can no longer attribute events to a tenant of their choosing by omitting the
+  // link code, so an unknown or missing code is rejected.
+  if (!linkCode) {
+    const error = new Error('linkCode is required');
+    error.code = 'LINK_CODE_REQUIRED';
+    throw error;
   }
+  const linkDoc = await db.collection('short_links').doc(linkCode).get();
+  if (!linkDoc.exists) {
+    const error = new Error('Link not found');
+    error.code = 'NOT_FOUND';
+    throw error;
+  }
+  const tenantId = linkDoc.data().tenantId || DEFAULT_TENANT_ID;
 
   const event = {
     type,
@@ -274,9 +275,9 @@ async function recordEvent(type, payload = {}, req = null) {
     intent: payload.intent || null,
     metadata: payload.metadata || {},
     userId: payload.userId || null,
-    userAgent: req?.get ? req.get('user-agent') || null : null,
+    userAgent: req?.get ? String(req.get('user-agent') || '').slice(0, 300) || null : null,
     referrer: req?.get ? req.get('referer') || null : null,
-    ip: req?.ip || req?.connection?.remoteAddress || null,
+    ip: req ? (require('./clientIp').getClientIp(req) || null) : null,
     createdAt: FieldValue.serverTimestamp()
   };
 
@@ -344,6 +345,28 @@ async function resolveLink({ code, namespace, host, path, query = {}, req = null
     : normalizedCode;
 
   const link = await LinkService.getShortLink(shortCode);
+
+  // The API resolver must honour the same gates as the redirect: a disabled,
+  // expired, held or blocked link is never handed out as a destination.
+  if (link.enabled === false) {
+    const error = new Error('Link disabled');
+    error.code = 'LINK_DISABLED';
+    throw error;
+  }
+  if (link.expiresAt) {
+    const expiry = link.expiresAt.toDate ? link.expiresAt.toDate() : new Date(link.expiresAt);
+    if (!Number.isNaN(expiry.getTime()) && expiry < new Date()) {
+      const error = new Error('Link expired');
+      error.code = 'LINK_EXPIRED';
+      throw error;
+    }
+  }
+  if (link.status === 'held' || link.status === 'blocked') {
+    const error = new Error(link.status === 'held' ? 'Link is under review' : 'Link has been blocked');
+    error.code = link.status === 'held' ? 'LINK_HELD' : 'LINK_BLOCKED';
+    throw error;
+  }
+
   const tenant = await findTenant({
     tenantId: link.tenantId || DEFAULT_TENANT_ID,
     host,

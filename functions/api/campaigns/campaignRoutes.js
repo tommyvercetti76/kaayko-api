@@ -338,6 +338,12 @@ function handleError(res, error, fallback) {
   if (error.code === 'VALIDATION_ERROR') {
     return res.status(400).json({ success: false, error: error.message, code: error.code, details: error.details || [] });
   }
+  if (error.code === 'DESTINATION_BLOCKED') {
+    return res.status(422).json({ success: false, error: error.message, code: error.code, reasons: error.reasons || [] });
+  }
+  if (error.code === 'CAMPAIGN_LIMIT_REACHED' || error.code === 'PLAN_LIMIT_EXCEEDED') {
+    return res.status(403).json({ success: false, error: error.message, code: error.code });
+  }
   if (error.code === 'TENANT_ACCESS_DENIED' || error.message?.includes('Access denied')) {
     return res.status(403).json({ success: false, error: 'Tenant access denied', code: 'TENANT_ACCESS_DENIED', message: error.message });
   }

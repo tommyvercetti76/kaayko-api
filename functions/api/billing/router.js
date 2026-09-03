@@ -31,6 +31,24 @@ const PLAN_RANK = { starter: 0, pro: 1, business: 2, enterprise: 3 };
 const isKnownPlan = (p) => Object.prototype.hasOwnProperty.call(PLAN_RANK, p);
 
 /**
+ * Billing must act on the caller's own tenant. Without a tenant profile the
+ * shared resolver used to fall back to Kaayko's default tenant, which let any
+ * Firebase account read or change that tenant's plan. Here the fallback is off.
+ */
+async function requireBillingTenant(req, res, next) {
+  try {
+    req.billingTenant = await getTenantFromRequest(req, { allowDefaultFallback: false });
+    next();
+  } catch (error) {
+    return res.status(403).json({
+      success: false,
+      error: error.code === 'TENANT_REQUIRED' ? 'No tenant is associated with this account' : 'Tenant access denied',
+      code: error.code || 'TENANT_ACCESS_DENIED'
+    });
+  }
+}
+
+/**
  * Helper to check if Stripe is configured
  */
 function requireStripe(req, res, next) {
@@ -59,9 +77,9 @@ router.get('/config', (req, res) => {
  * GET /billing/subscription
  * Get current subscription for authenticated user/tenant
  */
-router.get('/subscription', requireAuth, async (req, res) => {
+router.get('/subscription', requireAuth, requireBillingTenant, async (req, res) => {
   try {
-    const { tenantId } = await getTenantFromRequest(req);
+    const { tenantId } = req.billingTenant;
     
     // Get tenant subscription from Firestore
     const tenantDoc = await db.collection('tenants').doc(tenantId).get();
@@ -114,10 +132,10 @@ router.get('/subscription', requireAuth, async (req, res) => {
  * POST /billing/create-checkout
  * Create Stripe Checkout session for subscription upgrade
  */
-router.post('/create-checkout', requireAuth, requireStripe, async (req, res) => {
+router.post('/create-checkout', requireAuth, requireBillingTenant, requireStripe, async (req, res) => {
   try {
     const { planId } = req.body;
-    const { tenantId } = await getTenantFromRequest(req);
+    const { tenantId } = req.billingTenant;
     const userEmail = req.user.email;
     
     if (!planId || !PRICE_IDS[planId]) {
@@ -184,10 +202,10 @@ router.post('/create-checkout', requireAuth, requireStripe, async (req, res) => 
  * POST /billing/downgrade
  * Schedule downgrade to a lower plan
  */
-router.post('/downgrade', requireAuth, async (req, res) => {
+router.post('/downgrade', requireAuth, requireBillingTenant, async (req, res) => {
   try {
     const { planId } = req.body;
-    const { tenantId } = await getTenantFromRequest(req);
+    const { tenantId } = req.billingTenant;
 
     // Reject unknown plans outright.
     if (!isKnownPlan(planId)) {
@@ -265,9 +283,9 @@ router.post('/downgrade', requireAuth, async (req, res) => {
  * GET /billing/usage
  * Get detailed usage metrics for the current billing period
  */
-router.get('/usage', requireAuth, async (req, res) => {
+router.get('/usage', requireAuth, requireBillingTenant, async (req, res) => {
   try {
-    const { tenantId } = await getTenantFromRequest(req);
+    const { tenantId } = req.billingTenant;
     
     // Get tenant info
     const tenantDoc = await db.collection('tenants').doc(tenantId).get();

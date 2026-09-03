@@ -13,6 +13,10 @@ const request = require('supertest');
 const admin = require('firebase-admin');
 const { buildTestApp } = require('./helpers/testApp');
 
+// The redirect path scores a missing User-Agent as a bot (+70) and answers 404,
+// so redirect requests must look like a browser.
+const BROWSER_UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Safari/604.1';
+
 // Build the smartlinks app once for the describe blocks
 let smartLinksApp;
 let deepLinksApp;
@@ -37,13 +41,14 @@ describe('Kortex API — Health & Public Endpoints', () => {
 
   test('GET /smartlinks/:code for unknown link returns 404', async () => {
     // No doc set → exists returns false
-    const res = await request(smartLinksApp).get('/smartlinks/unknown-code');
+    const res = await request(smartLinksApp).get('/smartlinks/unknown-code')
+      .set('Authorization', 'Bearer VALID_ADMIN_TOKEN');
 
     expect(res.status).toBe(404);
     expect(res.body.success).toBe(false);
   });
 
-  test('GET /smartlinks/:code for existing link returns public-safe link data', async () => {
+  test('GET /smartlinks/:code requires authentication (no public link metadata)', async () => {
     admin._mocks.docData['short_links/lktest1'] = {
       code: 'lktest1',
       title: 'Test Link',
@@ -55,16 +60,16 @@ describe('Kortex API — Health & Public Endpoints', () => {
       createdAt: new Date()
     };
 
-    const res = await request(smartLinksApp).get('/smartlinks/lktest1');
+    const anonymous = await request(smartLinksApp).get('/smartlinks/lktest1');
+    expect(anonymous.status).toBe(401);
+    expect(anonymous.body.link).toBeUndefined();
 
-    expect(res.status).toBe(200);
-    expect(res.body.success).toBe(true);
-    expect(res.body.link).toBeDefined();
-    expect(res.body.link.code).toBe('lktest1');
-    expect(res.body.link.title).toBe('Test Link');
-    expect(res.body.link.destinations).toBeUndefined();
-    expect(res.body.link.metadata).toBeUndefined();
-    expect(res.body.link.tenantId).toBeUndefined();
+    admin._mocks.docData['admin_users/admin-uid'] = { role: 'admin', email: 'admin@kaayko.com', tenantId: 'kaayko-default' };
+    const owner = await request(smartLinksApp).get('/smartlinks/lktest1')
+      .set('Authorization', 'Bearer VALID_ADMIN_TOKEN');
+    expect(owner.status).toBe(200);
+    expect(owner.body.link.code).toBe('lktest1');
+    expect(owner.body.link.destinations.web).toBe('https://kaayko.com/store');
   });
 
   test('GET /smartlinks/tenants/:tenantSlug/bootstrap returns tenant portal routes', async () => {
@@ -123,11 +128,13 @@ describe('Kortex API — Health & Public Endpoints', () => {
   });
 
   test('POST /smartlinks/events accepts KORTEX V2 conversion events', async () => {
+    // Events are attributed to the link's stored tenant, never the body tenantId.
+    admin._mocks.docData['short_links/a_adminp12'] = { code: 'a_adminp12', tenantId: 'parishram', enabled: true };
     const res = await request(smartLinksApp)
       .post('/smartlinks/events')
       .send({
         type: 'registration_submitted',
-        tenantId: 'parishram',
+        tenantId: 'someone-else',
         linkCode: 'a_adminp12',
         source: 'qr',
         audience: 'alumni',
@@ -194,7 +201,7 @@ describe('Kortex API — Health & Public Endpoints', () => {
     expect(res.body.link.tenantId).toBe('tenant-a');
   });
 
-  test('GET /smartlinks/:code redacts full data from admins in other tenants', async () => {
+  test('GET /smartlinks/:code is a 404 for admins in other tenants (no metadata oracle)', async () => {
     admin._mocks.docData['admin_users/admin-uid'] = {
       role: 'admin',
       email: 'admin@kaayko.com',
@@ -214,11 +221,10 @@ describe('Kortex API — Health & Public Endpoints', () => {
       .get('/smartlinks/lktenantb')
       .set('Authorization', 'Bearer VALID_ADMIN_TOKEN');
 
-    expect(res.status).toBe(200);
-    expect(res.body.link.code).toBe('lktenantb');
-    expect(res.body.link.destinations).toBeUndefined();
-    expect(res.body.link.metadata).toBeUndefined();
-    expect(res.body.link.tenantId).toBeUndefined();
+    // Trust pass: other tenants get the same 404 as a missing code; nothing
+    // about the link (not even its title) is revealed.
+    expect(res.status).toBe(404);
+    expect(res.body.link).toBeUndefined();
   });
 
   test('GET /smartlinks/stats without auth returns 401', async () => {
@@ -279,7 +285,8 @@ describe('Kortex Redirects — Source-aware behavior', () => {
       tenantId: 'kaayko-default'
     };
 
-    const res = await request(deepLinksApp).get('/l/lksrc1?src=text');
+    const res = await request(deepLinksApp).get('/l/lksrc1?src=text')
+      .set('User-Agent', BROWSER_UA).set('Accept-Language', 'en');
 
     expect(res.status).toBe(302);
     expect(res.headers.location).toContain('https://example.com/landing');
@@ -300,7 +307,8 @@ describe('Kortex Redirects — Source-aware behavior', () => {
       }
     };
 
-    const res = await request(deepLinksApp).get('/l/lkblock1?src=qr');
+    const res = await request(deepLinksApp).get('/l/lkblock1?src=qr')
+      .set('User-Agent', BROWSER_UA).set('Accept-Language', 'en');
 
     expect(res.status).toBe(404);
     expect(res.text).toContain('QR campaign stopped.');
@@ -404,7 +412,10 @@ describe('Kortex API — Auth-protected CRUD requires admin', () => {
     expect(res.body.link.tenantId).toBe('tenant-a');
     expect(res.body.link.domain).toBe('go.tenant-a.test');
     expect(res.body.link.pathPrefix).toBe('/go');
-    expect(res.body.link.shortUrl).toBe('https://go.tenant-a.test/go/tenant-a-link');
+    // Tenant short URLs are currently issued on the alumni.kaayko.com namespace;
+    // branded domains (tenant.domain) are a later phase. The spoofed body
+    // domain/pathPrefix are still ignored.
+    expect(res.body.link.shortUrl).toBe('https://alumni.kaayko.com/tenant-a/tenant-a-link');
   });
 
   test('GET /smartlinks lists only the authenticated admin tenant by default', async () => {
@@ -547,9 +558,11 @@ describe('Kortex API — Public event tracking is constrained', () => {
       tenantId: 'tenant-a'
     };
 
+    // A public event must carry the clickId Kortex appended to the destination.
+    admin._mocks.docData['click_events/c_evt1'] = { clickId: 'c_evt1', linkCode: 'lkevent1' };
     const res = await request(smartLinksApp)
       .post('/smartlinks/events/open')
-      .send({ linkId: 'lkevent1', platform: 'ios' });
+      .send({ linkId: 'lkevent1', platform: 'ios', clickId: 'c_evt1' });
 
     const analytics = Object.values(admin._mocks.docData)
       .find(value => value?.type === 'open' && value?.linkId === 'lkevent1');

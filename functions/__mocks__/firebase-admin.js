@@ -133,6 +133,10 @@ const mockAuth = {
     if (token === 'VALID_ADMIN_TOKEN') return { uid: 'admin-uid', email: 'admin@kaayko.com', email_verified: true, auth_time: Date.now() / 1000, iat: Date.now() / 1000, exp: Date.now() / 1000 + 3600 };
     if (token === 'VALID_USER_TOKEN') return { uid: 'user-uid', email: 'user@test.com', email_verified: true, auth_time: Date.now() / 1000, iat: Date.now() / 1000, exp: Date.now() / 1000 + 3600 };
     if (token === 'VALID_SUPER_ADMIN_TOKEN') return { uid: 'super-admin-uid', email: 'super@kaayko.com', email_verified: true, auth_time: Date.now() / 1000, iat: Date.now() / 1000, exp: Date.now() / 1000 + 3600 };
+    // Self-serve signup fixtures: a freshly created Firebase user (no admin_users doc yet)
+    // and an existing self-serve admin whose email is still unverified.
+    if (token === 'VALID_NEW_USER_TOKEN') return { uid: 'new-user-uid', email: 'founder@acme-events.com', email_verified: false, auth_time: Date.now() / 1000, iat: Date.now() / 1000, exp: Date.now() / 1000 + 3600 };
+    if (token === 'VALID_UNVERIFIED_TOKEN') return { uid: 'unverified-uid', email: 'unverified@acme-events.com', email_verified: false, auth_time: Date.now() / 1000, iat: Date.now() / 1000, exp: Date.now() / 1000 + 3600 };
     if (token === 'EXPIRED_TOKEN') { const err = new Error('Token expired'); err.code = 'auth/id-token-expired'; throw err; }
     const err = new Error('Invalid token'); err.code = 'auth/argument-error'; throw err;
   }),
@@ -140,7 +144,9 @@ const mockAuth = {
   updateUser: jest.fn(async () => ({})),
   deleteUser: jest.fn(async () => ({})),
   revokeRefreshTokens: jest.fn(async () => ({})),
-  getUser: jest.fn(async (uid) => ({ uid, email: `${uid}@test.com`, displayName: uid, tokensValidAfterTime: new Date().toISOString() }))
+  getUser: jest.fn(async (uid) => ({ uid, email: `${uid}@test.com`, displayName: uid, tokensValidAfterTime: new Date().toISOString(), customClaims: {} })),
+  getUserByEmail: jest.fn(async (email) => ({ uid: 'uid-for-' + email.split('@')[0], email })),
+  setCustomUserClaims: jest.fn(async () => undefined)
 };
 
 // ─── Storage mocks ─────────────────────────────────────────────
@@ -151,7 +157,9 @@ const mockBucket = {
   file: jest.fn((name) => ({
     name,
     getSignedUrl: jest.fn(async () => [`https://storage.googleapis.com/${name}?signed`]),
-    save: jest.fn(async () => {}),
+    save: jest.fn(async (contents) => { mockState.storageFiles = mockState.storageFiles || {}; mockState.storageFiles[name] = String(contents); }),
+    exists: jest.fn(async () => [!!(mockState.storageFiles && mockState.storageFiles[name] !== undefined)]),
+    download: jest.fn(async () => [Buffer.from((mockState.storageFiles && mockState.storageFiles[name]) || '')]),
     delete: jest.fn(async () => {}),
     createWriteStream: jest.fn(() => {
       const { PassThrough } = require('stream');
@@ -210,6 +218,11 @@ module.exports._mocks = {
   resetAll() {
     Object.keys(mockDocData).forEach(k => delete mockDocData[k]);
     Object.keys(mockCollectionData).forEach(k => delete mockCollectionData[k]);
+    if (mockState.storageFiles) Object.keys(mockState.storageFiles).forEach(k => delete mockState.storageFiles[k]);
     mockState.activeBatch = null;
+  },
+  storageFiles() {
+    if (!mockState.storageFiles) mockState.storageFiles = {};
+    return mockState.storageFiles;
   }
 };
