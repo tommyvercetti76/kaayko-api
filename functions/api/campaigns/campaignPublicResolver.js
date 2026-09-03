@@ -11,6 +11,7 @@ const db = admin.firestore();
 // Never shadow existing mounted API or legacy routes.
 const RESERVED_SLUGS = new Set([
   'l',
+  'qr',
   'resolve',
   'health',
   'helloWorld',
