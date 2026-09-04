@@ -32,6 +32,7 @@ const { generateQR } = require('./qrService');
 const { scanUrl } = require('./utmTools');
 const { linkEventsCsv, workspaceCsv, sendCsv } = require('./csvExport');
 const { expiryDate } = require('./linkRules');
+const demo = require('./demoWorkspace');
 const { getLinkAnalytics } = require('./linkAnalytics');
 const { recordAudit } = require('./auditLog');
 const { rateLimiter } = require('../../middleware/securityMiddleware');
@@ -69,6 +70,14 @@ function parseExpiry(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) { const e = new Error('The end date is not a valid date'); e.code = 'VALIDATION_ERROR'; throw e; }
   return date.toISOString();
+}
+
+/** Writes are refused on a read-only (sample) session. */
+function requireWritable(req, res, next) {
+  if (req.guest && req.guest.readOnly) {
+    return res.status(403).json({ success: false, error: 'This is the sample workspace and it is read-only. Make your own link to get a code.', code: 'READ_ONLY_DEMO' });
+  }
+  next();
 }
 
 function hostnameOf(url) {
@@ -154,7 +163,7 @@ async function ownedLink(req, res) {
 router.post('/links', rateLimiter('guestCreate'), async (req, res) => {
   const body = req.body || {};
   // Honeypot: real forms never fill this field.
-  if (body.website) return res.status(400).json({ success: false, error: 'Invalid request', code: 'VALIDATION_ERROR' });
+  if (body.website) return res.status(400).json({ success: false, error: 'Something in the form did not look right. Reload the page and try again.', code: 'VALIDATION_ERROR' });
 
   const web = cleanUrl(body.destination || body.webDestination || body.url);
   const ios = cleanUrl(body.iosDestination);
@@ -172,6 +181,7 @@ router.post('/links', rateLimiter('guestCreate'), async (req, res) => {
   let created = null;
   try {
     workspace = await guest.resolveGuestSession(req);
+    if (workspace && workspace.readOnly) workspace = null; // never add to the sample workspace
     if (!workspace) {
       created = await guest.createGuestWorkspace({ email: contactEmail, req });
       workspace = { tenantId: created.tenantId, tenant: { id: created.tenantId, ...created.tenant } };
@@ -288,7 +298,8 @@ router.get('/workspace', guest.requireGuestSession, async (req, res) => {
     const { links } = await LinkService.listLinks({ tenantId: req.guest.tenantId, limit: 100 });
     return res.json({
       success: true,
-      workspace: guest.workspaceSummary(req.guest.tenant, { linkCount: links.length }),
+      workspace: { ...guest.workspaceSummary(req.guest.tenant, { linkCount: links.length }), demo: req.guest.tenant.demo === true, readOnly: !!req.guest.readOnly },
+      readOnly: !!req.guest.readOnly,
       links: links.map(publicLink)
     });
   } catch (error) {
@@ -324,6 +335,48 @@ router.get('/links/:code/analytics', guest.requireGuestSession, async (req, res)
   }
 });
 
+/**
+ * GET /kortex/guest/workspace/analytics — every link in the workspace inside
+ * the free window, plus one merged, compact event list for the overview
+ * charts. At most 25 links, so at most 25 queries.
+ */
+router.get('/workspace/analytics', guest.requireGuestSession, async (req, res) => {
+  try {
+    const { links } = await LinkService.listLinks({ tenantId: req.guest.tenantId, limit: 100 });
+    const rows = [];
+    let merged = [];
+    for (const link of links.slice(0, 25)) {
+      const a = await getLinkAnalytics(link.code, link, { windowDays: ANALYTICS_WINDOW_DAYS });
+      const src = Object.fromEntries((a.breakdowns.source || []).map(r => [r.value, r.clicks]));
+      const topCountry = (a.breakdowns.country || []).find(r => r.value) || null;
+      rows.push({
+        code: link.code, title: link.title || link.code, status: link.status || 'active', enabled: link.enabled !== false,
+        lifetime: link.clickCount || 0, events: a.totals.events, qr: src.qr || 0, taps: src.link || 0,
+        unique: a.unique ? a.unique.distinctVisitors : 0, topCountry: topCountry ? topCountry.value : null,
+        timeline: a.timeline.slice(-7).map(d => d.clicks)
+      });
+      merged = merged.concat((a.points || []).map(p => [link.code].concat(p)));
+    }
+    merged.sort((x, y) => x[1] - y[1]);
+    return res.json({ success: true, window: { days: ANALYTICS_WINDOW_DAYS }, links: rows, points: merged.slice(-3000) });
+  } catch (error) {
+    return guestError(res, error);
+  }
+});
+
+/**
+ * GET /kortex/guest/demo — a read-only session for the sample workspace.
+ */
+router.get('/demo', rateLimiter('guestSession'), async (req, res) => {
+  try {
+    const issued = await demo.issueDemoSession();
+    if (!issued) return res.status(404).json({ success: false, error: 'The sample workspace is not ready yet.', code: 'DEMO_NOT_READY' });
+    return res.json({ success: true, ...issued, readOnly: true });
+  } catch (error) {
+    return guestError(res, error);
+  }
+});
+
 router.get('/links/:code/analytics.csv', guest.requireGuestSession, rateLimiter('exportCsv'), async (req, res) => {
   const link = await ownedLink(req, res);
   if (!link) return;
@@ -348,7 +401,7 @@ router.get('/workspace/export.csv', guest.requireGuestSession, rateLimiter('expo
   }
 });
 
-router.patch('/links/:code', guest.requireGuestSession, async (req, res) => {
+router.patch('/links/:code', guest.requireGuestSession, requireWritable, async (req, res) => {
   const link = await ownedLink(req, res);
   if (!link) return;
   try {
@@ -385,7 +438,7 @@ router.patch('/links/:code', guest.requireGuestSession, async (req, res) => {
   }
 });
 
-router.delete('/links/:code', guest.requireGuestSession, async (req, res) => {
+router.delete('/links/:code', guest.requireGuestSession, requireWritable, async (req, res) => {
   const link = await ownedLink(req, res);
   if (!link) return;
   try {
@@ -399,7 +452,7 @@ router.delete('/links/:code', guest.requireGuestSession, async (req, res) => {
 
 // ─── Access code management ───────────────────────────────────────────────────
 
-router.post('/email', guest.requireGuestSession, rateLimiter('guestRecover'), async (req, res) => {
+router.post('/email', guest.requireGuestSession, requireWritable, rateLimiter('guestRecover'), async (req, res) => {
   try {
     const address = await guest.attachEmail(req.guest.tenantId, req.body?.email);
     // We never store the code, so attaching an email issues a fresh one and mails it.
@@ -419,7 +472,7 @@ router.post('/email', guest.requireGuestSession, rateLimiter('guestRecover'), as
   }
 });
 
-router.post('/rotate', guest.requireGuestSession, async (req, res) => {
+router.post('/rotate', guest.requireGuestSession, requireWritable, async (req, res) => {
   try {
     const { accessCode } = await guest.rotateAccessCode(req.guest.tenantId);
     recordAudit({ req, actor: { type: 'guest', workspace: req.guest.tenantId }, action: 'guest.code_rotated', tenantId: req.guest.tenantId });
@@ -436,7 +489,8 @@ router.post('/recover', rateLimiter('guestRecover'), async (req, res) => {
     return res.status(400).json({ success: false, error: 'A valid email address is required', code: 'VALIDATION_ERROR' });
   }
   try {
-    const workspaces = await guest.findGuestWorkspacesByEmail(address);
+    // Without a sender, rotating would only lock the owner out. Answer the same and do nothing.
+    const workspaces = email.isConfigured() ? await guest.findGuestWorkspacesByEmail(address) : [];
     for (const ws of workspaces.slice(0, 3)) {
       const { accessCode } = await guest.rotateAccessCode(ws.id);
       await email.sendGuestCodeRotated({ to: address, accessCode, lifetimeDays: guest.guestLifetimeDays() });
@@ -461,6 +515,7 @@ router.post('/recover', rateLimiter('guestRecover'), async (req, res) => {
  * stops working because the account now owns it.
  */
 router.post('/claim', rateLimiter('guestClaim'), requireAuth, async (req, res) => {
+  if (req.user && req.user.role === 'super-admin') return res.status(403).json({ success: false, error: 'A super-admin account cannot claim a workspace', code: 'SUPER_ADMIN_CANNOT_CLAIM' });
   try {
     if (req.user.profile?.tenantId) {
       return res.status(409).json({

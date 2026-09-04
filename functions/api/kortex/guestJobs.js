@@ -42,6 +42,20 @@ async function disableWorkspaceLinks(tenantId) {
  * @param {number} [options.limit=200]
  * @param {number} [options.nowMs]
  */
+/** Remove any queued credential-bearing emails written before bodies stopped being stored. */
+async function purgeQueuedCredentialEmails({ limit = 500 } = {}) {
+  const templates = ['guest_access_code', 'guest_code_rotated'];
+  let removed = 0;
+  for (const template of templates) {
+    const snap = await db.collection('pending_emails').where('template', '==', template).limit(limit).get();
+    for (const doc of snap.docs) {
+      const d = doc.data() || {};
+      if (d.text !== undefined || d.html !== undefined) { await doc.ref.delete(); removed++; }
+    }
+  }
+  return { removed };
+}
+
 async function expireGuestWorkspaces({ limit = 200, nowMs = Date.now() } = {}) {
   const snapshot = await db.collection('tenants')
     .where('kind', '==', GUEST_KIND)
@@ -54,6 +68,7 @@ async function expireGuestWorkspaces({ limit = 200, nowMs = Date.now() } = {}) {
   for (const doc of snapshot.docs) {
     const tenant = doc.data() || {};
     const guestInfo = tenant.guest || {};
+    if (tenant.demo === true) continue; // the sample workspace is refreshed, never expired
     // Defensive re-check: the in-memory test double ignores range filters.
     if (guestInfo.expired === true || !(guestInfo.expiresAtMs < nowMs)) continue;
     try {
@@ -74,4 +89,5 @@ async function expireGuestWorkspaces({ limit = 200, nowMs = Date.now() } = {}) {
   return result;
 }
 
-module.exports = { expireGuestWorkspaces, disableWorkspaceLinks };
+module.exports = {
+  purgeQueuedCredentialEmails, expireGuestWorkspaces, disableWorkspaceLinks };

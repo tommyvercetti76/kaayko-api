@@ -19,12 +19,12 @@ const { FieldValue } = require('firebase-admin/firestore');
 const COLLECTION = 'kortex_abuse_reports';
 const REASONS = Object.freeze(['phishing', 'malware', 'scam', 'adult', 'spam', 'other']);
 const AUTO_HOLD_REASONS = new Set(['phishing', 'malware', 'scam']);
-const AUTO_HOLD_DISTINCT_REPORTERS = 2;
+const AUTO_HOLD_DISTINCT_REPORTERS = 3;
+const AUTO_HOLD_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
 const AUTO_HOLD_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 function hashReporter(ip) {
-  const salt = process.env.KORTEX_IP_SALT || process.env.KORTEX_ACCESS_PEPPER || 'kortex-report';
-  return crypto.createHash('sha256').update(`${salt}:${ip || ''}`).digest('hex').slice(0, 24);
+  return require('./clientIp').hashClientIp(ip) || 'unknown';
 }
 
 function cleanText(value, max) {
@@ -72,7 +72,8 @@ async function fileReport({ body, ip, userAgent, setLinkStatus, recordAudit, req
   const ref = await db.collection(COLLECTION).add(report);
 
   let autoHeld = false;
-  if (link && AUTO_HOLD_REASONS.has(input.reason) && (link.status || 'active') === 'active') {
+  const recentlyReviewed = link && ((link.safety?.review?.approvedAtMs || 0) > nowMs - AUTO_HOLD_COOLDOWN_MS || (link.autoHeldAtMs || 0) > nowMs - AUTO_HOLD_COOLDOWN_MS);
+  if (link && !recentlyReviewed && AUTO_HOLD_REASONS.has(input.reason) && (link.status || 'active') === 'active') {
     const tenantSnap = link.tenantId ? await db.collection('tenants').doc(link.tenantId).get() : null;
     const tenantKind = tenantSnap && tenantSnap.exists ? (tenantSnap.data().kind || null) : null;
     if (tenantKind === 'guest') {
@@ -84,6 +85,7 @@ async function fileReport({ body, ip, userAgent, setLinkStatus, recordAudit, req
       reporters.add(reporter);
       if (reporters.size >= AUTO_HOLD_DISTINCT_REPORTERS) {
         await setLinkStatus(input.code, 'held', { reason: `abuse_reports:${input.reason}`, actor: 'abuse-reports' });
+        await db.collection('short_links').doc(input.code).update({ autoHeldAtMs: nowMs, heldBy: 'abuse-reports' });
         await ref.update({ autoHeld: true });
         autoHeld = true;
         await db.collection('security_alerts').add({

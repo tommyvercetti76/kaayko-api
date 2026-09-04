@@ -57,8 +57,8 @@ function eventRow(code, e) {
  */
 async function linkEventsCsv(code, { windowDays = 30, maxRows = 50000 } = {}) {
   const db = admin.firestore();
-  const snap = await db.collection('click_events').where('linkCode', '==', code).get();
   const startMs = Date.now() - windowDays * 86400000;
+  const snap = await db.collection('click_events').where('linkCode', '==', code).where('timestampMs', '>=', startMs).limit(maxRows * 2).get();
   const rows = snap.docs
     .map(d => d.data())
     .filter(e => { const ms = e.timestampMs || (e.timestamp?.toMillis ? e.timestamp.toMillis() : 0); return ms >= startMs; })

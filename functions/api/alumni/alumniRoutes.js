@@ -45,12 +45,8 @@ router.use(secureHeaders);
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function getClientIp(req) {
-  return (
-    req.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
-    req.headers['x-real-ip'] ||
-    req.socket?.remoteAddress ||
-    'unknown'
-  );
+  // Right-to-left forwarded chain (spoof-resistant); never the caller-controlled leftmost entry.
+  return require('../kortex/clientIp').getClientIp(req) || 'unknown';
 }
 
 function hashIp(ip) {
@@ -339,7 +335,9 @@ router.get('/report', rateLimiter(), async (req, res) => {
     if (keyData.linkCode) {
       try {
         const linkDoc = await db.collection('short_links').doc(keyData.linkCode).get();
-        if (linkDoc.exists && linkDoc.data().metadata?.isAdmin) {
+        // Privilege never comes from a customer link: only house-tenant links made by staff count.
+        const ld = linkDoc.exists ? linkDoc.data() : null;
+        if (ld && ld.metadata?.isAdmin && (ld.tenantId || 'kaayko-default') === 'kaayko-default' && ld.createdBy !== 'guest') {
           sourceGroup = null;
           sourceBatch = null;
           isAdminView = true;
@@ -505,7 +503,7 @@ router.post('/report-key', rateLimiter(), async (req, res) => {
       return res.status(404).json({ success: false, error: 'link_not_found' });
     }
     const linkData = linkDoc.data();
-    if (linkData.metadata?.campaign !== 'alumni') {
+    if (linkData.metadata?.campaign !== 'alumni' || (linkData.tenantId || 'kaayko-default') !== 'kaayko-default') {
       return res.status(403).json({ success: false, error: 'not_alumni_link' });
     }
 

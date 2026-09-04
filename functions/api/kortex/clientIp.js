@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 /**
  * Client IP resolution for requests arriving through Firebase Hosting → Cloud Run.
  *
@@ -76,4 +77,23 @@ function getClientIp(req) {
   return isPublic(direct) ? direct : null;
 }
 
-module.exports = { getClientIp, isPublic, normalise };
+/** Salt for IP hashes: a dedicated secret, else derived from the guest pepper chain; never a public constant outside the emulator. */
+function ipSalt() {
+  if (process.env.KORTEX_IP_SALT) return process.env.KORTEX_IP_SALT;
+  for (const key of ['KORTEX_ACCESS_PEPPER', 'KORTEX_LINK_SIGNING_SECRET', 'ADMIN_PASSPHRASE']) {
+    if (process.env[key]) return crypto.createHash('sha256').update(`kortex-ip-salt:${process.env[key]}`).digest('hex');
+  }
+  if (process.env.FUNCTIONS_EMULATOR === 'true' || process.env.NODE_ENV === 'test' || process.env.JEST_WORKER_ID) return 'kortex-ip-salt-emulator';
+  return null;
+}
+/** HMAC of the client IP under the salt, 16 hex chars; null when no salt exists (never a guessable hash). */
+function hashClientIp(ip) {
+  if (!ip) return null;
+  const salt = ipSalt();
+  if (!salt) return null;
+  return crypto.createHmac('sha256', salt).update(String(ip)).digest('hex').slice(0, 16);
+}
+
+module.exports = {
+  hashClientIp,
+  ipSalt, getClientIp, isPublic, normalise };

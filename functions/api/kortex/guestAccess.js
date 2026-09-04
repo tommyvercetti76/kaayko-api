@@ -73,6 +73,23 @@ function configError() {
   return error;
 }
 
+/** Every pepper we accept: the current one first, then any previous ones (comma-separated), so a rotation never bricks a workspace. */
+function peppers() {
+  const list = [pepper()];
+  for (const prev of String(process.env.KORTEX_ACCESS_PEPPER_PREVIOUS || '').split(',').map(s => s.trim()).filter(Boolean)) list.push(prev);
+  return list;
+}
+function verifyAgainstPeppers(id, secret, storedHash) {
+  const all = peppers();
+  for (let i = 0; i < all.length; i++) {
+    if (timingSafeEqualHex(hashSecretWith(all[i], id, secret), storedHash)) return { ok: true, pepperUsed: i };
+  }
+  return { ok: false, pepperUsed: -1 };
+}
+function hashSecretWith(pep, id, secret) {
+  return crypto.createHash('sha256').update(`${pep}:${id}:${secret}`).digest('hex');
+}
+
 /** Pepper for access-code hashes. Prefers a dedicated secret; derives from the admin passphrase otherwise. */
 function pepper() {
   if (process.env.KORTEX_ACCESS_PEPPER) return process.env.KORTEX_ACCESS_PEPPER;
@@ -261,18 +278,17 @@ async function verifyAccessCode(rawCode) {
   const guest = tenant.guest;
   const nowMs = Date.now();
 
-  if (guest.lockedUntilMs && guest.lockedUntilMs > nowMs) {
-    throw accessError('ACCESS_CODE_LOCKED', 'Too many attempts. Try again in about an hour.');
+  // No workspace-wide lockout: anyone who knew a workspace id could keep its
+  // owner out. Failures slow the next attempt down instead (up to two seconds),
+  // the per-IP limiter caps volume, and the 80-bit secret does the real work.
+  const priorFailures = guest.failedAttempts || 0;
+  if (priorFailures > 0 && process.env.NODE_ENV !== 'test' && !process.env.JEST_WORKER_ID) {
+    await new Promise(r => setTimeout(r, Math.min(2000, 100 * Math.pow(2, Math.min(priorFailures, 5)))));
   }
 
-  const ok = timingSafeEqualHex(hashSecret(parsed.id, parsed.secret), guest.accessCodeHash);
+  const { ok, pepperUsed } = verifyAgainstPeppers(parsed.id, parsed.secret, guest.accessCodeHash);
   if (!ok) {
-    const failures = (guest.failedAttempts || 0) + 1;
-    const update = { 'guest.failedAttempts': failures, updatedAt: FieldValue.serverTimestamp() };
-    if (failures >= LOCK_AFTER_FAILURES) {
-      update['guest.lockedUntilMs'] = nowMs + LOCK_DURATION_MS;
-      update['guest.failedAttempts'] = 0;
-    }
+    const update = { 'guest.failedAttempts': Math.min(priorFailures + 1, 50), updatedAt: FieldValue.serverTimestamp() };
     await ref.update(update).catch(() => {});
     await jitter();
     throw accessError();
@@ -286,6 +302,8 @@ async function verifyAccessCode(rawCode) {
   const update = {
     'guest.failedAttempts': 0,
     'guest.lockedUntilMs': 0,
+    // A code verified under a previous pepper is re-hashed under the current one.
+    ...(pepperUsed > 0 ? { 'guest.accessCodeHash': hashSecret(parsed.id, parsed.secret), 'guest.pepperVersion': (guest.pepperVersion || 1) + 1 } : {}),
     'guest.lastAccessAtMs': nowMs,
     'guest.expiresAtMs': nowMs + guestLifetimeDays() * 86400000,
     updatedAt: FieldValue.serverTimestamp()
@@ -335,8 +353,8 @@ async function attachEmail(tenantId, email) {
   return emailClean;
 }
 
-async function findGuestWorkspacesByEmail(email) {
-  const hash = hashEmail(email);
+async function findGuestWorkspacesByEmailUnderPepper(email, hashOverride = null) {
+  const hash = hashOverride || hashEmail(email);
   if (!hash) return [];
   const snapshot = await db.collection('tenants').where('guest.emailHash', '==', hash).limit(5).get();
   return snapshot.docs
@@ -354,13 +372,14 @@ function sign(payloadB64) {
   return crypto.createHmac('sha256', sessionSecret()).update(payloadB64).digest('base64url');
 }
 
-function issueSession(tenant, { ttlMs = SESSION_TTL_MS } = {}) {
+function issueSession(tenant, { ttlMs = SESSION_TTL_MS, readOnly = false } = {}) {
   const payload = {
     t: tenant.id,
     v: tenant.guest?.codeVersion || 1,
     iat: Date.now(),
     exp: Date.now() + ttlMs
   };
+  if (readOnly) payload.ro = 1; // sample workspace: reads only, no code exists for it
   const payloadB64 = b64url(JSON.stringify(payload));
   return `kxs.${payloadB64}.${sign(payloadB64)}`;
 }
@@ -402,7 +421,7 @@ async function resolveGuestSession(req) {
   const tenant = { id: snap.id, ...snap.data() };
   if (tenant.kind !== GUEST_KIND || tenant.enabled === false) return null;
   if ((tenant.guest?.codeVersion || 1) !== payload.v) return null;
-  return { tenantId: tenant.id, tenant, session: payload };
+  return { tenantId: tenant.id, tenant, session: payload, readOnly: payload.ro === 1 };
 }
 
 /** Express middleware: requires a valid guest session; attaches req.guest. */
@@ -444,7 +463,21 @@ function workspaceSummary(tenant, { linkCount = 0 } = {}) {
   };
 }
 
+/** Lookup by email under every accepted pepper (a rotated pepper changes the stored email hash). */
+async function findGuestWorkspacesByEmail(email) {
+  const normalised = String(email || '').trim().toLowerCase();
+  if (!normalised) return [];
+  const seen = new Map();
+  for (const pep of peppers()) {
+    const hash = crypto.createHash('sha256').update(`${pep}:email:${normalised}`).digest('hex');
+    const found = await findGuestWorkspacesByEmailUnderPepper(email, hash);
+    for (const ws of found) seen.set(ws.id, ws);
+  }
+  return [...seen.values()];
+}
+
 module.exports = {
+  findGuestWorkspacesByEmail,
   GUEST_KIND,
   SESSION_TTL_MS,
   LOCK_AFTER_FAILURES,

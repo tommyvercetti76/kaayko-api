@@ -100,7 +100,7 @@ async function recordAudit(entry = {}) {
       code,
       tenantId: tenantId || after?.tenantId || before?.tenantId || null,
       actor: describeActor(req, actor),
-      ip: req ? (getClientIp(req) || null) : null,
+      ip: req ? (require('./clientIp').hashClientIp(getClientIp(req)) || null) : null,
       userAgent: req?.get ? String(req.get('user-agent') || '').slice(0, 300) : null,
       changes: computeChanges(before, after),
       reason: reason || null,

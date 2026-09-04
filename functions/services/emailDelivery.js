@@ -26,6 +26,8 @@ function fromAddress() {
   return process.env.KORTEX_EMAIL_FROM || 'kortex@kaayko.com';
 }
 
+const SENSITIVE_TEMPLATES = new Set(['guest_access_code', 'guest_code_rotated']);
+
 function isConfigured() {
   return !!process.env.SENDGRID_API_KEY;
 }
@@ -70,11 +72,10 @@ async function sendViaSendGrid({ to, subject, text, html }, fetchImpl) {
  */
 async function deliver(message, { fetchImpl } = {}) {
   const { to, subject, text, html, template = null, meta = null } = message;
+  // The log never keeps a body: an access code in a queued email would defeat the hash at rest.
   const record = {
     to,
     subject,
-    text,
-    html,
     template,
     meta,
     from: fromAddress(),
@@ -87,6 +88,8 @@ async function deliver(message, { fetchImpl } = {}) {
   }
 
   if (!isConfigured()) {
+    // Nothing that carries a credential is queued: it could not be sent later without storing the code.
+    if (SENSITIVE_TEMPLATES.has(template)) return { status: 'not_configured', id: null };
     try {
       const ref = await db.collection('pending_emails').add({ ...record, status: 'queued', reason: 'no_provider' });
       return { status: 'queued', id: ref.id };
@@ -175,4 +178,4 @@ async function sendGuestCodeRotated(params, options) {
   return deliver(guestCodeRotatedMessage(params), options);
 }
 
-module.exports = { deliver, isConfigured, sendGuestAccessCode, sendGuestCodeRotated, guestAccessCodeMessage, guestCodeRotatedMessage, MANAGE_URL };
+module.exports = { deliver, isConfigured, SENSITIVE_TEMPLATES, sendGuestAccessCode, sendGuestCodeRotated, guestAccessCodeMessage, guestCodeRotatedMessage, MANAGE_URL };

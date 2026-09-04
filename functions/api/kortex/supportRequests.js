@@ -72,7 +72,7 @@ async function createRequest({ body, requester, ip, userAgent, email, recordAudi
     targetHours: target.hours,
     targetByMs: nowMs + target.hours * 3600000,
     status: 'open',
-    reporter: crypto.createHash('sha256').update(`${process.env.KORTEX_IP_SALT || 'kortex-support'}:${ip || ''}`).digest('hex').slice(0, 24),
+    reporter: require('./clientIp').hashClientIp(ip),
     userAgent: String(userAgent || '').slice(0, 200),
     createdAt: FieldValue.serverTimestamp(),
     createdAtMs: nowMs

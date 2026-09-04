@@ -5,6 +5,8 @@ const { FieldValue } = require('firebase-admin/firestore');
 const LinkService = require('./smartLinkService');
 const { DEFAULT_TENANT_ID } = require('./tenantContext');
 const { evaluateLimits } = require('./linkRules');
+const { getTenantGate } = require('./tenantGate');
+const { isQrScan, mergeTrackingIntoDestination, UTM_KEYS } = require('./utmTools');
 
 const db = admin.firestore();
 
@@ -78,6 +80,18 @@ function normalizeBoolean(value, fallback = false) {
   return value === true || value === 'true' || value === 1 || value === '1';
 }
 
+/** returnTo may only point back into Kaayko: a same-site path or a kaayko.com https URL. */
+function safeReturnTo(value) {
+  if (!value) return null;
+  if (value.startsWith('/') && !value.startsWith('//')) return value;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'https:') return null;
+    const host = url.hostname.toLowerCase();
+    return host === 'kaayko.com' || host.endsWith('.kaayko.com') ? url.toString() : null;
+  } catch (_) { return null; }
+}
+
 function normalizeV2Fields(data = {}) {
   const destinationType = cleanString(data.destinationType || data.metadata?.destinationType || 'external_url', 64);
   const audience = cleanString(data.audience || data.metadata?.audience || 'public', 32);
@@ -91,7 +105,7 @@ function normalizeV2Fields(data = {}) {
     audience: AUDIENCES.has(audience) ? audience : 'public',
     source: SOURCES.has(source) ? source : 'manual',
     intent: INTENTS.has(intent) ? intent : 'view',
-    returnTo: cleanString(data.returnTo || data.metadata?.returnTo, 2000) || null,
+    returnTo: safeReturnTo(cleanString(data.returnTo || data.metadata?.returnTo, 2000)),
     conversionGoal: cleanString(data.conversionGoal || data.metadata?.conversionGoal, 120) || null
   };
 
@@ -99,6 +113,10 @@ function normalizeV2Fields(data = {}) {
 }
 
 function publicTenantView(doc) {
+  // Free workspaces are anonymous: their id is part of the access code and must not be handed out.
+  if (doc && doc.data && doc.data().kind === 'guest') {
+    return { id: null, slug: null, name: 'Free workspace', domain: 'kaayko.com', pathPrefix: '/l', enabled: doc.data().enabled !== false, anonymous: true };
+  }
   const data = doc?.data ? doc.data() : doc || {};
   return {
     id: doc?.id || data.id || DEFAULT_TENANT_ID,
@@ -125,7 +143,11 @@ async function findTenant({ tenantId, tenantSlug, host, path }) {
 
   if (tenantId) {
     const doc = await db.collection('tenants').doc(tenantId).get();
-    if (doc.exists && doc.data().enabled !== false) return { id: doc.id, ...doc.data() };
+    if (doc.exists) {
+      // A link's own tenant that is switched off never falls through to another tenant.
+      if (doc.data().enabled === false) return null;
+      return { id: doc.id, ...doc.data() };
+    }
   }
 
   const candidates = [slug, hostSlug, pathSlug].filter(Boolean);
@@ -265,6 +287,26 @@ async function recordEvent(type, payload = {}, req = null) {
   }
   const tenantId = linkDoc.data().tenantId || DEFAULT_TENANT_ID;
 
+  // A conversion must hang off a real click on this link; a caller cannot invent traffic.
+  if (type !== 'link_clicked' && req) {
+    const clickId = typeof payload.clickId === 'string' ? payload.clickId.slice(0, 80) : null;
+    const click = clickId ? await db.collection('click_events').doc(clickId).get() : null;
+    if (!click || !click.exists || click.data().linkCode !== linkCode) {
+      const error = new Error('A clickId from this link is required');
+      error.code = 'CLICK_ID_REQUIRED';
+      throw error;
+    }
+  }
+  const boundedMetadata = (() => {
+    const src = payload.metadata && typeof payload.metadata === 'object' && !Array.isArray(payload.metadata) ? payload.metadata : {};
+    const out = {};
+    for (const [k, v] of Object.entries(src).slice(0, 20)) {
+      if (typeof v === 'string') out[k.slice(0, 40)] = v.slice(0, 500);
+      else if (typeof v === 'number' || typeof v === 'boolean' || v === null) out[k.slice(0, 40)] = v;
+    }
+    return out;
+  })();
+
   const event = {
     type,
     tenantId,
@@ -274,11 +316,11 @@ async function recordEvent(type, payload = {}, req = null) {
     source: payload.source || null,
     audience: payload.audience || null,
     intent: payload.intent || null,
-    metadata: payload.metadata || {},
+    metadata: boundedMetadata,
     userId: payload.userId || null,
     userAgent: req?.get ? String(req.get('user-agent') || '').slice(0, 300) || null : null,
     referrer: req?.get ? req.get('referer') || null : null,
-    ip: req ? (require('./clientIp').getClientIp(req) || null) : null,
+    ip: req ? (require('./clientIp').hashClientIp(require('./clientIp').getClientIp(req)) || null) : null,
     createdAt: FieldValue.serverTimestamp()
   };
 
@@ -354,7 +396,25 @@ async function resolveLink({ code, namespace, host, path, query = {}, req = null
     error.code = 'LINK_DISABLED';
     throw error;
   }
-  const overLimit = evaluateLimits(link);
+  // The same gates as the redirect: the tenant kill switch, the churn grace period, the legacy cap.
+  const gateInfo = await getTenantGate(link.tenantId || DEFAULT_TENANT_ID);
+  if (!gateInfo.enabled) {
+    const error = new Error('Workspace switched off');
+    error.code = 'TENANT_DISABLED';
+    throw error;
+  }
+  if (link.tenantChurnedAt) {
+    const churn = link.tenantChurnedAt.toDate ? link.tenantChurnedAt.toDate() : new Date(link.tenantChurnedAt);
+    if (!Number.isNaN(churn.getTime()) && Date.now() > churn.getTime() + 30 * 86400000) {
+      const error = new Error('Link no longer active');
+      error.code = 'TENANT_CHURNED';
+      throw error;
+    }
+  }
+  const withLegacyCap = link.maxUses && !(link.limits && link.limits.maxClicks)
+    ? { ...link, limits: { ...(link.limits || {}), maxClicks: Number(link.maxUses) } }
+    : link;
+  const overLimit = evaluateLimits(withLegacyCap);
   if (overLimit.over) {
     if (overLimit.fallbackUrl) {
       // Same rule as the redirect: the creator's fallback, and no click counted.
@@ -422,6 +482,12 @@ async function resolveLink({ code, namespace, host, path, query = {}, req = null
   if (v2.destinationType === 'external_url' && link.schedule) {
     const pick = require('./linkSchedule').pickScheduledDestination(link.schedule);
     if (pick) destination = pick.url;
+  }
+  // Same tag rules as the redirect: destination tags win, link tags fill gaps, a scan adds the medium.
+  if (v2.destinationType === 'external_url' && destination) {
+    const queryUtm = {};
+    for (const key of UTM_KEYS) if (typeof query[key] === 'string' && query[key]) queryUtm[key] = query[key];
+    destination = mergeTrackingIntoDestination(destination, { clickId, utm: { ...(link.utm || {}), ...queryUtm }, scanned: isQrScan(query) });
   }
 
   return {

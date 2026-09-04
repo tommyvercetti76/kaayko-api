@@ -220,6 +220,17 @@ exports.kortexLinkRescan = onSchedule({
 // successful access-code entry.
 const { expireGuestWorkspaces } = require("./api/kortex/guestJobs");
 
+exports.kortexDemoRefresh = onSchedule({
+  schedule: "20 3 * * 1",
+  timeZone: "Asia/Kolkata",
+  memory: "512MiB",
+  timeoutSeconds: 540
+}, async () => {
+  console.log("[KortexDemo] Refreshing the sample workspace...");
+  const result = await require("./api/kortex/demoWorkspace").seedDemo();
+  console.log(`[KortexDemo] Done: links=${result.links.length} events=${result.events}`);
+});
+
 exports.kortexGuestHousekeeping = onSchedule({
   schedule: "45 3 * * *",
   timeZone: "Asia/Kolkata",
@@ -229,6 +240,8 @@ exports.kortexGuestHousekeeping = onSchedule({
   console.log("[KortexGuest] Expiring dormant guest workspaces...");
   const result = await expireGuestWorkspaces({ limit: 200 });
   console.log(`[KortexGuest] Done: expired=${result.expired} linksDisabled=${result.linksDisabled}`);
+  const purged = await require("./api/kortex/guestJobs").purgeQueuedCredentialEmails();
+  if (purged.removed) console.log(`[KortexGuest] Purged ${purged.removed} queued credential emails`);
 });
 
 console.log("✅ Kaayko API v2 - PUBLIC: fastForecast + paddlingOut | PREMIUM: forecast ($$) | SMARTLINKS: admin portal");

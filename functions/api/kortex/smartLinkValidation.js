@@ -8,11 +8,11 @@
  * @returns {string} Random alphanumeric code (e.g., "lk1ngp", "lk9xrf")
  */
 function generateShortCode() {
+  // Six random characters from a CSPRNG (2.2 billion codes), so a code is not guessable from a 404 oracle.
   const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  const bytes = require('crypto').randomBytes(6);
   let code = 'lk';
-  for (let i = 0; i < 4; i++) {
-    code += chars[Math.floor(Math.random() * chars.length)];
-  }
+  for (let i = 0; i < 6; i++) code += chars[bytes[i] % chars.length];
   return code;
 }
 

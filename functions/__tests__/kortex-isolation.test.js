@@ -102,7 +102,8 @@ describe('POST /kortex/events (v2)', () => {
 
   test('ignores a body tenantId and derives the tenant from the link', async () => {
     linkFor('v2a', 'tenant-a');
-    const res = await request(app).post('/kortex/events').send({ type: 'registration_submitted', linkCode: 'v2a', tenantId: 'victim-tenant' });
+    admin._mocks.docData['click_events/c_v2a'] = { clickId: 'c_v2a', linkCode: 'v2a', tenantId: 'tenant-a' };
+    const res = await request(app).post('/kortex/events').send({ type: 'registration_submitted', linkCode: 'v2a', tenantId: 'victim-tenant', clickId: 'c_v2a' });
     expect(res.status).toBe(201);
     const events = Object.entries(admin._mocks.docData).filter(([k]) => k.startsWith('kortex_events/')).map(([, v]) => v);
     expect(events).toHaveLength(1);

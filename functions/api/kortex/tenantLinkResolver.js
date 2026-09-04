@@ -17,7 +17,7 @@ const db = admin.firestore();
 const router = express.Router();
 const { runSecurityChecks, isCanaryCode } = require('./linkSecurityService');
 const { getClientIp } = require('./clientIp');
-const { respondForStatus } = require('./safetyPages');
+const { respondForStatus, escapeHtml } = require('./safetyPages');
 const { pickScheduledDestination } = require('./linkSchedule');
 const { evaluateLimits, OVER_LIMIT_COPY } = require('./linkRules');
 const { isQrScan, mergeTrackingIntoDestination, UTM_KEYS } = require('./utmTools');
@@ -76,7 +76,7 @@ function isValidTenantSlug(slug) {
 
 function generateClickFingerprint(req) {
   // Hardened resolver (right-to-left forwarded chain); the old leftmost read was caller-controlled.
-  const ip = getClientIp(req) || req.ip || 'unknown';
+  const ip = getClientIp(req) || 'unknown';
   const ua = req.headers['user-agent'] || '';
   const accept = req.headers['accept-language'] || '';
   const raw = `${ip}|${ua}|${accept}`;
@@ -186,7 +186,7 @@ router.get('/:tenantSlug/:code', async (req, res, next) => {
 
   // Rate limit per IP
   // Hardened resolver (right-to-left forwarded chain); the old leftmost read was caller-controlled.
-  const ip = getClientIp(req) || req.ip || 'unknown';
+  const ip = getClientIp(req) || 'unknown';
   if (!checkResolveRateLimit(ip)) {
     return res.status(429).json({ error: 'Too many requests. Try again in a minute.' });
   }
@@ -383,22 +383,23 @@ function notFoundPage() {
 }
 
 function gonePage(title, message) {
-  return `<!DOCTYPE html><html><head><title>${title}</title><meta name="robots" content="noindex">
+  return `<!DOCTYPE html><html><head><title>${escapeHtml(title)}</title><meta name="robots" content="noindex">
 <style>body{font-family:-apple-system,sans-serif;background:#080808;color:#f0f0f0;margin:0;display:flex;align-items:center;justify-content:center;min-height:100vh}
 .c{text-align:center;max-width:400px;padding:32px}.h{font-size:48px;margin-bottom:16px;opacity:.3}h1{font-size:20px;margin:0 0 8px}p{color:#666;font-size:14px}</style>
-</head><body><div class="c"><div class="h">410</div><h1>${title}</h1><p>${message}</p></div></body></html>`;
+</head><body><div class="c"><div class="h">410</div><h1>${escapeHtml(title)}</h1><p>${escapeHtml(message)}</p></div></body></html>`;
 }
 
 function ogMetadataPage(link, destination, tenant) {
-  const title = link.title || 'Shared Link';
-  const desc = link.description || `Shared by ${tenant.name}`;
+  const title = escapeHtml(link.title || 'Shared Link');
+  const desc = escapeHtml(link.description || `Shared by ${tenant.name || 'Kortex'}`);
+  const safeDest = escapeHtml(destination);
   return `<!DOCTYPE html><html><head>
 <meta property="og:title" content="${title}">
 <meta property="og:description" content="${desc}">
-<meta property="og:url" content="${destination}">
+<meta property="og:url" content="${safeDest}">
 <meta property="og:type" content="website">
 <meta name="twitter:card" content="summary">
-<meta http-equiv="refresh" content="0;url=${destination}">
+<meta http-equiv="refresh" content="0;url=${safeDest}">
 </head><body></body></html>`;
 }
 

@@ -92,16 +92,13 @@ describe('Creating a free link', () => {
     expect(empty.status).toBe(400);
   });
 
-  test('an email at creation queues the access code when no provider is configured', async () => {
+  test('an email at creation is not queued when no provider is configured (a code is never stored in a mail log)', async () => {
     const res = await createFirst({ email: 'owner@example.com' });
     expect(res.status).toBe(201);
-    expect(res.body.emailDelivery).toBe('queued');
+    expect(res.body.emailDelivery).toBe('not_configured');
     expect(res.body.workspace.hasEmail).toBe(true);
     expect(res.body.workspace.email).toMatch(/^ow.+@example\.com$/);
-    const mail = docs('pending_emails/');
-    expect(mail).toHaveLength(1);
-    expect(mail[0].text).toContain(res.body.accessCode);
-    expect(mail[0].status).toBe('queued');
+    expect(docs('pending_emails/')).toHaveLength(0); // nothing that carries a code is ever queued
   });
 
   test('sends through SendGrid when a key is present', async () => {
@@ -140,16 +137,16 @@ describe('Access codes', () => {
     expect(garbage.body.error).toBe(wrong.body.error);
   });
 
-  test('locks a workspace after repeated failures', async () => {
+  test('repeated failures never lock the owner out; the right code still works', async () => {
     const created = await createFirst();
     const code = created.body.accessCode;
-    const bad = code.slice(0, -4) + (code.endsWith('AAAA') ? 'BBBB' : 'AAAA');
-    for (let i = 0; i < guest.LOCK_AFTER_FAILURES; i++) {
-      await request(app).post('/kortex/guest/session').set(...UA).send({ accessCode: bad });
+    const wrong = code.slice(0, -4) + 'ZZZZ';
+    for (let i = 0; i < guest.LOCK_AFTER_FAILURES + 1; i++) {
+      const r = await request(app).post('/kortex/guest/session').set(...UA).set('X-Forwarded-For', `198.51.100.${i + 1}`).send({ accessCode: wrong });
+      expect(r.status).toBe(401);
     }
-    const locked = await request(app).post('/kortex/guest/session').set(...UA).send({ accessCode: code });
-    expect(locked.status).toBe(429);
-    expect(locked.body.code).toBe('ACCESS_CODE_LOCKED');
+    const ok = await request(app).post('/kortex/guest/session').set(...UA).set('X-Forwarded-For', '198.51.100.50').send({ accessCode: code });
+    expect(ok.status).toBe(200);
   });
 
   test('each check-in renews the workspace for another lifetime', async () => {
@@ -170,7 +167,7 @@ describe('Access codes', () => {
     expect(res.status).toBe(200);
     expect(res.body.accessCode).toMatch(CODE_SHAPE);
     expect(res.body.accessCode).not.toBe(created.body.accessCode);
-    expect(res.body.emailDelivery).toBe('queued');
+    expect(res.body.emailDelivery).toBe('not_configured');
 
     const stale = await request(app).get('/kortex/guest/workspace').set(...UA).set('X-Kortex-Guest-Session', oldSession);
     expect(stale.status).toBe(401);
@@ -183,24 +180,17 @@ describe('Access codes', () => {
     expect(newCode.status).toBe(200);
   });
 
-  test('recovery by email answers the same way for known and unknown addresses', async () => {
+  test('recovery by email answers the same way for known and unknown addresses, and never rotates without a sender', async () => {
     const created = await createFirst({ email: 'owner@example.com' });
-    admin._mocks.docData = admin._mocks.docData; // keep
+    const hashBefore = admin._mocks.docData['tenants/' + created.body.workspace.id].guest.accessCodeHash;
     const beforeMails = docs('pending_emails/').length;
-
     const unknown = await request(app).post('/kortex/guest/recover').set(...UA).send({ email: 'nobody@example.com' });
     expect(unknown.status).toBe(202);
-    expect(docs('pending_emails/')).toHaveLength(beforeMails);
-
     const known = await request(app).post('/kortex/guest/recover').set(...UA).send({ email: 'owner@example.com' });
     expect(known.status).toBe(202);
     expect(known.body.message).toBe(unknown.body.message);
-    const mails = docs('pending_emails/');
-    expect(mails).toHaveLength(beforeMails + 1);
-    expect(mails[mails.length - 1].template).toBe('guest_code_rotated');
-
-    const oldCode = await request(app).post('/kortex/guest/session').set(...UA).send({ accessCode: created.body.accessCode });
-    expect(oldCode.status).toBe(401);
+    expect(docs('pending_emails/')).toHaveLength(beforeMails);
+    expect(admin._mocks.docData['tenants/' + created.body.workspace.id].guest.accessCodeHash).toBe(hashBefore);
   });
 });
 

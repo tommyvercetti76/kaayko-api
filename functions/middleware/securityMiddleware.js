@@ -79,53 +79,38 @@ function rateLimiter(limitType = 'api') {
       const now = Date.now();
       const key = `rate_limit_${limitType}_${ip}`;
       
-      // Get current rate limit data
-      const rateLimitDoc = await db.collection('rate_limits').doc(key).get();
-      
-      if (rateLimitDoc.exists) {
-        const data = rateLimitDoc.data();
-        const windowStart = typeof data.windowStart?.toMillis === 'function'
-          ? data.windowStart.toMillis()
-          : new Date(data.windowStart || 0).getTime();
-        
-        // Check if we're still in the same window
-        if (now - windowStart < limit.window) {
-          if (data.count >= limit.max) {
-            // Rate limit exceeded
-            const resetTime = new Date(windowStart + limit.window);
-            console.log(`[Security] Rate limit exceeded for ${ip} on ${limitType}`);
-            
-            return res.status(429).json({
-              success: false,
-              error: 'Too many requests',
-              message: `Rate limit exceeded. Try again after ${resetTime.toLocaleTimeString()}`,
-              retryAfter: Math.ceil((resetTime - now) / 1000)
-            });
-          }
-          
-          // Increment counter
-          await db.collection('rate_limits').doc(key).update({
-            count: admin.firestore.FieldValue.increment(1),
-            lastRequest: admin.firestore.FieldValue.serverTimestamp()
-          });
-        } else {
-          // Start new window
-          await db.collection('rate_limits').doc(key).set({
-            count: 1,
-            windowStart: admin.firestore.FieldValue.serverTimestamp(),
-            lastRequest: admin.firestore.FieldValue.serverTimestamp(),
-            ip,
-            limitType
-          });
+      // Read, check and count inside one transaction, so a burst of parallel
+      // requests cannot all pass the check before any increment lands.
+      const ref = db.collection('rate_limits').doc(key);
+      const outcome = await db.runTransaction(async (tx) => {
+        const snap = await tx.get(ref);
+        const data = snap.exists ? snap.data() : null;
+        const windowStart = data
+          ? (typeof data.windowStart?.toMillis === 'function' ? data.windowStart.toMillis() : new Date(data.windowStart || 0).getTime())
+          : 0;
+        if (data && now - windowStart < limit.window) {
+          if ((data.count || 0) >= limit.max) return { limited: true, windowStart };
+          // Explicit next count: inside the transaction this is atomic, and it needs no server-side arithmetic.
+          tx.update(ref, { count: (data.count || 0) + 1, lastRequest: admin.firestore.FieldValue.serverTimestamp() });
+          return { limited: false };
         }
-      } else {
-        // First request - create new rate limit entry
-        await db.collection('rate_limits').doc(key).set({
+        tx.set(ref, {
           count: 1,
           windowStart: admin.firestore.FieldValue.serverTimestamp(),
           lastRequest: admin.firestore.FieldValue.serverTimestamp(),
           ip,
           limitType
+        });
+        return { limited: false };
+      });
+      if (outcome.limited) {
+        const resetTime = new Date(outcome.windowStart + limit.window);
+        console.log(`[Security] Rate limit exceeded for ${ip} on ${limitType}`);
+        return res.status(429).json({
+          success: false,
+          error: 'Too many requests',
+          message: `Rate limit exceeded. Try again after ${resetTime.toLocaleTimeString()}`,
+          retryAfter: Math.ceil((resetTime - now) / 1000)
         });
       }
       

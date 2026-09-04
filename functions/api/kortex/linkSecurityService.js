@@ -163,8 +163,7 @@ async function createCanaryLink(tenantId, tenantSlug) {
 }
 
 async function triggerCanaryAlert(code, req) {
-  const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || 'unknown';
-  const ipHash = crypto.createHash('sha256').update(ip).digest('hex').substring(0, 16);
+  const ipHash = require('./clientIp').hashClientIp(require('./clientIp').getClientIp(req)) || 'unknown';
 
   await db.collection('security_alerts').add({
     type: 'canary_triggered',
@@ -372,9 +371,7 @@ async function runSecurityChecks(code, tenantId, req) {
         tenantId,
         alerts: results.alerts,
         botScore: results.botScore,
-        ipHash: crypto.createHash('sha256')
-          .update(req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || '')
-          .digest('hex').substring(0, 12),
+        ipHash: require('./clientIp').hashClientIp(require('./clientIp').getClientIp(req)) || null,
         timestamp: admin.firestore.FieldValue.serverTimestamp()
       }).catch(() => {});
     }
@@ -390,7 +387,7 @@ async function runSecurityChecks(code, tenantId, req) {
 function sanitizeHeaders(headers) {
   const safe = {};
   const ALLOWED = ['accept', 'accept-language', 'accept-encoding', 'connection',
-    'cache-control', 'x-forwarded-for', 'x-forwarded-proto', 'cf-ipcountry'];
+    'cache-control', 'x-forwarded-proto', 'cf-ipcountry'];
   for (const key of ALLOWED) {
     if (headers[key]) safe[key] = String(headers[key]).substring(0, 200);
   }

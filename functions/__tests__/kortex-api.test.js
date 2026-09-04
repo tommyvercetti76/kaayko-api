@@ -130,12 +130,14 @@ describe('Kortex API — Health & Public Endpoints', () => {
   test('POST /smartlinks/events accepts KORTEX V2 conversion events', async () => {
     // Events are attributed to the link's stored tenant, never the body tenantId.
     admin._mocks.docData['short_links/a_adminp12'] = { code: 'a_adminp12', tenantId: 'parishram', enabled: true };
+    admin._mocks.docData['click_events/c_conv1'] = { clickId: 'c_conv1', linkCode: 'a_adminp12', tenantId: 'parishram' };
     const res = await request(smartLinksApp)
       .post('/smartlinks/events')
       .send({
         type: 'registration_submitted',
         tenantId: 'someone-else',
         linkCode: 'a_adminp12',
+        clickId: 'c_conv1',
         source: 'qr',
         audience: 'alumni',
         intent: 'register'

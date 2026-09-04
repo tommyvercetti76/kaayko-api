@@ -120,6 +120,9 @@ async function syncThreatFeeds({ fetchImpl } = {}) {
 
 function linkDestinationUrls(link) {
   const urls = [];
+  // Night/day windows and the fallback are destinations too.
+  urls.push(...require('./linkSchedule').scheduleUrls(link.schedule || null));
+  urls.push(...require('./linkRules').limitUrls(link.limits || null));
   for (const value of Object.values(link.destinations || {})) {
     if (!value) continue;
     if (Array.isArray(value)) value.forEach(v => { const u = typeof v === 'string' ? v : v?.url; if (u) urls.push(u); });

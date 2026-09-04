@@ -172,6 +172,18 @@ function sanitizeMetadataForDestination(metadata, webDestination) {
  * ENRICHED: Full metadata support - destinations, UTM, expiry, creator, custom fields
  * MULTI-TENANT: Now supports tenantId, domain, and pathPrefix
  */
+const PRIVILEGED_METADATA_KEYS = ['isAdmin'];
+/** Only a super-admin acting on the house tenant may set privileged metadata; everyone else's value is ignored. */
+function withoutPrivilegedMetadata(metadata, { actorIsSuperAdmin, tenantId, current = null }) {
+  if (!metadata || typeof metadata !== 'object') return metadata;
+  if (actorIsSuperAdmin === true && tenantId === DEFAULT_TENANT_ID) return metadata;
+  const out = { ...metadata };
+  for (const key of PRIVILEGED_METADATA_KEYS) {
+    if (current && current[key] !== undefined) out[key] = current[key]; else delete out[key];
+  }
+  return out;
+}
+
 async function createShortLink(data) {
   const {
     iosDestination,
@@ -342,7 +354,7 @@ async function createShortLink(data) {
     qrCodeUrl = `${shortDomain}/qr/${shortCode}.png`;
   }
 
-  const sanitizedMetadata = sanitizeMetadataForDestination(metadata, webDestination);
+  const sanitizedMetadata = sanitizeMetadataForDestination(withoutPrivilegedMetadata(metadata, { actorIsSuperAdmin: data.actorIsSuperAdmin, tenantId }), webDestination);
   const normalizedUtm = normalizeUTM(utm);
 
   // Generate HMAC signature for tenant links (enables tamper detection)
@@ -406,7 +418,7 @@ async function createShortLink(data) {
   // Save to Firestore
   await db.collection('short_links').doc(shortCode).set(linkDoc);
 
-  if (safetyOutcome.status === LINK_STATUS.ACTIVE) learnDomains(safetyOutcome.safety, tenantId);
+  if (safetyOutcome.status === LINK_STATUS.ACTIVE && !String(tenantId).startsWith('g_')) learnDomains(safetyOutcome.safety, tenantId);
 
   // Return FULL enriched link data
   return {
@@ -635,9 +647,12 @@ async function updateShortLink(code, updates) {
     // An operator block survives edits; safety-derived states follow the new destination.
     if (currentData.blockedBy === 'operator' && effectiveStatus(currentData) === LINK_STATUS.BLOCKED) {
       updateData.status = LINK_STATUS.BLOCKED;
+    } else if (effectiveStatus(currentData) === LINK_STATUS.HELD) {
+      // A hold (reviewer, abuse reports or the safety engine) is released only by a reviewer, never by re-saving.
+      updateData.status = LINK_STATUS.HELD;
     } else {
       updateData.status = safetyOutcome.status;
-      if (safetyOutcome.status === LINK_STATUS.ACTIVE) learnDomains(safetyOutcome.safety, linkTenantId);
+      if (safetyOutcome.status === LINK_STATUS.ACTIVE && !String(linkTenantId).startsWith('g_')) learnDomains(safetyOutcome.safety, linkTenantId);
     }
   }
   if (updates.updatedBy) updateData.updatedBy = updates.updatedBy;
@@ -652,7 +667,7 @@ async function updateShortLink(code, updates) {
     const nextMetadata = sourceRules !== undefined && isPlainObject(metadata)
       ? deepMergeObjects(metadata, { sourceRules })
       : metadata;
-    updateData.metadata = sanitizeMetadataForDestination(nextMetadata, nextWebDestination);
+    updateData.metadata = sanitizeMetadataForDestination(withoutPrivilegedMetadata(nextMetadata, { actorIsSuperAdmin: updates.actorIsSuperAdmin, tenantId: currentData.tenantId || DEFAULT_TENANT_ID, current: currentData.metadata || {} }), nextWebDestination);
   } else if (metadataPatch !== undefined || sourceRules !== undefined) {
     const currentDestinations = currentData.destinations || {};
     const nextWebDestination = destinations?.web !== undefined
@@ -663,7 +678,7 @@ async function updateShortLink(code, updates) {
       sourceRules !== undefined ? { sourceRules } : {}
     );
     updateData.metadata = sanitizeMetadataForDestination(
-      deepMergeObjects(currentData.metadata || {}, mergedPatch),
+      withoutPrivilegedMetadata(deepMergeObjects(currentData.metadata || {}, mergedPatch), { actorIsSuperAdmin: updates.actorIsSuperAdmin, tenantId: currentData.tenantId || DEFAULT_TENANT_ID, current: currentData.metadata || {} }),
       nextWebDestination
     );
   }

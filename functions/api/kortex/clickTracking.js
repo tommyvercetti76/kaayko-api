@@ -43,10 +43,9 @@ function generateClickId() {
 
 // Privacy: store a salted hash of the client IP, never the raw address.
 // Preserves per-IP dedup/analytics grouping without retaining PII (GDPR/DPDP).
-const IP_SALT = process.env.KORTEX_IP_SALT || 'kortex-ip-salt';
+const { hashClientIp } = require('./clientIp');
 function hashIp(ip) {
-  if (!ip) return null;
-  return crypto.createHash('sha256').update(`${IP_SALT}:${ip}`).digest('hex').slice(0, 16);
+  return hashClientIp(ip);
 }
 
 // Country resolution from the raw IP, offline. The lookup happens here, on the

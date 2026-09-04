@@ -66,7 +66,8 @@ function tally(items) {
  * @returns {Promise<object>} Aggregate report
  */
 async function getLinkAnalytics(code, linkData, options = {}) {
-  const snap = await db.collection('click_events').where('linkCode', '==', code).get();
+  const windowDaysWanted = Number.isFinite(Number(options.windowDays)) && Number(options.windowDays) > 0 ? Math.min(Number(options.windowDays), RETENTION_DAYS) : RETENTION_DAYS;
+  const snap = await db.collection('click_events').where('linkCode', '==', code).where('timestampMs', '>=', Date.now() - windowDaysWanted * 86400000).limit(20000).get();
 
   // Plan window: the free tier sees the last `windowDays` of events, paid
   // tiers the full retained history. Lifetime totals stay on the link doc.
@@ -89,6 +90,7 @@ async function getLinkAnalytics(code, linkData, options = {}) {
       country: e.geo?.country || null,
       installAttributed: e.installAttributed === true,
       source: e.metadata?.source === 'qr' ? 'qr' : 'link',
+      window: e.metadata?.scheduleWindow || null,
       // redirectTimestamp - timestamp is the time the visitor spent waiting on
       // the resolver. It is stored on every event but has never been surfaced.
       redirectMs: (e.redirectTimestamp?.toMillis ? e.redirectTimestamp.toMillis() : null),
@@ -252,6 +254,11 @@ async function getLinkAnalytics(code, linkData, options = {}) {
     country: e.country,
   }));
 
+  // Compact per-event points for the client's clock, spider and sky views:
+  // [ms, platform, deviceType, country, source, window, referrerHost]. Newest 2000.
+  const hostOf = (r) => { try { return r ? new URL(r).hostname.replace(/^www\./, '') : null; } catch (_) { return null; } };
+  const points = events.slice(-2000).map(e => [e.ms, e.platform, e.deviceType, e.country, e.source, e.window, hostOf(e.referrer)]);
+
   const storedClickCount = linkData?.clickCount ?? null;
   const drift = storedClickCount == null ? null : storedClickCount - total;
 
@@ -282,6 +289,7 @@ async function getLinkAnalytics(code, linkData, options = {}) {
     latency,
     cadence,
     recentScans,
+    points,
     timeline,
     breakdowns,
     unavailable,

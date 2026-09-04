@@ -49,9 +49,7 @@ function randomSuffix(length = 4) {
 }
 
 function hashForStorage(value) {
-  if (!value) return null;
-  const salt = process.env.KORTEX_IP_SALT || 'kortex-ip-salt';
-  return crypto.createHash('sha256').update(`${salt}:${value}`).digest('hex').slice(0, 16);
+  return require('./clientIp').hashClientIp(value);
 }
 
 function validationError(message) {

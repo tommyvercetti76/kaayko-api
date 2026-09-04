@@ -241,7 +241,7 @@ describe('CSV export', () => {
 describe('Abuse reports', () => {
   const report = (body, ip) => request(app).post('/kortex/report').set(...UA).set('X-Forwarded-For', ip).send(body);
 
-  test('two different reporters hold a free link for review', async () => {
+  test('three different reporters hold a free link for review', async () => {
     const created = await createGuest();
     const code = created.body.link.code;
     const first = await report({ code, reason: 'phishing', details: 'Pretends to be a bank login page.' }, '198.51.100.1');
@@ -249,6 +249,9 @@ describe('Abuse reports', () => {
     expect(doc(`short_links/${code}`).status).toBe('active');
     const second = await report({ code, reason: 'phishing', details: 'Same here.' }, '198.51.100.2');
     expect(second.status).toBe(202);
+    expect(doc(`short_links/${code}`).status).toBe('active');
+    const third = await report({ code, reason: 'phishing', details: 'And here.' }, '198.51.100.3');
+    expect(third.status).toBe(202);
     expect(doc(`short_links/${code}`).status).toBe('held');
     expect(docs('security_alerts/').some(a => a.type === 'abuse_auto_hold' && a.code === code)).toBe(true);
     const res = await scan(code);
@@ -259,11 +262,9 @@ describe('Abuse reports', () => {
   test('the same reporter twice is one reporter; other reasons never auto-hold', async () => {
     const created = await createGuest();
     const code = created.body.link.code;
-    await report({ code, reason: 'malware', details: 'Downloads something.' }, '198.51.100.7');
-    await report({ code, reason: 'malware', details: 'Still does.' }, '198.51.100.7');
+    for (let i = 0; i < 3; i++) await report({ code, reason: 'malware', details: 'Downloads something.' }, '198.51.100.7');
     expect(doc(`short_links/${code}`).status).toBe('active');
-    await report({ code, reason: 'spam', details: 'Too many posters.' }, '198.51.100.8');
-    await report({ code, reason: 'spam', details: 'Really.' }, '198.51.100.9');
+    for (const ip of ['198.51.100.8', '198.51.100.9', '198.51.100.10']) await report({ code, reason: 'spam', details: 'Too many posters.' }, ip);
     expect(doc(`short_links/${code}`).status).toBe('active');
   });
 

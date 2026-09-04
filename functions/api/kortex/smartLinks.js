@@ -49,9 +49,7 @@ const emailDelivery = require('../../services/emailDelivery');
 const { PLAN_LIMITS: PLAN_WINDOWS } = require('../billing/planLimits');
 
 function hashIpForStorage(ip) {
-  if (!ip) return null;
-  const salt = process.env.KORTEX_IP_SALT || 'kortex-ip-salt';
-  return crypto.createHash('sha256').update(`${salt}:${ip}`).digest('hex').slice(0, 16);
+  return require('./clientIp').hashClientIp(ip);
 }
 
 function linkWriteError(res, error, fallback) {
@@ -71,7 +69,7 @@ function linkWriteError(res, error, fallback) {
     return res.status(403).json({ success: false, error: error.message, code: error.code });
   }
   if (error.message?.includes('tenant') || error.message?.includes('Access denied') || error.code?.startsWith('TENANT')) {
-    return res.status(403).json({ success: false, error: 'Tenant access denied', message: error.message, code: 'TENANT_ACCESS_DENIED' });
+    return res.status(403).json({ success: false, error: 'Tenant access denied', code: 'TENANT_ACCESS_DENIED' });
   }
   return null;
 }
@@ -199,7 +197,7 @@ router.get('/tenants/resolve', async (req, res) => {
   try {
     const tenant = await KortexV2.findTenant({
       tenantSlug: req.query.tenantSlug || req.query.slug,
-      host: req.query.host || req.headers.host || req.hostname,
+      host: req.headers.host || req.hostname, // never the caller's choice
       path: req.query.path || ''
     });
 
@@ -229,7 +227,7 @@ router.get('/tenants/:tenantSlug/bootstrap', async (req, res) => {
   try {
     const tenant = await KortexV2.findTenant({
       tenantSlug: req.params.tenantSlug,
-      host: req.query.host || req.headers.host || req.hostname,
+      host: req.headers.host || req.hostname, // never the caller's choice
       path: req.query.path || ''
     });
 
@@ -266,7 +264,7 @@ router.get('/links/:code/resolve', rateLimiter('resolve'), async (req, res) => {
     const resolved = await KortexV2.resolveLink({
       code: req.params.code,
       namespace: req.query.namespace || req.query.ns || null,
-      host: req.query.host || req.headers.host || req.hostname,
+      host: req.headers.host || req.hostname, // never the caller's choice
       path: req.query.path || '',
       query: req.query,
       req
@@ -275,7 +273,7 @@ router.get('/links/:code/resolve', rateLimiter('resolve'), async (req, res) => {
     return res.json({ success: true, ...resolved });
   } catch (error) {
     console.error('[KortexV2] Link resolve error:', error);
-    const gone = new Set(['LINK_DISABLED', 'LINK_EXPIRED', 'LINK_BLOCKED', 'LINK_CAPPED']);
+    const gone = new Set(['LINK_DISABLED', 'LINK_EXPIRED', 'LINK_BLOCKED', 'LINK_CAPPED', 'TENANT_DISABLED', 'TENANT_CHURNED']);
     const status = error.code === 'NOT_FOUND' || error.code === 'TENANT_NOT_FOUND' ? 404
       : gone.has(error.code) ? 410
       : error.code === 'LINK_HELD' ? 409
@@ -284,6 +282,8 @@ router.get('/links/:code/resolve', rateLimiter('resolve'), async (req, res) => {
       LINK_DISABLED: 'This link has been disabled.',
       LINK_EXPIRED: 'This link has expired.',
       LINK_CAPPED: 'This link has reached its scan limit.',
+      TENANT_DISABLED: 'This link is no longer active.',
+      TENANT_CHURNED: 'This link is no longer active.',
       LINK_BLOCKED: 'This link has been disabled for safety reasons.',
       LINK_HELD: 'This link is under review and not yet live.'
     };
@@ -305,7 +305,7 @@ router.post('/events', rateLimiter('api'), async (req, res) => {
     });
   } catch (error) {
     console.error('[KortexV2] Event tracking error:', error);
-    const status = error.code === 'INVALID_EVENT_TYPE' || error.code === 'LINK_CODE_REQUIRED' ? 400
+    const status = error.code === 'INVALID_EVENT_TYPE' || error.code === 'LINK_CODE_REQUIRED' || error.code === 'CLICK_ID_REQUIRED' ? 400
       : error.code === 'NOT_FOUND' ? 404
       : 500;
     return res.status(status).json({
@@ -1215,6 +1215,26 @@ router.get('/export/links.csv', requireAuth, requireAdmin, rateLimiter('exportCs
   } catch (error) {
     console.error('[Kortex] links export failed:', error);
     return res.status(500).json({ success: false, error: 'Export failed' });
+  }
+});
+
+/**
+ * POST /kortex/demo/seed — create or refresh the sample workspace. Runs for a
+ * super-admin, or with the server-side sync key (ops, cron).
+ */
+router.post('/demo/seed', optionalAuth, async (req, res) => {
+  try {
+    const key = req.get('X-Kortex-Sync-Key');
+    const keyOk = !!process.env.KORTEX_SYNC_KEY && typeof key === 'string' && key.length === process.env.KORTEX_SYNC_KEY.length
+      && crypto.timingSafeEqual(Buffer.from(key), Buffer.from(process.env.KORTEX_SYNC_KEY));
+    const superOk = req.user && req.user.role === 'super-admin';
+    if (!keyOk && !superOk) return res.status(403).json({ success: false, error: 'Forbidden' });
+    const summary = await require('./demoWorkspace').seedDemo();
+    recordAudit({ req, action: 'demo.seed_requested', extra: { links: summary.links.length, events: summary.events, via: superOk ? 'super-admin' : 'sync-key' } });
+    return res.json({ success: true, ...summary });
+  } catch (error) {
+    console.error('[Kortex] demo seed failed:', error);
+    return res.status(500).json({ success: false, error: 'Seed failed' });
   }
 });
 

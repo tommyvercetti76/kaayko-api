@@ -18,7 +18,18 @@ const DEFAULT_OPTIONS = {
 /**
  * Generate QR code as data URL (PNG base64)
  */
+const HEX_COLOR = /^#[0-9a-f]{3,8}$/i;
+/** Only hex colours reach the QR library or the SVG; anything else falls back to the defaults. */
+function safeColorOptions(options = {}) {
+  const out = { ...options };
+  for (const key of ['background', 'foreground', 'dark', 'light', 'color']) {
+    if (out[key] !== undefined && !HEX_COLOR.test(String(out[key]))) delete out[key];
+  }
+  return out;
+}
+
 async function generateQR(url, options = {}) {
+  options = safeColorOptions(options);
   const qrOptions = {
     ...DEFAULT_OPTIONS,
     width: options.size || DEFAULT_OPTIONS.width,
@@ -38,6 +49,7 @@ async function generateQR(url, options = {}) {
  * Generate QR code as SVG string
  */
 async function generateQRSvg(url, options = {}) {
+  options = safeColorOptions(options);
   const svgOptions = {
     type: 'svg',
     width: options.size || DEFAULT_OPTIONS.width,
@@ -52,14 +64,16 @@ async function generateQRSvg(url, options = {}) {
   const svg = await QRCode.toString(url, svgOptions);
 
   // If logo requested, embed it in center of SVG
-  if (options.logoUrl) {
+  const safeBackground = /^#[0-9a-f]{3,8}$/i.test(String(options.background || '')) ? options.background : '#ffffff';
+  const safeLogo = (() => { try { const u = new URL(String(options.logoUrl || '')); return u.protocol === 'https:' ? u.toString().replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])) : null; } catch (_) { return null; } })();
+  if (safeLogo) {
     const size = options.size || DEFAULT_OPTIONS.width;
     const logoSize = Math.round(size * 0.22);
     const logoPos = Math.round((size - logoSize) / 2);
     const logoEmbed = `
       <rect x="${logoPos - 4}" y="${logoPos - 4}" width="${logoSize + 8}" height="${logoSize + 8}"
-            fill="${options.background || '#ffffff'}" rx="8"/>
-      <image href="${options.logoUrl}" x="${logoPos}" y="${logoPos}"
+            fill="${safeBackground}" rx="8"/>
+      <image href="${safeLogo}" x="${logoPos}" y="${logoPos}"
              width="${logoSize}" height="${logoSize}" preserveAspectRatio="xMidYMid meet"/>
     `;
     return svg.replace('</svg>', `${logoEmbed}</svg>`);
@@ -110,7 +124,7 @@ async function serveLinkQr(req, res) {
   const snap = await db.collection('short_links').doc(code).get();
   if (!snap.exists) return res.status(404).json({ success: false, error: 'Not found' });
   const link = snap.data() || {};
-  if (link.enabled === false || link.status === 'held' || link.status === 'blocked') {
+  if (link.status === 'held' || link.status === 'blocked') {
     return res.status(404).json({ success: false, error: 'Not found' });
   }
 

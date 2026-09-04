@@ -228,7 +228,7 @@ describe('Admin create route wiring', () => {
     expect(admin._mocks.docData['kortex_known_domains/venue-learned.example']).toBeDefined();
   });
 
-  test('editing to a bad destination is refused; editing a held link to a clean one activates it', async () => {
+  test('editing to a bad destination is refused; a held link stays held until a reviewer releases it', async () => {
     newTenant();
     admin._mocks.docData['short_links/held1'] = {
       code: 'held1', tenantId: 'tenant-new', status: 'held', enabled: true, title: 'Held',
@@ -238,7 +238,9 @@ describe('Admin create route wiring', () => {
     expect(bad.status).toBe(422);
     const clean = await request(app).put('/kortex/held1').set(...AUTH).send({ destinations: { web: 'https://acme-events.com/updated' } });
     expect(clean.status).toBe(200);
-    expect(clean.body.status).toBe('active');
+    expect(clean.body.status).toBe('held'); // re-saving never clears a hold
+    await require('../api/kortex/smartLinkService').setLinkStatus('held1', 'active', { actor: 'reviewer' });
+    expect(admin._mocks.docData['short_links/held1'].status).toBe('active');
   });
 
   test('an operator block survives a destination edit', async () => {
