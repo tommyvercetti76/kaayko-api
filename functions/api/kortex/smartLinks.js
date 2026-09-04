@@ -30,7 +30,7 @@ const LinkService = require('./smartLinkService');
 const KortexV2 = require('./v2LinkIntents');
 
 // Import authentication middleware
-const { requireAuth, requireAdmin, requireVerifiedEmail, requireSuperAdmin } = require('../../middleware/authMiddleware');
+const { requireAuth, requireAdmin, requireVerifiedEmail, requireSuperAdmin, optionalAuth } = require('../../middleware/authMiddleware');
 
 // Trust pass: input allowlists, audit log, self-serve provisioning, safety jobs
 const { pickCreateInput, pickUpdateInput } = require('./validation/linkInput');
@@ -40,6 +40,13 @@ const { userRateLimit } = require('./rateLimitService');
 const { LINK_STATUS, effectiveStatus } = require('./safetyPages');
 const safetyJobs = require('./safetyJobs');
 const { getClientIp } = require('./clientIp');
+const { linkEventsCsv, workspaceCsv, sendCsv } = require('./csvExport');
+const abuseReports = require('./abuseReports');
+const supportRequests = require('./supportRequests');
+const { getTenantGate, forgetTenant } = require('./tenantGate');
+const guestAccess = require('./guestAccess');
+const emailDelivery = require('../../services/emailDelivery');
+const { PLAN_LIMITS: PLAN_WINDOWS } = require('../billing/planLimits');
 
 function hashIpForStorage(ip) {
   if (!ip) return null;
@@ -254,7 +261,7 @@ router.get('/tenants/:tenantSlug/bootstrap', async (req, res) => {
   }
 });
 
-router.get('/links/:code/resolve', async (req, res) => {
+router.get('/links/:code/resolve', rateLimiter('resolve'), async (req, res) => {
   try {
     const resolved = await KortexV2.resolveLink({
       code: req.params.code,
@@ -268,7 +275,7 @@ router.get('/links/:code/resolve', async (req, res) => {
     return res.json({ success: true, ...resolved });
   } catch (error) {
     console.error('[KortexV2] Link resolve error:', error);
-    const gone = new Set(['LINK_DISABLED', 'LINK_EXPIRED', 'LINK_BLOCKED']);
+    const gone = new Set(['LINK_DISABLED', 'LINK_EXPIRED', 'LINK_BLOCKED', 'LINK_CAPPED']);
     const status = error.code === 'NOT_FOUND' || error.code === 'TENANT_NOT_FOUND' ? 404
       : gone.has(error.code) ? 410
       : error.code === 'LINK_HELD' ? 409
@@ -276,6 +283,7 @@ router.get('/links/:code/resolve', async (req, res) => {
     const messages = {
       LINK_DISABLED: 'This link has been disabled.',
       LINK_EXPIRED: 'This link has expired.',
+      LINK_CAPPED: 'This link has reached its scan limit.',
       LINK_BLOCKED: 'This link has been disabled for safety reasons.',
       LINK_HELD: 'This link is under review and not yet live.'
     };
@@ -1164,6 +1172,176 @@ router.delete('/webhooks/:id', requireAuth, requireAdmin, async (req, res) => {
 // ============================================================================
 // REVIEW QUEUE, APPEALS, SAFETY JOBS (Must be BEFORE /:code)
 // ============================================================================
+
+/**
+ * GET /kortex/:code/clicks.csv — one link's click events as CSV, inside the
+ * tenant's plan window. Tenant-scoped like every other read; audited.
+ */
+router.get('/:code/clicks.csv', requireAuth, requireAdmin, rateLimiter('exportCsv'), async (req, res) => {
+  try {
+    const { code } = req.params;
+    const tenantContext = await getTenantFromRequest(req);
+    const linkDoc = await db.collection('short_links').doc(code).get();
+    if (!linkDoc.exists) return res.status(404).json({ success: false, error: 'Link not found' });
+    const linkData = linkDoc.data();
+    const tenantId = linkData.tenantId || DEFAULT_TENANT_ID;
+    if (!tenantContext.isSuperAdmin) {
+      try { assertTenantAccess(req.user, tenantId); } catch (_) { return res.status(403).json({ success: false, error: 'Access denied' }); }
+    }
+    const gate = await getTenantGate(tenantId);
+    const planWindow = (PLAN_WINDOWS[gate.plan] || PLAN_WINDOWS.starter || {}).analytics_range_days || 30;
+    const windowDays = tenantContext.isSuperAdmin ? 30 : Math.min(30, planWindow);
+    const { csv, rows } = await linkEventsCsv(code, { windowDays });
+    recordAudit({ req, action: 'analytics.exported', code, tenantId, extra: { rows, windowDays, format: 'csv' } });
+    return sendCsv(res, `kortex-${code}-clicks.csv`, csv);
+  } catch (error) {
+    console.error('[Kortex] CSV export failed:', error);
+    return res.status(500).json({ success: false, error: 'Export failed' });
+  }
+});
+
+/**
+ * GET /kortex/export/links.csv — every link in the caller's tenant as CSV
+ * (the portfolio "Export CSV" button). Super-admins may pass ?allTenants=true.
+ */
+router.get('/export/links.csv', requireAuth, requireAdmin, rateLimiter('exportCsv'), async (req, res) => {
+  try {
+    const tenantContext = await getTenantFromRequest(req);
+    const all = tenantContext.isSuperAdmin && req.query.allTenants === 'true';
+    const { links } = await LinkService.listLinks(all ? { limit: 5000 } : { tenantId: tenantContext.tenantId, limit: 5000 });
+    const { csv, rows } = workspaceCsv(links);
+    recordAudit({ req, action: 'links.exported', tenantId: all ? null : tenantContext.tenantId, extra: { rows, allTenants: all } });
+    return sendCsv(res, all ? 'kortex-all-links.csv' : `kortex-${tenantContext.tenantId}-links.csv`, csv);
+  } catch (error) {
+    console.error('[Kortex] links export failed:', error);
+    return res.status(500).json({ success: false, error: 'Export failed' });
+  }
+});
+
+/**
+ * POST /kortex/report — anyone can report a link. Always answers 202 with the
+ * same body, so the endpoint reveals nothing about whether a code exists.
+ * Two different reporters flagging a guest link for phishing, malware or a
+ * scam inside a day hold it for review on the spot.
+ */
+router.post('/report', rateLimiter('report'), async (req, res) => {
+  try {
+    const body = req.body || {};
+    if (body.website) return res.status(400).json({ success: false, error: 'Invalid request' });
+    const result = await abuseReports.fileReport({
+      body,
+      ip: getClientIp(req),
+      userAgent: req.get('user-agent'),
+      setLinkStatus: LinkService.setLinkStatus,
+      recordAudit,
+      req
+    });
+    if (!result.accepted) return res.status(400).json({ success: false, error: result.error });
+    return res.status(202).json({ success: true, message: 'Thanks. A reviewer will look at this link.' });
+  } catch (error) {
+    console.error('[Kortex] abuse report failed:', error);
+    return res.status(500).json({ success: false, error: 'Could not file the report right now' });
+  }
+});
+
+router.get('/reports', requireAuth, requireSuperAdmin, async (req, res) => {
+  try {
+    const reports = await abuseReports.listReports({ status: String(req.query.status || 'open'), limit: Number(req.query.limit) || 100 });
+    return res.json({ success: true, reports });
+  } catch (error) {
+    console.error('[Kortex] list reports failed:', error);
+    return res.status(500).json({ success: false, error: 'Could not list reports' });
+  }
+});
+
+router.post('/reports/:id/resolve', requireAuth, requireSuperAdmin, async (req, res) => {
+  try {
+    const result = await abuseReports.resolveReport(req.params.id, { resolution: req.body?.resolution, actor: req.user?.email || req.user?.uid || null });
+    recordAudit({ req, action: 'report.resolved', extra: { reportId: req.params.id } });
+    return res.json({ success: true, ...result });
+  } catch (error) {
+    if (error.code === 'NOT_FOUND') return res.status(404).json({ success: false, error: 'Report not found' });
+    console.error('[Kortex] resolve report failed:', error);
+    return res.status(500).json({ success: false, error: 'Could not resolve the report' });
+  }
+});
+
+/**
+ * POST /kortex/support — a support request with a plan-aware response target.
+ * Signed in: the tenant's plan. Guest session: free. Anonymous: free.
+ */
+router.post('/support', rateLimiter('support'), optionalAuth, async (req, res) => {
+  try {
+    const body = req.body || {};
+    if (body.website) return res.status(400).json({ success: false, error: 'Invalid request' });
+    let requester = { plan: 'free', tenantId: null, via: 'public' };
+    if (req.user) {
+      const tenantContext = await getTenantFromRequest(req);
+      const gate = await getTenantGate(tenantContext.tenantId);
+      requester = { plan: tenantContext.isSuperAdmin ? 'business' : gate.plan, tenantId: tenantContext.tenantId, via: 'admin' };
+    } else {
+      const workspace = await guestAccess.resolveGuestSession(req).catch(() => null);
+      if (workspace && workspace.tenantId) requester = { plan: 'free', tenantId: workspace.tenantId, via: 'guest' };
+    }
+    const result = await supportRequests.createRequest({
+      body, requester, ip: getClientIp(req), userAgent: req.get('user-agent'), email: emailDelivery, recordAudit, req
+    });
+    if (!result.ok) return res.status(400).json({ success: false, error: result.error });
+    return res.status(201).json({ success: true, id: result.id, plan: result.plan, target: result.target, targetBy: result.targetBy });
+  } catch (error) {
+    console.error('[Kortex] support request failed:', error);
+    return res.status(500).json({ success: false, error: 'Could not send the request right now' });
+  }
+});
+
+router.get('/support', requireAuth, requireSuperAdmin, async (req, res) => {
+  try {
+    const requests = await supportRequests.listRequests({ status: String(req.query.status || 'open'), limit: Number(req.query.limit) || 100 });
+    return res.json({ success: true, requests });
+  } catch (error) {
+    console.error('[Kortex] list support failed:', error);
+    return res.status(500).json({ success: false, error: 'Could not list requests' });
+  }
+});
+
+router.post('/support/:id/resolve', requireAuth, requireSuperAdmin, async (req, res) => {
+  try {
+    const result = await supportRequests.resolveRequest(req.params.id, { note: req.body?.note, actor: req.user?.email || req.user?.uid || null });
+    recordAudit({ req, action: 'support.resolved', extra: { requestId: req.params.id } });
+    return res.json({ success: true, ...result });
+  } catch (error) {
+    if (error.code === 'NOT_FOUND') return res.status(404).json({ success: false, error: 'Request not found' });
+    console.error('[Kortex] resolve support failed:', error);
+    return res.status(500).json({ success: false, error: 'Could not resolve the request' });
+  }
+});
+
+/**
+ * POST /kortex/tenants/:tenantId/kill | /restore — the tenant-wide kill switch.
+ * Every link of a switched-off workspace answers 410 on the next request.
+ */
+async function setTenantEnabled(req, res, enabled) {
+  try {
+    const tenantId = String(req.params.tenantId || '').trim();
+    if (!tenantId || tenantId === DEFAULT_TENANT_ID) return res.status(400).json({ success: false, error: 'This workspace cannot be switched off' });
+    const ref = db.collection('tenants').doc(tenantId);
+    const snap = await ref.get();
+    if (!snap.exists) return res.status(404).json({ success: false, error: 'Workspace not found' });
+    const reason = String(req.body?.reason || '').trim().slice(0, 500) || null;
+    const actor = req.user?.email || req.user?.uid || null;
+    await ref.update(enabled
+      ? { enabled: true, killedAt: null, killedBy: null, killedReason: null, restoredAt: FieldValue.serverTimestamp(), restoredBy: actor, updatedAt: FieldValue.serverTimestamp() }
+      : { enabled: false, killedAt: FieldValue.serverTimestamp(), killedBy: actor, killedReason: reason, updatedAt: FieldValue.serverTimestamp() });
+    forgetTenant(tenantId);
+    recordAudit({ req, action: enabled ? 'tenant.restored' : 'tenant.killed', tenantId, extra: { reason } });
+    return res.json({ success: true, tenantId, enabled });
+  } catch (error) {
+    console.error('[Kortex] tenant switch failed:', error);
+    return res.status(500).json({ success: false, error: 'Could not update the workspace' });
+  }
+}
+router.post('/tenants/:tenantId/kill', requireAuth, requireSuperAdmin, (req, res) => setTenantEnabled(req, res, false));
+router.post('/tenants/:tenantId/restore', requireAuth, requireSuperAdmin, (req, res) => setTenantEnabled(req, res, true));
 
 /**
  * GET /kortex/review — links that are held for review or blocked.

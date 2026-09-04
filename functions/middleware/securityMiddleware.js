@@ -26,7 +26,11 @@ const RATE_LIMITS = {
   guestSession: { max: 15, window: 15 * 60 * 1000, failClosed: true }, // 15 code attempts per 15 min per IP
   guestRecover: { max: 5, window: 60 * 60 * 1000, failClosed: true }, // 5 recovery mails per hour per IP
   guestClaim: { max: 10, window: 60 * 60 * 1000, failClosed: true },
-  publicQr: { max: 120, window: 60 * 1000 } // QR image renders per minute per IP
+  publicQr: { max: 120, window: 60 * 1000 }, // QR image renders per minute per IP
+  resolve: { max: 60, window: 60 * 1000 }, // SDK / API link resolution per IP
+  report: { max: 5, window: 60 * 60 * 1000, failClosed: true }, // abuse reports per hour per IP
+  support: { max: 5, window: 60 * 60 * 1000, failClosed: true }, // support requests per hour per IP
+  exportCsv: { max: 30, window: 60 * 60 * 1000 } // CSV exports per hour per IP
 };
 
 // Bot detection patterns

@@ -374,7 +374,12 @@ function applyEnhancedPenalties(prediction, features, marineData = null, hydrolo
   // -----------------------------
   // 🧊 WATER TEMPERATURE (°C)
   // -----------------------------
-  if (vals.waterTempC != null) {
+  // MEASURED ONLY. `features.waterTempMeasured === false` means we have no
+  // sensor on this water — the ML feature vector still carries a derived value
+  // (that is how the model was trained) but no safety deduction may rest on a
+  // number nobody measured. Same doctrine as the rest of this file: we do not
+  // penalize for data we don't have.
+  if (features.waterTempMeasured !== false && vals.waterTempC != null) {
     if (vals.waterTempC < THRESHOLDS.waterColdMajor) {
       addPenalty(details, 1.0, "WATER_COLD_MAJOR", `Cold water (${vals.waterTempC.toFixed(1)}°C)`);
     } else if (vals.waterTempC < THRESHOLDS.waterColdMinor) {

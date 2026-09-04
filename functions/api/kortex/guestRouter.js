@@ -29,6 +29,9 @@ const { FieldValue } = require('firebase-admin/firestore');
 const LinkService = require('./smartLinkService');
 const guest = require('./guestAccess');
 const { generateQR } = require('./qrService');
+const { scanUrl } = require('./utmTools');
+const { linkEventsCsv, workspaceCsv, sendCsv } = require('./csvExport');
+const { expiryDate } = require('./linkRules');
 const { getLinkAnalytics } = require('./linkAnalytics');
 const { recordAudit } = require('./auditLog');
 const { rateLimiter } = require('../../middleware/securityMiddleware');
@@ -46,6 +49,26 @@ const QR_BASE = 'https://kaayko.com/qr';
 
 function cleanUrl(value) {
   return typeof value === 'string' ? value.trim().slice(0, DESTINATION_MAX) : '';
+}
+
+const UTM_FIELDS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content'];
+function cleanUtm(value) {
+  if (value === null) return {};
+  if (!value || typeof value !== 'object') return undefined;
+  const out = {};
+  for (const key of UTM_FIELDS) {
+    const v = value[key] ?? value[key.replace('utm_', '')];
+    if (typeof v === 'string' && v.trim()) out[key] = v.trim().slice(0, 100);
+  }
+  return out;
+}
+
+function parseExpiry(value) {
+  if (value === undefined) return undefined;
+  if (value === null || value === '') return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) { const e = new Error('The end date is not a valid date'); e.code = 'VALIDATION_ERROR'; throw e; }
+  return date.toISOString();
 }
 
 function hostnameOf(url) {
@@ -66,7 +89,10 @@ function publicLink(link) {
     lastClickedAt: link.lastClickedAt?.toDate ? link.lastClickedAt.toDate().toISOString() : (link.lastClickedAt || null),
     createdAt: link.createdAt?.toDate ? link.createdAt.toDate().toISOString() : (link.createdAt || null),
     disabledReason: link.disabledReason || null,
-    schedule: link.schedule || null
+    schedule: link.schedule || null,
+    limits: link.limits || null,
+    utm: link.utm || {},
+    expiresAt: expiryDate(link) ? expiryDate(link).toISOString() : null
   };
 }
 
@@ -163,7 +189,10 @@ router.post('/links', rateLimiter('guestCreate'), async (req, res) => {
       pathPrefix: '/l',
       source: 'qr',
       metadata: { createdVia: 'guest' },
-      schedule: body.schedule !== undefined ? body.schedule : undefined
+      schedule: body.schedule !== undefined ? body.schedule : undefined,
+      limits: body.limits !== undefined ? body.limits : undefined,
+      expiresAt: parseExpiry(body.expiresAt),
+      utm: cleanUtm(body.utm)
     });
 
     recordAudit({
@@ -177,7 +206,7 @@ router.post('/links', rateLimiter('guestCreate'), async (req, res) => {
     });
 
     const [qrPng, linkCount] = await Promise.all([
-      generateQR(link.shortUrl, { size: 512 }),
+      generateQR(scanUrl(link.shortUrl), { size: 512 }),
       countLinks(workspace.tenantId)
     ]);
 
@@ -295,6 +324,30 @@ router.get('/links/:code/analytics', guest.requireGuestSession, async (req, res)
   }
 });
 
+router.get('/links/:code/analytics.csv', guest.requireGuestSession, rateLimiter('exportCsv'), async (req, res) => {
+  const link = await ownedLink(req, res);
+  if (!link) return;
+  try {
+    const code = link.code || req.params.code;
+    const { csv, rows } = await linkEventsCsv(code, { windowDays: ANALYTICS_WINDOW_DAYS });
+    recordAudit({ req, actor: { type: 'guest', workspace: req.guest.tenantId }, action: 'analytics.exported', code, tenantId: req.guest.tenantId, extra: { rows, windowDays: ANALYTICS_WINDOW_DAYS, format: 'csv' } });
+    return sendCsv(res, `kortex-${code}-scans.csv`, csv);
+  } catch (error) {
+    return guestError(res, error);
+  }
+});
+
+router.get('/workspace/export.csv', guest.requireGuestSession, rateLimiter('exportCsv'), async (req, res) => {
+  try {
+    const { links } = await LinkService.listLinks({ tenantId: req.guest.tenantId, limit: 100 });
+    const { csv, rows } = workspaceCsv(links);
+    recordAudit({ req, actor: { type: 'guest', workspace: req.guest.tenantId }, action: 'workspace.exported', tenantId: req.guest.tenantId, extra: { rows } });
+    return sendCsv(res, 'kortex-links.csv', csv);
+  } catch (error) {
+    return guestError(res, error);
+  }
+});
+
 router.patch('/links/:code', guest.requireGuestSession, async (req, res) => {
   const link = await ownedLink(req, res);
   if (!link) return;
@@ -317,6 +370,9 @@ router.patch('/links/:code', guest.requireGuestSession, async (req, res) => {
       }
     }
     if (body.schedule !== undefined) updates.schedule = body.schedule; // object sets, null clears
+    if (body.limits !== undefined) updates.limits = body.limits; // object sets, null clears
+    if (body.utm !== undefined) updates.utm = cleanUtm(body.utm) || {};
+    if (body.expiresAt !== undefined) updates.expiresAt = parseExpiry(body.expiresAt);
     if (updates.enabled === true && link.disabledReason === 'guest_expired') updates.disabledReason = null;
     if (!Object.keys(updates).length) {
       return res.status(400).json({ success: false, error: 'Nothing to update', code: 'VALIDATION_ERROR' });

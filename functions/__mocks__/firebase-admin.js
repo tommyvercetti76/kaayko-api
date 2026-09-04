@@ -205,6 +205,7 @@ const FieldValue = {
 };
 
 const Timestamp = {
+  fromDate: (d) => { const ms = new Date(d).getTime(); return { toDate: () => new Date(ms), toMillis: () => ms, seconds: Math.floor(ms / 1000), nanoseconds: 0 }; },
   fromMillis: jest.fn((ms) => ({ toMillis: () => ms, toDate: () => new Date(ms) })),
   now: jest.fn(() => ({ toMillis: () => Date.now(), toDate: () => new Date() }))
 };

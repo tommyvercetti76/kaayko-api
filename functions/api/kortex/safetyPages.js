@@ -17,6 +17,8 @@
 
 const LINK_STATUS = Object.freeze({ ACTIVE: 'active', HELD: 'held', BLOCKED: 'blocked' });
 const APPEAL_PAGE = 'https://kaayko.com/kortex/appeal';
+const REPORT_PAGE = 'https://kaayko.com/kortex/report';
+const SUPPORT_PAGE = 'https://kaayko.com/kortex/support';
 
 function effectiveStatus(link) {
   const status = link?.status;
@@ -39,6 +41,7 @@ function page({ title, heading, message, code, tone }) {
   const safeMessage = escapeHtml(message);
   const safeCode = escapeHtml(code || '');
   const appealHref = `${APPEAL_PAGE}?code=${encodeURIComponent(code || '')}`;
+  const reportHref = `${REPORT_PAGE}?code=${encodeURIComponent(code || '')}`;
   const accent = tone === 'blocked' ? '#e05a4f' : '#D4A84B';
   return `<!DOCTYPE html>
 <html lang="en">
@@ -58,6 +61,7 @@ function page({ title, heading, message, code, tone }) {
     code{font-family:ui-monospace,Menlo,monospace;font-size:13px;color:#cfcfcf;background:#161616;padding:2px 6px;border-radius:4px}
     a{display:inline-block;margin-top:20px;color:#080808;background:${accent};font-weight:700;padding:11px 20px;border-radius:10px;text-decoration:none}
     .foot{margin-top:18px;font-size:12px;color:#555}
+    .foot a.quiet{display:inline;margin:0 0 0 6px;padding:0;background:none;color:#8a6f3a;font-weight:500;text-decoration:underline}
   </style>
 </head>
 <body>
@@ -67,7 +71,7 @@ function page({ title, heading, message, code, tone }) {
     <p>${safeMessage}</p>
     <p>Link <code>${safeCode}</code></p>
     <a href="${appealHref}">Request a review</a>
-    <div class="foot">Kortex checks every destination before and after a link goes live.</div>
+    <div class="foot">Kortex checks every destination before and after a link goes live. <a class="quiet" href="${reportHref}">Report this link</a></div>
   </div>
 </body>
 </html>`;
@@ -117,4 +121,4 @@ function respondForStatus(res, link, code) {
   return false;
 }
 
-module.exports = { LINK_STATUS, APPEAL_PAGE, effectiveStatus, heldPage, blockedPage, respondForStatus, escapeHtml };
+module.exports = { LINK_STATUS, APPEAL_PAGE, REPORT_PAGE, SUPPORT_PAGE, effectiveStatus, heldPage, blockedPage, respondForStatus, escapeHtml };

@@ -19,6 +19,8 @@ const { runSecurityChecks, isCanaryCode } = require('./linkSecurityService');
 const { getClientIp } = require('./clientIp');
 const { respondForStatus } = require('./safetyPages');
 const { pickScheduledDestination } = require('./linkSchedule');
+const { evaluateLimits, OVER_LIMIT_COPY } = require('./linkRules');
+const { isQrScan, mergeTrackingIntoDestination, UTM_KEYS } = require('./utmTools');
 
 // ============================================================================
 // CONSTANTS
@@ -225,17 +227,16 @@ router.get('/:tenantSlug/:code', async (req, res, next) => {
     // Safety / review state (held → review page, blocked → 410)
     if (respondForStatus(res, link, code)) return;
 
-    // Check expiry
-    if (link.expiresAt) {
-      const expiryDate = link.expiresAt.toDate ? link.expiresAt.toDate() : new Date(link.expiresAt);
-      if (new Date() > expiryDate) {
-        return res.status(410).send(gonePage('Link Expired', 'This link has expired and is no longer active.'));
-      }
-    }
-
-    // Check max uses
-    if (link.maxUses && link.clickCount >= link.maxUses) {
-      return res.status(410).send(gonePage('Link Limit Reached', 'This link has reached its maximum number of uses.'));
+    // Past expiry or over its cap (the legacy maxUses field still counts).
+    // A creator-set fallback URL gets a redirect; otherwise a 410 page.
+    const withLegacyCap = link.maxUses && !(link.limits && link.limits.maxClicks)
+      ? { ...link, limits: { ...(link.limits || {}), maxClicks: Number(link.maxUses) } }
+      : link;
+    const overLimit = evaluateLimits(withLegacyCap);
+    if (overLimit.over) {
+      if (overLimit.fallbackUrl) return res.redirect(302, overLimit.fallbackUrl);
+      const copy = OVER_LIMIT_COPY[overLimit.reason];
+      return res.status(410).send(gonePage(copy.title, copy.message));
     }
 
     // Advanced security checks (bot detection, velocity, canary, geo, referer)
@@ -319,7 +320,7 @@ router.get('/:tenantSlug/:code', async (req, res, next) => {
         timestamp: admin.firestore.FieldValue.serverTimestamp(),
         timestampMs: Date.now(),
         installAttributed: false,
-        metadata: { resolvedVia: 'alumni_namespace', linkTitle: link.title || '' },
+        metadata: { resolvedVia: 'alumni_namespace', linkTitle: link.title || '', source: isQrScan(req.query) ? 'qr' : 'link' },
         expiresAt: admin.firestore.Timestamp.fromMillis(Date.now() + 30 * 24 * 60 * 60 * 1000)
       }).catch(() => {});
 
@@ -334,10 +335,13 @@ router.get('/:tenantSlug/:code', async (req, res, next) => {
       checkAbuseSpike(code, tenantId).catch(() => {});
     }
 
-    // Append UTM passthrough from query params
-    const destUrl = new URL(destination);
-    ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content'].forEach(param => {
-      if (req.query[param]) destUrl.searchParams.set(param, req.query[param]);
+    // Campaign tags: what the destination already carries stays; tags on the
+    // scanning URL, then the link's own tags, fill the gaps.
+    const queryUtm = {};
+    for (const key of UTM_KEYS) if (typeof req.query[key] === 'string' && req.query[key]) queryUtm[key] = req.query[key];
+    const finalDestination = mergeTrackingIntoDestination(destination, {
+      utm: { ...(link.utm || {}), ...queryUtm },
+      scanned: isQrScan(req.query)
     });
 
     // Security headers on redirect
@@ -348,7 +352,7 @@ router.get('/:tenantSlug/:code', async (req, res, next) => {
       'Cache-Control': 'no-store, private'
     });
 
-    return res.redirect(302, destUrl.toString());
+    return res.redirect(302, finalDestination);
 
   } catch (error) {
     console.error('[TenantResolver] Error:', error);

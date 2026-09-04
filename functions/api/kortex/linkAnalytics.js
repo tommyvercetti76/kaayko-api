@@ -88,6 +88,7 @@ async function getLinkAnalytics(code, linkData, options = {}) {
       redirectedTo: e.redirectedTo || null,
       country: e.geo?.country || null,
       installAttributed: e.installAttributed === true,
+      source: e.metadata?.source === 'qr' ? 'qr' : 'link',
       // redirectTimestamp - timestamp is the time the visitor spent waiting on
       // the resolver. It is stored on every event but has never been surfaced.
       redirectMs: (e.redirectTimestamp?.toMillis ? e.redirectTimestamp.toMillis() : null),
@@ -168,6 +169,7 @@ async function getLinkAnalytics(code, linkData, options = {}) {
   // --- breakdowns ----------------------------------------------------------
   const breakdowns = {
     platform: tally(events.map(e => e.platform)),
+    source: tally(events.map(e => e.source)),
     deviceType: tally(events.map(e => e.deviceType)),
     os: tally(events.map(e => e.os)),
     browser: tally(events.map(e => e.browser)),

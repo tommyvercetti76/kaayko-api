@@ -4,6 +4,7 @@
  */
 
 const QRCode = require('qrcode');
+const { scanUrl } = require('./utmTools');
 const admin = require('firebase-admin');
 const db = admin.firestore();
 
@@ -114,7 +115,8 @@ async function serveLinkQr(req, res) {
   }
 
   const size = Math.max(128, Math.min(1024, Number(req.query.size) || 512));
-  const target = link.shortUrl || `https://kaayko.com/l/${code}`;
+  // Every QR Kortex renders carries the scan marker, so scans count separately from taps.
+  const target = scanUrl(link.shortUrl || `https://kaayko.com/l/${code}`);
   res.set('Cache-Control', 'public, max-age=86400');
   res.set('X-Content-Type-Options', 'nosniff');
 

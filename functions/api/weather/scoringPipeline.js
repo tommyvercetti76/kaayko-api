@@ -126,6 +126,8 @@ async function scoreFromFeatures({
   // Safety-gate penalties (marine shape unlocks swell/steepness/thunder codes;
   // hydrologyContext adds the river flow gate for gauged river spots)
   const penaltyMarine = buildPenaltyMarine(marineHour);
+  // waterTempMeasured travels with the features so the penalty layer can stand
+  // its water rules down when nobody measured the water (see paddlePenalties).
   const penaltyResult = applyEnhancedPenalties({ rating: calBase }, mlFeatures, penaltyMarine, hydrologyContext);
 
   // Per-spot dynamic offset — positive offsets never undo the safety gate

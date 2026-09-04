@@ -17,6 +17,7 @@ const { PLAN_LIMITS } = require('../billing/planLimits');
 const safety = require('./destinationSafety');
 const { LINK_STATUS, effectiveStatus } = require('./safetyPages');
 const { normalizeSchedule, scheduleUrls } = require('./linkSchedule');
+const { normalizeLimits, limitUrls } = require('./linkRules');
 
 const db = admin.firestore();
 
@@ -24,6 +25,13 @@ const db = admin.firestore();
 function withScheduleUrls(destinations, schedule) {
   const set = { ...destinations };
   scheduleUrls(schedule).forEach((url, i) => { set[`window${i}`] = url; });
+  return set;
+}
+
+/** Fold a limit's fallback URL into the same set: it is a destination too. */
+function withLimitUrls(destinations, limits) {
+  const set = { ...destinations };
+  limitUrls(limits).forEach((url, i) => { set[`fallback${i}`] = url; });
   return set;
 }
 
@@ -285,11 +293,12 @@ async function createShortLink(data) {
   // Time-of-day routing (optional). Validated here; window URLs go through the
   // same safety assessment as the destinations below.
   const schedule = normalizeSchedule(data.schedule);
+  const limits = normalizeLimits(data.limits);
 
   // Destination safety — private hosts, blocklists, Safe Browsing, domain
   // reputation. Blocks throw; unknown domains for new tenants come back 'held'.
   const safetyOutcome = await assessForWrite(
-    withScheduleUrls({ web: webDestination, ios: iosDestination, android: androidDestination }, schedule),
+    withLimitUrls(withScheduleUrls({ web: webDestination, ios: iosDestination, android: androidDestination }, schedule), limits),
     { tenantId, tenantDocData, actorIsSuperAdmin: data.actorIsSuperAdmin, purpose: 'create', actor: createdBy }
   );
 
@@ -388,6 +397,7 @@ async function createShortLink(data) {
     status: safetyOutcome.status, // active | held | blocked (safety / review state)
     safety: safetyOutcome.safety,
     schedule, // time-of-day windows or null
+    limits, // scan cap + fallback URL, or null
     createdBy, // Audit trail: who created this
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp()
@@ -411,6 +421,7 @@ async function createShortLink(data) {
     status: safetyOutcome.status,
     safety: safetyOutcome.safety,
     schedule,
+    limits,
     destinationType,
     campaignId,
     requiresAuth,
@@ -538,7 +549,8 @@ async function updateShortLink(code, updates) {
     conversionGoal,
     destinationCategory,
     destinationTemplate,
-    schedule
+    schedule,
+    limits
   } = updates;
 
   const linkRef = db.collection('short_links').doc(code);
@@ -553,6 +565,9 @@ async function updateShortLink(code, updates) {
   // Time-of-day routing: `schedule: null` clears; an object is validated.
   const scheduleProvided = schedule !== undefined;
   const nextSchedule = scheduleProvided ? normalizeSchedule(schedule) : undefined;
+  // Caps / fallback: `limits: null` clears; an object is validated.
+  const limitsProvided = limits !== undefined;
+  const nextLimits = limitsProvided ? normalizeLimits(limits) : undefined;
 
   // Validate destination URLs on update (if destinations are being changed)
   if (destinations) {
@@ -588,7 +603,8 @@ async function updateShortLink(code, updates) {
   // Destination domain policy + safety on update — mirrors createShortLink.
   // A new schedule is assessed together with the destinations it will route to.
   const scheduleChanged = scheduleProvided && scheduleUrls(nextSchedule).length > 0;
-  if (destinations || scheduleChanged) {
+  const limitsChanged = limitsProvided && limitUrls(nextLimits).length > 0;
+  if (destinations || scheduleChanged || limitsChanged) {
     const linkTenantId = currentData.tenantId || DEFAULT_TENANT_ID;
     let tenantDocData = null;
     if (linkTenantId !== DEFAULT_TENANT_ID) {
@@ -604,7 +620,10 @@ async function updateShortLink(code, updates) {
       });
     }
 
-    const toAssess = withScheduleUrls(destinations || (currentData.destinations || {}), scheduleChanged ? nextSchedule : (currentData.schedule || null));
+    const toAssess = withLimitUrls(
+      withScheduleUrls(destinations || (currentData.destinations || {}), scheduleChanged ? nextSchedule : (currentData.schedule || null)),
+      limitsChanged ? nextLimits : (currentData.limits || null)
+    );
     const safetyOutcome = await assessForWrite(toAssess, {
       tenantId: linkTenantId,
       tenantDocData,
@@ -623,6 +642,7 @@ async function updateShortLink(code, updates) {
   }
   if (updates.updatedBy) updateData.updatedBy = updates.updatedBy;
   if (scheduleProvided) updateData.schedule = nextSchedule;
+  if (limitsProvided) updateData.limits = nextLimits;
 
   if (metadata !== undefined) {
     const currentDestinations = currentData.destinations || {};

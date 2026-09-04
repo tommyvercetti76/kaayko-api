@@ -162,3 +162,34 @@ every email-dependent control (email at creation, "email me the code",
 "lost your code?" recovery) until email delivery is real, so a first-time
 user is never offered something that would silently do nothing. Adding the
 SendGrid key reveals those controls without a page change.
+
+## Pass 2 (4 Sep 2026): caps, tags, exports, reports, support
+
+- **Caps / expiry / fallback** — `api/kortex/linkRules.js` (pure). A link may carry
+  `limits: { maxClicks, fallbackUrl }`; `expiresAt` stays top-level. Past either,
+  all three resolvers redirect to the fallback (no click counted) or serve a 410.
+  The fallback URL goes through the safety engine like any destination.
+  `GET /kortex/links/:code/resolve` now has the `resolve` limiter and answers
+  `LINK_CAPPED` (410) or the fallback with `overLimit`.
+- **Campaign tags** — `api/kortex/utmTools.js`. Tags already on the destination
+  stay; the link's tags fill gaps; a QR scan with no medium anywhere becomes
+  `utm_medium=qr`. Every QR Kortex renders encodes `?s=qr`, so scans and taps are
+  told apart (`click_events.metadata.source`, `breakdowns.source`).
+- **CSV** — `api/kortex/csvExport.js`. `GET /kortex/:code/clicks.csv` (admin,
+  tenant-scoped, plan window) and, for free workspaces,
+  `GET /kortex/guest/links/:code/analytics.csv` + `GET /kortex/guest/workspace/export.csv`.
+  Formula-leading cells are neutralised. Every export is audited.
+- **Abuse reports + kill switch** — `api/kortex/abuseReports.js`. `POST /kortex/report`
+  is public, always 202, `report` limiter (fail-closed). Two distinct reporters
+  flagging a *guest* link for phishing/malware/scam inside 24 h hold it
+  (`abuse_auto_hold` alert). Super-admins: `GET /kortex/reports`,
+  `POST /kortex/reports/:id/resolve`, `POST /kortex/tenants/:id/kill|restore`.
+  `api/kortex/tenantGate.js` caches one tenant read per redirect (60 s) so a
+  killed workspace answers 410 everywhere within a minute.
+- **Support** — `api/kortex/supportRequests.js`. `POST /kortex/support` (public,
+  guest session or signed in) stores a request with a plan-aware target
+  (free 3 business days, pro 1 business day, business 4 h) and emails
+  `KORTEX_SUPPORT_EMAIL` when a provider is configured. Super-admins:
+  `GET /kortex/support`, `POST /kortex/support/:id/resolve`.
+- Public pages: `/kortex/report`, `/kortex/support` (hosting rewrites).
+- Tests: `__tests__/kortex-pass2.test.js` (23). Test double gained `Timestamp.fromDate`.

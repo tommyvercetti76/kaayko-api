@@ -20,6 +20,9 @@ const KortexV2 = require('./v2LinkIntents');
 const { respondForStatus } = require('./safetyPages');
 const { DEFAULT_TENANT_ID } = require('./tenantContext');
 const { pickScheduledDestination } = require('./linkSchedule');
+const { evaluateLimits, OVER_LIMIT_COPY } = require('./linkRules');
+const { isQrScan, mergeTrackingIntoDestination } = require('./utmTools');
+const { getTenantGate } = require('./tenantGate');
 
 const db = admin.firestore();
 
@@ -255,12 +258,9 @@ async function isStarterLink(tenantId) {
   // Kaayko's own links (paddling QR codes, store links) are the house tenant,
   // not a free-tier customer: they get a clean 302, never the "Powered by" page.
   if (!tenantId || tenantId === DEFAULT_TENANT_ID) return false;
-  try {
-    const snap = await db.collection('tenants').doc(tenantId).get();
-    if (!snap.exists) return true;
-    const plan = snap.data().plan || 'starter';
-    return plan === 'starter';
-  } catch { return false; }
+  const gate = await getTenantGate(tenantId);
+  if (!gate.exists) return true;
+  return gate.plan === 'starter';
 }
 
 function poweredByPage(destination, linkTitle) {
@@ -405,14 +405,14 @@ function errorPage(code, title, message, showAppButton = true) {
           <div class="icon">${icon}</div>
           <h1>${safeTitle}</h1>
           <p>${safeMessage}</p>
-          <p class="contact">Questions? <a href="mailto:rohan@kaayko.com">rohan@kaayko.com</a></p>
+          <p class="contact">Questions? <a href="https://kaayko.com/kortex/support">Get help</a> · <a href="https://kaayko.com/kortex/report">Report this link</a></p>
           ${appButton}
         </div>
       </div>
       <footer class="site-footer">
         <span class="footer-brand">KAAYKO</span>
         <span class="footer-sep">&middot;</span>
-        <a href="mailto:rohan@kaayko.com" class="footer-link">rohan@kaayko.com</a>
+        <a href="https://kaayko.com/kortex/support" class="footer-link">Get help</a>
       </footer>
     </body>
     </html>
@@ -477,6 +477,18 @@ async function handleRedirect(req, res, code, options = {}) {
 
     const linkData = linkDoc.data();
     const trackingContext = buildTrackingContext(req.query, linkData.utm);
+    const scanned = isQrScan(req.query);
+
+    // Tenant kill switch: a workspace switched off by a reviewer stops every
+    // one of its links on the next request (one cached read, 60 s).
+    const gate = await getTenantGate(linkData.tenantId || DEFAULT_TENANT_ID);
+    if (!gate.enabled) {
+      return res.status(410).send(errorPage(
+        410,
+        'Link No Longer Active',
+        'The workspace that owns this link has been switched off.'
+      ));
+    }
 
     // Case 2: Link disabled by creator
     if (linkData.enabled === false) {
@@ -507,16 +519,13 @@ async function handleRedirect(req, res, code, options = {}) {
       }
     }
 
-    // Case 3: Link expired
-    if (linkData.expiresAt) {
-      const expirationDate = linkData.expiresAt.toDate ? linkData.expiresAt.toDate() : new Date(linkData.expiresAt);
-      if (expirationDate < new Date()) {
-        return res.status(410).send(errorPage(
-          410,
-          'Link Expired',
-          'This link has expired and is no longer available.'
-        ));
-      }
+    // Case 3: Past its expiry or over its scan cap. A fallback URL set by the
+    // creator gets a redirect (not counted as a click); otherwise a 410 page.
+    const overLimit = evaluateLimits(linkData);
+    if (overLimit.over) {
+      if (overLimit.fallbackUrl) return res.redirect(302, overLimit.fallbackUrl);
+      const copy = OVER_LIMIT_COPY[overLimit.reason];
+      return res.status(410).send(errorPage(410, copy.title, copy.message));
     }
 
     const sourceAccess = evaluateSourceAccess(linkData.metadata, trackingContext.source);
@@ -704,6 +713,7 @@ async function handleRedirect(req, res, code, options = {}) {
             linkTitle: linkData.title,
             linkMetadata: linkData.metadata,
             trackingSource: trackingContext.source,
+            source: scanned ? 'qr' : 'link',
             scheduleWindow
           }
         });
@@ -728,10 +738,11 @@ async function handleRedirect(req, res, code, options = {}) {
     }
 
     // Preserve tracking context across redirects. Mobile deep links also receive clickId.
-    if (clickId || Object.keys(trackingContext.utm).length) {
+    if (clickId || scanned || Object.keys(trackingContext.utm).length) {
       destination = appendTrackingToDestination(destination, {
         clickId: (platform === 'ios' || platform === 'android') ? clickId : null,
-        utm: trackingContext.utm
+        utm: trackingContext.utm,
+        scanned
       });
     }
     
@@ -837,29 +848,9 @@ function extractUTMParams(query) {
  * @returns {string} Modified destination with clickId
  */
 function appendTrackingToDestination(destination, tracking = {}) {
-  const { clickId = null, utm = {} } = tracking;
-  try {
-    const url = new URL(destination);
-    if (clickId) {
-      url.searchParams.set('clickId', clickId);
-    }
-
-    for (const [key, value] of Object.entries(utm || {})) {
-      url.searchParams.set(key, value);
-    }
-
-    return url.toString();
-  } catch (error) {
-    // If URL parsing fails, append manually
-    const params = [];
-    if (clickId) params.push(`clickId=${encodeURIComponent(clickId)}`);
-    for (const [key, value] of Object.entries(utm || {})) {
-      params.push(`${encodeURIComponent(key)}=${encodeURIComponent(value)}`);
-    }
-    if (!params.length) return destination;
-    const separator = destination.includes('?') ? '&' : '?';
-    return `${destination}${separator}${params.join('&')}`;
-  }
+  // Tags already on the destination win; the link's tags fill the gaps; a QR
+  // scan with no medium anywhere becomes utm_medium=qr (see utmTools).
+  return mergeTrackingIntoDestination(destination, tracking);
 }
 
 function appendClickIdToDestination(destination, clickId, query = {}) {

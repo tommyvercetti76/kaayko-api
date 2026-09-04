@@ -4,6 +4,7 @@ const admin = require('firebase-admin');
 const { FieldValue } = require('firebase-admin/firestore');
 const LinkService = require('./smartLinkService');
 const { DEFAULT_TENANT_ID } = require('./tenantContext');
+const { evaluateLimits } = require('./linkRules');
 
 const db = admin.firestore();
 
@@ -353,13 +354,22 @@ async function resolveLink({ code, namespace, host, path, query = {}, req = null
     error.code = 'LINK_DISABLED';
     throw error;
   }
-  if (link.expiresAt) {
-    const expiry = link.expiresAt.toDate ? link.expiresAt.toDate() : new Date(link.expiresAt);
-    if (!Number.isNaN(expiry.getTime()) && expiry < new Date()) {
-      const error = new Error('Link expired');
-      error.code = 'LINK_EXPIRED';
-      throw error;
+  const overLimit = evaluateLimits(link);
+  if (overLimit.over) {
+    if (overLimit.fallbackUrl) {
+      // Same rule as the redirect: the creator's fallback, and no click counted.
+      return {
+        link: { code: link.code || shortCode, shortUrl: link.shortUrl, title: link.title || '' },
+        overLimit: overLimit.reason,
+        destination: overLimit.fallbackUrl,
+        clickId: null,
+        tenant: null,
+        campaignId: null
+      };
     }
+    const error = new Error(overLimit.reason === 'expired' ? 'Link expired' : 'Link limit reached');
+    error.code = overLimit.reason === 'expired' ? 'LINK_EXPIRED' : 'LINK_CAPPED';
+    throw error;
   }
   if (link.status === 'held' || link.status === 'blocked') {
     const error = new Error(link.status === 'held' ? 'Link is under review' : 'Link has been blocked');

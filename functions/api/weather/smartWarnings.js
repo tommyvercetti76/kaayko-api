@@ -67,18 +67,16 @@ function generateSmartWarnings(currentConditions, forecastData, locationData) {
   const cloudCover = currentConditions.cloudCover || 0;
   const uvIndex = currentConditions.uvIndex || 0;
   const visibility = currentConditions.visibility || 10;
-  // PRIORITY: Use real marine water temperature data first, then estimate
+  // MEASURED ONLY — no local fallback. This function used to run its own
+  // independent water-temperature estimator, so a spot with no sensor still
+  // produced a confident cold-water warning from a number nobody measured.
+  // A safety warning must rest on a reading, not on a guess made three
+  // modules deep.
   let waterTemp = null;
-  
-  if (currentConditions.waterTemp && currentConditions.waterTemp > 0) {
+  if (Number.isFinite(currentConditions.waterTemp) && currentConditions.waterTemp > 0) {
     waterTemp = currentConditions.waterTemp;
-    console.log(`🌊 Using provided waterTemp: ${waterTemp}°C`);
-  } else if (currentConditions.water_temp && currentConditions.water_temp > 0) {
+  } else if (Number.isFinite(currentConditions.water_temp) && currentConditions.water_temp > 0) {
     waterTemp = currentConditions.water_temp;
-    console.log(`🌊 Using marine water_temp: ${waterTemp}°C`);
-  } else {
-    waterTemp = estimateWaterTemperature(temp, locationData);
-    console.log(`🧮 Using estimated water temp: ${waterTemp}°C for air temp ${temp}°C`);
   }
   
   console.log('🚨 Generating smart warnings for conditions:', {
@@ -105,18 +103,19 @@ function generateSmartWarnings(currentConditions, forecastData, locationData) {
   // 2. WATER TEMPERATURE WARNINGS (using real marine data when available)
   console.log(`🌡️ Water temp check: ${waterTemp}°C`);
   
-  // An estimated water temperature carries real error bars, so it says so in
-  // the warning rather than posing as a reading. The 18 °C "cool water — wear
-  // thermal protection" tier was removed: 16-18 °C is ordinary, comfortable
-  // summer paddling water, and warning there trained users to ignore us.
-  const waterIsEstimated = currentConditions.waterTempEstimated === true;
-  const est = waterIsEstimated ? ' (estimated)' : '';
-  if (waterTemp <= 4) {
-    warnings.push(`Extremely cold water${est} - hypothermia risk within minutes`);
-  } else if (waterTemp <= 10) {
-    warnings.push(`Very cold water${est} - cold water shock and rapid heat loss risk`);
-  } else if (waterTemp <= 15) {
-    warnings.push(`Cold water${est} - hypothermia possible with prolonged exposure`);
+  // MEASURED ONLY. currentConditions.waterTemp is null when no sensor covers this
+  // water, and we do not warn about a temperature nobody measured. The 18 °C
+  // "cool water — wear thermal protection" tier is also gone: 16-18 °C is
+  // ordinary, comfortable paddling water, and warning there taught users to
+  // ignore us on the days that matter.
+  if (Number.isFinite(waterTemp)) {
+    if (waterTemp <= 4) {
+      warnings.push("Extremely cold water - hypothermia risk within minutes");
+    } else if (waterTemp <= 10) {
+      warnings.push("Very cold water - cold water shock and rapid heat loss risk");
+    } else if (waterTemp <= 15) {
+      warnings.push("Cold water - hypothermia possible with prolonged exposure");
+    }
   }
 
   // 3. WIND CONDITIONS (with context)

@@ -9,7 +9,6 @@
 const UnifiedWeatherService = require('./unifiedWeatherService');
 const { standardizeForMLModel } = require('./dataStandardization');
 const { scoreFromFeatures, selectMarineHour } = require('./scoringPipeline');
-const { estimateWaterTempC } = require('./waterTempEstimator');
 
 /**
  * First daylight hour at or after `fromHour` across the standardized forecast.
@@ -111,6 +110,7 @@ async function computePaddleScoreForSpot(loc, options = {}) {
         longitude: loc.lng
     }, marineData, marineHour);
 
+
     // Water temperature estimate. Water has enormous thermal mass — it tracks the
     // DAY's average air temperature, not the current hour. Estimating from
     // instantaneous air made an alpine lake read 2 °C at night (tripping the
@@ -121,20 +121,20 @@ async function computePaddleScoreForSpot(loc, options = {}) {
         ?? marineHour?.water_temp_c
         ?? null;
 
-    // Estimate from a real 30-day mean air temperature (water integrates heat
-    // over weeks). The old same-day `avgAir - 8` put Lake Union at 9.5 °C in
-    // late August against an actual ~21 °C and raised a drysuit warning on a
-    // warm summer lake. Last-resort fallback only if the climate window fails.
-    let estimatedWaterTemp = null;
-    if (measuredWaterTemp == null) {
-        estimatedWaterTemp = await estimateWaterTempC(loc.lat, loc.lng);
-        if (estimatedWaterTemp == null) {
-            const avgAirToday = weatherData.forecast?.[0]?.day?.avgTempC;
-            const airFallback = Number.isFinite(avgAirToday) ? avgAirToday : mlFeatures.temperature;
-            estimatedWaterTemp = Math.round(Math.max(2, airFallback - 8) * 10) / 10;
-        }
-    }
-    const waterTempC = measuredWaterTemp ?? estimatedWaterTemp;
+    // MEASURED OR NOTHING. We do not publish, warn on, or score against a water
+    // temperature we have not measured. Guessing a safety-critical number — even
+    // labelled "estimate" — is indefensible: it put a "Very cold water" alert and
+    // a drysuit instruction on a 70 °F summer lake. When there is no sensor the
+    // value is null, the UI says "no sensor", and every water-temperature rule
+    // (penalty, warning, tip) stands down. The ML model still receives an
+    // internally-derived value because that is how it was trained — that is a
+    // model input, never a claim shown to a paddler.
+    const waterTempC = measuredWaterTemp;   // null when unmeasured — deliberate
+
+    // The model keeps a derived water temperature (it was trained that way); the
+    // RULES layer must know it was never measured so it can stand down.
+    mlFeatures.waterTempMeasured = measuredWaterTemp != null;
+    if (measuredWaterTemp != null) mlFeatures.waterTemp = measuredWaterTemp;
 
     // Night gate: Kaayko does not score night paddling (see methodology/terms).
     // The score is still computed, but surfaces present it as unavailable and
@@ -161,8 +161,8 @@ async function computePaddleScoreForSpot(loc, options = {}) {
                 cloudCover:  mlFeatures.cloudCover,
                 uvIndex:     mlFeatures.uvIndex,
                 visibility:  mlFeatures.visibility,
-                waterTemp:   waterTempC,
-                waterTempEstimated: measuredWaterTemp == null
+                // null when unmeasured → water-temperature warnings stand down
+                waterTemp:   waterTempC
             },
             previousMLResult: previousScore ? {
                 mlInputsHash:     previousScore.mlInputsHash,
@@ -195,10 +195,8 @@ async function computePaddleScoreForSpot(loc, options = {}) {
             cloudCover:    mlFeatures.cloudCover,
             uvIndex:       mlFeatures.uvIndex,
             visibility:    mlFeatures.visibility,                                // km
-            waterTemp:     waterTempC,                                           // °C
-            // Inland water has no measured temperature source — say so rather
-            // than presenting an estimate as a reading.
-            waterTempEstimated: measuredWaterTemp == null,
+            waterTemp:     waterTempC,          // °C, or null when no sensor exists
+            waterTempMeasured: measuredWaterTemp != null,
             waterTempSource: waterTempReading ? {
                 gaugeId: waterTempReading.gaugeId,
                 gaugeName: waterTempReading.gaugeName,

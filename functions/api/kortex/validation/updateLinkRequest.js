@@ -24,7 +24,8 @@ const ALLOWED_FIELDS = new Set([
   'returnTo',
   'conversionGoal',
   'sourceRules',
-  'schedule'
+  'schedule',
+  'limits'
 ]);
 
 function validateUpdateRequest(req, res, next) {
