@@ -17,6 +17,7 @@
 const crypto = require('crypto');
 const admin = require('firebase-admin');
 const { resolveCart } = require('./pricing');
+const { resolveNotifyEmail } = require('./notifyAddress');
 
 // Lazy-load Stripe to avoid timeout during function initialization
 let stripe = null;
@@ -175,7 +176,11 @@ async function createPaymentIntent(req, res) {
           // retry — reopening checkout after going back to the bag — fail
           // with an idempotency error. Stripe records `created` itself, and
           // payment_intents/{id}.createdAt holds our own copy.
-          notifyEmail: 'rohan@kaayko.com'
+          // Owner notification address, stamped at creation time as a record of
+          // intent. The webhook still prefers ORDER_NOTIFY_EMAIL at send time so
+          // the address can be changed without redeploying or losing in-flight
+          // payment intents — see ./notifyAddress.js.
+          notifyEmail: resolveNotifyEmail()
         }
       },
       { idempotencyKey: resolveIdempotencyKey(req, cart) }

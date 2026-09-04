@@ -392,7 +392,14 @@ describe('Checkout Webhook — payment_intent.payment_failed', () => {
     expect(pi.errorMessage).toBe('Your card was declined.');
 
     expect(admin._mocks.docData[`orders/${PI_ID}_item1`]).toBeUndefined();
-    expect(mailDocs()).toHaveLength(0);
+
+    // No order confirmation — but the owner IS told, because a run of declines
+    // is a broken checkout, not a quiet week.
+    expect(admin._mocks.docData[`mail/${PI_ID}_customer`]).toBeUndefined();
+    expect(admin._mocks.docData[`mail/${PI_ID}_admin`]).toBeUndefined();
+    const alert = admin._mocks.docData[`mail/${PI_ID}_failed`];
+    expect(alert).toBeDefined();
+    expect(alert.message.html).toContain('Your card was declined.');
   });
 
   test('duplicate failure event is acknowledged as a duplicate', async () => {

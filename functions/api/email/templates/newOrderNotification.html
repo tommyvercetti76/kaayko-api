@@ -200,6 +200,34 @@
     </div>
     
     <div class="details">
+      <h3>Ship To</h3>
+      <div class="detail-row">
+        <span class="detail-label">Name</span>
+        <span class="detail-value">{{shipName}}</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-label">Address</span>
+        <span class="detail-value">{{shipLine1}} {{shipLine2}}</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-label">City / State / ZIP</span>
+        <span class="detail-value">{{shipCityLine}}</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-label">Country</span>
+        <span class="detail-value">{{shipCountry}}</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-label">Phone</span>
+        <span class="detail-value">{{shipPhone}}</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-label">Source</span>
+        <span class="detail-value">{{shipNote}}</span>
+      </div>
+    </div>
+
+    <div class="details">
       <h3>Items to Fulfill</h3>
       {{#each items}}
       <div class="line-item">
@@ -235,7 +263,7 @@
     <div class="footer">
       <strong>Kaayko Admin Notifications</strong>
       <p style="margin-top: 10px;">
-        This is an automated notification sent to rohan@kaayko.com for new orders.
+        Automated new-order notification sent to {{notifyEmail}}. Change the destination with the ORDER_NOTIFY_EMAIL environment variable.
       </p>
     </div>
   </div>

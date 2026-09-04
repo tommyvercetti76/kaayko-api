@@ -64,19 +64,26 @@ async function getOrder(req, res) {
     }
 
   } catch (error) {
+    // A missing composite index surfaces here — see firestore.indexes.json.
     console.error('❌ Error fetching order:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to fetch order',
-      details: error.message
+      error: 'Failed to fetch order'
     });
   }
 }
 
 /**
- * List all orders with filtering
- * @route GET /api/admin/listOrders?status=processing&limit=50
- * @returns {success, orders}
+ * List orders.
+ *
+ * Line items are the storage unit but the SHIPMENT is the unit of work, so
+ * `groupByOrder=true` returns one entry per payment intent with the address,
+ * the totals and every item in it — i.e. a packing list. That is the shape the
+ * owner actually needs to answer "what do I ship today"; the flat list is kept
+ * for anything that reasons about individual items.
+ *
+ * @route GET /api/admin/listOrders?orderStatus=pending&groupByOrder=true&limit=50
+ * @returns {success, orders} or {success, shipments}
  */
 async function listOrders(req, res) {
   try {
@@ -119,6 +126,17 @@ async function listOrders(req, res) {
       ...doc.data()
     }));
 
+    if (String(req.query.groupByOrder) === 'true') {
+      const shipments = await groupIntoShipments(db, orders);
+      return res.json({
+        success: true,
+        shipments,
+        count: shipments.length,
+        lineItemCount: orders.length,
+        hasMore: orders.length === parseInt(limit)
+      });
+    }
+
     res.json({
       success: true,
       orders: orders,
@@ -127,13 +145,91 @@ async function listOrders(req, res) {
     });
 
   } catch (error) {
+    // A missing composite index surfaces here — see firestore.indexes.json.
     console.error('❌ Error listing orders:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to list orders',
-      details: error.message
+      error: 'Failed to list orders'
     });
   }
+}
+
+/**
+ * Collapse line items into one packing-list entry per payment intent, enriched
+ * with the order-level total (which by design lives only on payment_intents).
+ */
+async function groupIntoShipments(db, orders) {
+  const byParent = new Map();
+
+  for (const order of orders) {
+    const parentId = order.parentOrderId || order.id;
+    if (!byParent.has(parentId)) {
+      byParent.set(parentId, {
+        parentOrderId: parentId,
+        createdAt: order.createdAt || null,
+        orderStatus: order.orderStatus || null,
+        fulfillmentStatus: order.fulfillmentStatus || null,
+        paymentStatus: order.paymentStatus || null,
+        customerEmail: order.customerEmail || null,
+        customerPhone: order.customerPhone || null,
+        shippingAddress: order.shippingAddress || null,
+        // The one thing that blocks fulfilment outright.
+        shippingAddressMissing: !order.shippingAddress,
+        trackingNumber: order.trackingNumber || null,
+        carrier: order.carrier || null,
+        trackingUrl: order.trackingUrl || null,
+        shippedAt: order.shippedAt || null,
+        currency: order.currency || 'usd',
+        items: [],
+        itemsTotalCents: 0,
+        unitCount: 0
+      });
+    }
+
+    const shipment = byParent.get(parentId);
+    shipment.items.push({
+      orderId: order.id,
+      itemIndex: order.itemIndex || null,
+      productId: order.productId || null,
+      productTitle: order.productTitle || null,
+      size: order.size || null,
+      gender: order.gender || null,
+      quantity: order.quantity || 1,
+      unitPriceCents: order.unitPriceCents || 0,
+      lineTotalCents: order.lineTotalCents || 0,
+      orderStatus: order.orderStatus || null
+    });
+    shipment.itemsTotalCents += order.lineTotalCents || 0;
+    shipment.unitCount += order.quantity || 1;
+    if (!shipment.shippingAddress && order.shippingAddress) {
+      shipment.shippingAddress = order.shippingAddress;
+      shipment.shippingAddressMissing = false;
+    }
+  }
+
+  // Attach the authoritative order-level money from payment_intents.
+  await Promise.all([...byParent.values()].map(async (shipment) => {
+    shipment.items.sort((a, b) => (a.itemIndex || 0) - (b.itemIndex || 0));
+    try {
+      const piSnap = await db.collection('payment_intents').doc(shipment.parentOrderId).get();
+      if (piSnap.exists) {
+        const pi = piSnap.data();
+        shipment.orderTotalCents = pi.totalCents ?? pi.totalAmount ?? shipment.itemsTotalCents;
+        shipment.paidAt = pi.paidAt || null;
+        if (!shipment.shippingAddress && pi.shippingAddress) {
+          shipment.shippingAddress = pi.shippingAddress;
+          shipment.shippingAddressMissing = false;
+        }
+      } else {
+        shipment.orderTotalCents = shipment.itemsTotalCents;
+      }
+    } catch (err) {
+      console.warn(`Could not read payment_intents/${shipment.parentOrderId}: ${err.message}`);
+      shipment.orderTotalCents = shipment.itemsTotalCents;
+    }
+  }));
+
+  return [...byParent.values()];
 }
 
 module.exports = { getOrder, listOrders };

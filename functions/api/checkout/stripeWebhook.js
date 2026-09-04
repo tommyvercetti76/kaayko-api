@@ -18,6 +18,8 @@
  */
 
 const admin = require('firebase-admin');
+const { renderTemplate, escapeHtml, renderEmail, formatMoney, queueMailOnce } = require('../email/render');
+const { resolveNotifyEmail } = require('./notifyAddress');
 
 // ─── Stripe client ─────────────────────────────────────────────
 // Firebase secrets are delivered with trailing newlines, so every read of a
@@ -100,6 +102,12 @@ async function stripeWebhook(req, res) {
     if (error instanceof PermanentWebhookError) {
       console.error(`❌ Permanent webhook failure (${event.id}): ${error.message}`);
       await recordWebhookFailure(event, error).catch(() => {});
+      // A payment that Stripe took but we could not turn into an order is the
+      // single worst state in the system — the buyer has been charged and
+      // nobody knows to ship anything. Tell the owner, once per event.
+      await notifyWebhookFailure(event, error).catch((e) =>
+        console.error('Could not queue webhook-failure notification:', e.message)
+      );
       // 2xx: retrying will never help, and an infinitely retried event is worse
       // than one flagged in webhook_failures.
       return res.json({ received: true, ignored: true, reason: error.message });
@@ -127,18 +135,11 @@ async function stripeWebhook(req, res) {
  * payment intent makes "one confirmation per order" true by construction, and
  * it needs no extra collection on the write path. A `stripe_events/{id}` marker
  * is ALSO recorded, but only as a fast-path skip and audit trail.
+ *
+ * The implementation is `queueMailOnce` in ../email/render.js — shared with the
+ * shipping-confirmation email sent from admin/updateOrderStatus.js so that both
+ * writers obey the same rule.
  */
-async function queueMailOnce(db, docId, payload) {
-  const ref = db.collection('mail').doc(docId);
-  const existing = await ref.get();
-  if (existing.exists) {
-    console.log(`↩️  Mail ${docId} already queued — skipping duplicate send`);
-    return false;
-  }
-  await ref.set(payload);
-  return true;
-}
-
 async function markEventProcessed(db, event, extra = {}) {
   if (!event?.id) return;
   await db.collection('stripe_events').doc(event.id).set({
@@ -291,6 +292,85 @@ function resolveCustomerEmail(paymentIntent, piDoc) {
   );
 }
 
+/**
+ * WHERE THE SHIPPING ADDRESS ACTUALLY LIVES
+ * -----------------------------------------
+ * The storefront mounts a Stripe Address Element in `mode: 'shipping'` in the
+ * same Elements group as the Payment Element (kaayko/src/cart.html), so Stripe
+ * attaches the collected address at confirm time. On the API versions this
+ * account can be pinned to, that address is readable in more than one place and
+ * the old code read exactly one of them (`paymentIntent.shipping`) — if the
+ * webhook endpoint's API version does not populate it, every order document was
+ * written with `shippingAddress: null` and the owner could not ship.
+ *
+ * So: try every known location, in order of directness, and record which one
+ * won (`shippingSource`) so a future API-version change is visible in the data
+ * rather than silent. As a last resort re-read the PaymentIntent from Stripe
+ * with `latest_charge` expanded — the webhook payload embeds `latest_charge` as
+ * a bare id string, and a Charge always carries the shipping details.
+ */
+function pickAddress(source) {
+  const address = source?.address;
+  if (!address) return null;
+  // A country-only stub (what Stripe sends for a billing address that was never
+  // filled in) is not an address anyone can ship to.
+  if (!address.line1 && !address.postal_code) return null;
+  return {
+    name: source.name || null,
+    line1: address.line1 || null,
+    line2: address.line2 || null,
+    city: address.city || null,
+    state: address.state || null,
+    postal_code: address.postal_code || null,
+    country: address.country || null
+  };
+}
+
+function resolveShippingFromObject(paymentIntent, piDoc) {
+  const latestCharge = typeof paymentIntent?.latest_charge === 'object' ? paymentIntent.latest_charge : null;
+  const candidates = [
+    ['payment_intent.shipping', paymentIntent?.shipping],
+    // 2025+ API versions surface Element-collected details here.
+    ['payment_intent.collected_information', paymentIntent?.collected_information?.shipping_details],
+    ['latest_charge.shipping', latestCharge?.shipping],
+    ['charges.data[0].shipping', paymentIntent?.charges?.data?.[0]?.shipping],
+    ['payment_intents_doc', piDoc?.shippingAddress ? { name: piDoc.shippingAddress.name, address: piDoc.shippingAddress, phone: piDoc.customerPhone } : null]
+  ];
+
+  for (const [source, candidate] of candidates) {
+    const address = pickAddress(candidate);
+    if (address) return { address, phone: candidate.phone || null, source };
+  }
+  return null;
+}
+
+/**
+ * Last resort: ask Stripe directly with the charge expanded. Never throws —
+ * a missing address must not fail an otherwise-good payment webhook.
+ */
+async function resolveShipping(paymentIntent, piDoc) {
+  const direct = resolveShippingFromObject(paymentIntent, piDoc);
+  if (direct) return direct;
+
+  try {
+    const stripeClient = getStripe();
+    if (typeof stripeClient?.paymentIntents?.retrieve !== 'function') return null;
+    const fresh = await stripeClient.paymentIntents.retrieve(paymentIntent.id, {
+      expand: ['latest_charge']
+    });
+    const refetched = resolveShippingFromObject(fresh, piDoc);
+    if (refetched) return { ...refetched, source: `refetch:${refetched.source}` };
+  } catch (err) {
+    console.warn(`⚠️  Could not re-read ${paymentIntent.id} from Stripe for a shipping address: ${err.message}`);
+  }
+
+  console.error(
+    `❌ NO SHIPPING ADDRESS for ${paymentIntent.id} — this order cannot be fulfilled ` +
+    `without opening it in the Stripe dashboard.`
+  );
+  return null;
+}
+
 // ─── Success handler ───────────────────────────────────────────
 
 async function handlePaymentSuccess(paymentIntent, event) {
@@ -304,6 +384,7 @@ async function handlePaymentSuccess(paymentIntent, event) {
   const ctx = await resolveOrderContext(db, paymentIntent);
   const nowIso = new Date().toISOString();
   const customerEmail = resolveCustomerEmail(paymentIntent, ctx.piDoc);
+  const shipping = await resolveShipping(paymentIntent, ctx.piDoc);
 
   // 1. Update the payment intent record (order-level money lives HERE, once).
   //    set(merge) rather than update() so a missing doc does not throw NOT_FOUND.
@@ -320,6 +401,11 @@ async function handlePaymentSuccess(paymentIntent, event) {
     currency: ctx.currency,
     itemCount: ctx.items.length,
     customerEmail: customerEmail,
+    customerPhone: shipping?.phone || ctx.piDoc?.customerPhone || null,
+    shippingAddress: shipping?.address || null,
+    shippingSource: shipping?.source || null,
+    // Surfaced so the owner can query "orders I cannot ship" directly.
+    shippingAddressMissing: !shipping,
     itemsSource: ctx.source,
     statusHistory: admin.firestore.FieldValue.arrayUnion({
       status: 'succeeded',
@@ -352,17 +438,13 @@ async function handlePaymentSuccess(paymentIntent, event) {
     estimatedDelivery: null,
 
     customerEmail: customerEmail,
-    customerPhone: paymentIntent.shipping?.phone || null,
+    customerPhone: shipping?.phone || ctx.piDoc?.customerPhone || null,
 
-    shippingAddress: paymentIntent.shipping?.address ? {
-      name: paymentIntent.shipping.name || null,
-      line1: paymentIntent.shipping.address.line1 || null,
-      line2: paymentIntent.shipping.address.line2 || null,
-      city: paymentIntent.shipping.address.city || null,
-      state: paymentIntent.shipping.address.state || null,
-      postal_code: paymentIntent.shipping.address.postal_code || null,
-      country: paymentIntent.shipping.address.country || null
-    } : null,
+    // See resolveShipping() — read from every place Stripe puts it, not just
+    // paymentIntent.shipping.
+    shippingAddress: shipping?.address || null,
+    shippingSource: shipping?.source || null,
+    shippingAddressMissing: !shipping,
 
     dataRetentionConsent:
       ctx.piDoc?.dataRetentionConsent === true ||
@@ -404,7 +486,7 @@ async function handlePaymentSuccess(paymentIntent, event) {
   console.log(`✅ Wrote ${ctx.items.length} order documents for ${paymentIntent.id} (items from ${ctx.source})`);
 
   // 4. Emails — exactly once per payment intent.
-  const emailsSent = await sendOrderConfirmationEmails(db, paymentIntent, ctx, customerEmail);
+  const emailsSent = await sendOrderConfirmationEmails(db, paymentIntent, ctx, customerEmail, shipping);
 
   await markEventProcessed(db, event, { paymentIntentId: paymentIntent.id, itemCount: ctx.items.length });
 
@@ -439,64 +521,33 @@ async function handlePaymentFailure(paymentIntent, event) {
     errorMessage: paymentIntent.last_payment_error?.message || 'Unknown error'
   }, { merge: true });
 
+  // The owner asked to be told when a payment fails, not only when one lands:
+  // a run of declines is the difference between "quiet week" and "checkout is
+  // broken". One email per payment intent, same idempotency rule as the
+  // confirmation mail.
+  const notified = await notifyOwner(db, `${paymentIntent.id}_failed`, {
+    subject: '⚠️ Payment Failed - Kaayko Store',
+    alertTitle: '⚠️ A payment did not go through',
+    alertText: 'A shopper reached checkout and the card was declined or the payment was abandoned. No order was created and nothing needs shipping — this is here so a broken checkout cannot look like a quiet week.',
+    rows: [
+      { label: 'Payment Intent', value: paymentIntent.id },
+      { label: 'Amount', value: formatMoney(paymentIntent.amount, paymentIntent.currency || 'usd') },
+      { label: 'Customer Email', value: resolveCustomerEmail(paymentIntent, null) || 'Not provided' },
+      { label: 'Reason', value: paymentIntent.last_payment_error?.message || 'Unknown error' },
+      { label: 'Decline Code', value: paymentIntent.last_payment_error?.decline_code || '—' },
+      { label: 'When', value: formatTimestamp() }
+    ],
+    stripeUrl: `https://dashboard.stripe.com/test/payments/${paymentIntent.id}`,
+    stripeLabel: 'View in Stripe Dashboard →'
+  }, paymentIntent);
+
   await markEventProcessed(db, event, { paymentIntentId: paymentIntent.id });
 
   console.log(`⚠️  Payment failed for: ${paymentIntent.id}`);
-  return { failed: true };
+  return { failed: true, ownerNotified: notified };
 }
 
-// ─── Templating ────────────────────────────────────────────────
-
-function escapeHtml(value) {
-  if (value == null) return '';
-  return String(value)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
-function lookup(scope, key) {
-  return String(key).split('.').reduce((o, k) => (o == null ? undefined : o[k]), scope);
-}
-
-/**
- * Minimal, dependency-free template renderer.
- *   {{#each items}} ... {{/each}}   repeat block per array element
- *   {{key}}                          HTML-ESCAPED interpolation
- *   {{{key}}}                        raw interpolation (trusted markup only)
- * All customer-supplied values (product titles, sizes, emails) go through
- * {{key}} and are therefore escaped.
- */
-function renderTemplate(template, data) {
-  // Blocks first so their bodies are rendered against the element scope.
-  const withBlocks = template.replace(
-    /\{\{#each\s+([\w.]+)\}\}([\s\S]*?)\{\{\/each\}\}/g,
-    (_match, key, body) => {
-      const list = lookup(data, key);
-      if (!Array.isArray(list)) return '';
-      return list
-        .map((entry, index) =>
-          renderTemplate(body, { ...data, ...entry, '@index': index, '@number': index + 1 })
-        )
-        .join('');
-    }
-  );
-
-  return withBlocks
-    .replace(/\{\{\{\s*([\w.@]+)\s*\}\}\}/g, (_m, key) => {
-      const v = lookup(data, key);
-      return v == null ? '' : String(v);
-    })
-    .replace(/\{\{\s*([\w.@]+)\s*\}\}/g, (_m, key) => escapeHtml(lookup(data, key)));
-}
-
-function formatMoney(cents, currency = 'usd') {
-  const amount = (Number(cents || 0) / 100).toFixed(2);
-  const symbol = String(currency).toLowerCase() === 'usd' ? '$' : '';
-  return `${symbol}${amount}`;
-}
+// ─── View models ───────────────────────────────────────────────
 
 function buildItemViews(ctx) {
   return ctx.items.map((item, index) => ({
@@ -511,33 +562,102 @@ function buildItemViews(ctx) {
   }));
 }
 
-// ─── Emails ────────────────────────────────────────────────────
-
-async function sendOrderConfirmationEmails(db, paymentIntent, ctx, customerEmail) {
-  const fs = require('fs');
-  const path = require('path');
-
-  const adminEmail = paymentIntent.metadata?.notifyEmail || 'rohan@kaayko.com';
-  const itemViews = buildItemViews(ctx);
-  const orderTotal = formatMoney(ctx.totalCents, ctx.currency);
-  const subtotal = formatMoney(ctx.subtotalCents, ctx.currency);
-  const itemCount = itemViews.reduce((sum, i) => sum + i.quantity, 0);
-
-  const timestamp = new Date().toLocaleString('en-US', {
+function formatTimestamp(date = new Date()) {
+  return date.toLocaleString('en-US', {
     timeZone: 'America/Los_Angeles',
     dateStyle: 'full',
     timeStyle: 'long'
   });
+}
+
+/**
+ * Flatten the shipping address into template fields. The owner email always
+ * shows a Ship To block: when there is no address the block says so loudly
+ * rather than rendering a run of blank lines the eye skips over.
+ */
+function buildShipToView(shipping) {
+  const a = shipping?.address;
+  if (!a) {
+    return {
+      shipName: '—',
+      shipLine1: '—',
+      shipLine2: '',
+      shipCityLine: '—',
+      shipCountry: '—',
+      shipPhone: '—',
+      shipNote: '⚠️ NO SHIPPING ADDRESS was captured for this order. Open it in the Stripe dashboard before shipping.'
+    };
+  }
+  const cityLine = [a.city, a.state, a.postal_code].filter(Boolean).join(', ');
+  return {
+    shipName: a.name || '—',
+    shipLine1: a.line1 || '—',
+    shipLine2: a.line2 || '',
+    shipCityLine: cityLine || '—',
+    shipCountry: a.country || '—',
+    shipPhone: shipping.phone || '—',
+    shipNote: `Captured from Stripe (${shipping.source}).`
+  };
+}
+
+// ─── Emails ────────────────────────────────────────────────────
+
+/**
+ * Queue a generic owner alert (payment failure, webhook failure). Uses the
+ * shared ownerAlert template so a new alert kind is a data change, not a new
+ * file, and inherits the deterministic-id idempotency rule.
+ */
+async function notifyOwner(db, mailDocId, view, paymentIntent) {
+  const to = resolveNotifyEmail(paymentIntent);
+  const html = renderEmail('ownerAlert.html', {
+    ...view,
+    stripeUrl: view.stripeUrl || '',
+    stripeLabel: view.stripeLabel || ''
+  });
+
+  const queued = await queueMailOnce(db, mailDocId, {
+    to,
+    message: { subject: view.subject, html },
+    paymentIntentId: paymentIntent?.id || null
+  });
+  if (queued) console.log(`📧 Owner alert queued (${mailDocId}) → ${to}`);
+  return queued;
+}
+
+async function notifyWebhookFailure(event, error) {
+  const db = admin.firestore();
+  return notifyOwner(db, `${event.id}_webhook_failure`, {
+    subject: '🚨 Order NOT recorded - Kaayko Store',
+    alertTitle: '🚨 A Stripe event could not be turned into an order',
+    alertText: 'Stripe delivered an event that this server could not process, and retrying will not help. If it was a successful payment the buyer HAS been charged and no order document exists. Check the payment in Stripe and record the order by hand.',
+    rows: [
+      { label: 'Event', value: event.id },
+      { label: 'Event Type', value: event.type },
+      { label: 'Object', value: event.data?.object?.id || '—' },
+      { label: 'Error', value: error.message },
+      { label: 'When', value: formatTimestamp() }
+    ],
+    stripeUrl: event.data?.object?.id
+      ? `https://dashboard.stripe.com/test/payments/${event.data.object.id}`
+      : 'https://dashboard.stripe.com/test/webhooks',
+    stripeLabel: 'Open in Stripe Dashboard →'
+  }, event.data?.object);
+}
+
+async function sendOrderConfirmationEmails(db, paymentIntent, ctx, customerEmail, shipping) {
+  const adminEmail = resolveNotifyEmail(paymentIntent);
+  const itemViews = buildItemViews(ctx);
+  const orderTotal = formatMoney(ctx.totalCents, ctx.currency);
+  const subtotal = formatMoney(ctx.subtotalCents, ctx.currency);
+  const itemCount = itemViews.reduce((sum, i) => sum + i.quantity, 0);
+  const timestamp = formatTimestamp();
 
   const sent = { customer: false, admin: false };
 
   if (!customerEmail) {
     console.warn(`⚠️  No customer email for ${paymentIntent.id}, skipping customer notification`);
   } else {
-    const customerTemplate = fs.readFileSync(
-      path.join(__dirname, '../email/templates/orderConfirmation.html'), 'utf8'
-    );
-    const customerHtml = renderTemplate(customerTemplate, {
+    const customerHtml = renderEmail('orderConfirmation.html', {
       orderId: paymentIntent.id,
       items: itemViews,
       itemCount,
@@ -552,16 +672,12 @@ async function sendOrderConfirmationEmails(db, paymentIntent, ctx, customerEmail
         subject: '🛶 Order Confirmation - Kaayko',
         html: customerHtml
       },
-      paymentIntentId: paymentIntent.id,
-      createdAt: admin.firestore.FieldValue.serverTimestamp()
+      paymentIntentId: paymentIntent.id
     });
     if (sent.customer) console.log(`📧 Customer email queued: ${customerEmail}`);
   }
 
-  const adminTemplate = fs.readFileSync(
-    path.join(__dirname, '../email/templates/newOrderNotification.html'), 'utf8'
-  );
-  const adminHtml = renderTemplate(adminTemplate, {
+  const adminHtml = renderEmail('newOrderNotification.html', {
     orderId: paymentIntent.id,
     customerEmail: customerEmail || 'Not provided',
     items: itemViews,
@@ -571,7 +687,9 @@ async function sendOrderConfirmationEmails(db, paymentIntent, ctx, customerEmail
     amount: orderTotal,
     status: 'SUCCEEDED',
     paymentIntentId: paymentIntent.id,
-    timestamp
+    notifyEmail: adminEmail,
+    timestamp,
+    ...buildShipToView(shipping)
   });
 
   sent.admin = await queueMailOnce(db, `${paymentIntent.id}_admin`, {
@@ -580,8 +698,7 @@ async function sendOrderConfirmationEmails(db, paymentIntent, ctx, customerEmail
       subject: '🔔 New Order - Kaayko Store',
       html: adminHtml
     },
-    paymentIntentId: paymentIntent.id,
-    createdAt: admin.firestore.FieldValue.serverTimestamp()
+    paymentIntentId: paymentIntent.id
   });
   if (sent.admin) console.log(`📧 Admin notification queued: ${adminEmail}`);
 
@@ -593,3 +710,5 @@ module.exports.renderTemplate = renderTemplate;
 module.exports.escapeHtml = escapeHtml;
 module.exports.normalizeItem = normalizeItem;
 module.exports.PermanentWebhookError = PermanentWebhookError;
+module.exports.resolveShipping = resolveShipping;
+module.exports.buildShipToView = buildShipToView;

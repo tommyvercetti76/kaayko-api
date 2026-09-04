@@ -468,3 +468,74 @@ TODO: Add authentication middleware to admin endpoints
 8. ⏳ Set up automated email triggers
 9. ⏳ Add return/refund workflow
 10. ⏳ Integrate with shipping label APIs (ShipStation, EasyPost)
+
+---
+
+## Fulfilment cycle — how the owner actually works an order (Sep 2026)
+
+**Prerequisite:** none of the emails below are delivered until the
+`firestore-send-email` extension is installed. See the banner at the top of
+`STRIPE_EMAIL_SETUP_GUIDE.md`.
+
+### 1. See what to ship
+```
+GET /api/admin/listOrders?orderStatus=pending&groupByOrder=true
+```
+Returns one **shipment** per payment intent — customer email, shipping address,
+every line item (product, gender, size, quantity), the order total, and
+`shippingAddressMissing` for orders that cannot be shipped as recorded.
+Without `groupByOrder` the flat per-line-item list is returned as before.
+
+`GET /api/admin/getOrder?parentOrderId=pi_…` gives the same order in full,
+including the `payment_intents` record.
+
+### 2. Mark it shipped
+```
+POST /api/admin/updateOrderStatus
+{ "parentOrderId": "pi_…", "orderStatus": "shipped",
+  "trackingNumber": "9400…", "carrier": "USPS",
+  "estimatedDelivery": "2026-09-09" }
+```
+* `parentOrderId` updates **every** line item of the order; `orderId` updates a
+  single item (partial shipment).
+* `orderStatus` / `fulfillmentStatus` are validated against the vocabularies
+  above — an invalid value is a 400, not a silently written document.
+* Carrier is turned into a tracking URL for USPS / UPS / FedEx / DHL.
+* The customer is emailed the tracking number, once, keyed `mail/{pi}_shipped`.
+  Pass `"notifyCustomer": false` to suppress that.
+* The parent `payment_intents` doc rolls forward only when **all** line items
+  share the new status.
+
+### 3. Mark it delivered
+Same call with `"orderStatus": "delivered"` — sets `deliveredAt` and
+`fulfilledAt` on the parent. No customer email is sent for delivery.
+
+### Owner notifications
+| Event | Mail doc id | Goes to |
+|---|---|---|
+| Payment succeeded | `{pi}_admin` | `ORDER_NOTIFY_EMAIL` |
+| Payment failed | `{pi}_failed` | `ORDER_NOTIFY_EMAIL` |
+| Unprocessable webhook (`webhook_failures`) | `{eventId}_webhook_failure` | `ORDER_NOTIFY_EMAIL` |
+| Order confirmation | `{pi}_customer` | buyer |
+| Shipping confirmation | `{pi}_shipped` | buyer |
+
+`ORDER_NOTIFY_EMAIL` (functions/.env) → `metadata.notifyEmail` →
+`rohanramekar17@gmail.com`. Every mail id is deterministic, so no event replay
+or double-click can send the same email twice.
+
+### Shipping address
+`shippingAddress` is resolved from, in order: `payment_intent.shipping`,
+`payment_intent.collected_information.shipping_details` (2025+ API versions),
+`latest_charge.shipping`, `charges.data[0].shipping`, the stored
+`payment_intents` doc, and finally a re-read of the PaymentIntent from Stripe
+with `latest_charge` expanded. The winning source is recorded on the order as
+`shippingSource`, and `shippingAddressMissing: true` marks an order nobody can
+ship.
+
+### Still missing (by design, not oversight)
+* **No admin UI.** These are API-only endpoints behind `requireAuth` +
+  `requireAdmin`; there is no orders screen in the frontend yet.
+* **No refund / return handling** beyond the `returned` status string.
+* **No inventory decrement** on a successful order.
+* The composite indexes these queries need are in `firestore.indexes.json` but
+  must be deployed (`firebase deploy --only firestore:indexes`).

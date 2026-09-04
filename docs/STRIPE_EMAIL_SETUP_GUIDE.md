@@ -1,5 +1,28 @@
 # Stripe Email Notification Setup Guide
 
+> ## ⛔ NOT DONE YET — no email is being delivered
+>
+> Verified 4 Sep 2026 with `firebase ext:list --project kaaykostore`:
+> **"there are no extensions installed on project kaaykostore."**
+>
+> Every email in this system is written to the Firestore `mail` collection and
+> is sent by the `firestore-send-email` extension. With no extension installed
+> those documents just accumulate — the customer gets no confirmation, the
+> owner gets no order alert, and nothing errors. Step 2 Option A below is a
+> REQUIREMENT, not a suggestion:
+>
+> ```bash
+> firebase ext:install firebase/firestore-send-email --project=kaaykostore
+> #   Email documents collection: mail
+> #   SMTP connection URI:        smtps://apikey:SG.xxxx@smtp.sendgrid.net:465
+> #   Default FROM address:       orders@kaayko.com  (must be a verified sender)
+> firebase ext:list --project kaaykostore   # confirm it is there
+> ```
+>
+> The owner notification address is now `ORDER_NOTIFY_EMAIL`
+> (default `rohanramekar17@gmail.com`), not the hardcoded `rohan@kaayko.com`
+> this document describes below.
+
 ## Overview
 Complete guide for setting up email notifications for Stripe checkout, including customer order confirmations and admin notifications to rohan@kaayko.com.
 
