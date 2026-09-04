@@ -24,6 +24,7 @@ const { FieldValue } = require('firebase-admin/firestore');
 const LinkService = require('./smartLinkService');
 const guest = require('./guestAccess');
 const { recordAudit } = require('./auditLog');
+const { referrerHostOf, normalizeDestination, destinationKeyOf } = require('./clickTracking');
 
 const DEMO_TENANT_ID = 'g_demo00';
 const DAY = 86400000;
@@ -54,12 +55,6 @@ function hourWeights(peaks) {
   }
   return out;
 }
-
-const UA = {
-  ios: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1',
-  android: 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Mobile Safari/537.36',
-  web: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36'
-};
 
 /** The eight reports. Destinations are Kaayko's own products. */
 const DEMO_LINKS = [
@@ -278,17 +273,21 @@ function generateEvents(spec, link, nowMs) {
         tenantId: DEMO_TENANT_ID,
         timestamp: admin.firestore.Timestamp.fromMillis(ms),
         timestampMs: ms,
+        schemaVersion: 2,
+        delivered: true,
+        outcome: 'delivered',
+        fallbackReason: null,
         platform,
-        deviceInfo: { platform, os, browser, deviceType },
-        userAgent: UA[platform],
-        ip: visitor,
+        deviceInfo: { deviceType, os, browser, parserVersion: 1 },
         geo: { country },
-        referrer,
+        visitorKey: visitor,
+        visitorKeyVersion: 1,
+        referrerHost: referrerHostOf(referrer),
+        destinationKey: destinationKeyOf({ platform, destinations: { ios: spec.ios, android: spec.android }, scheduleWindow: isNight ? 'night' : null }),
+        redirectedTo: normalizeDestination(redirectedTo),
         utm: spec.utm || {},
-        redirectedTo,
         installAttributed: false,
-        installTimestamp: null,
-        metadata: { linkTitle: spec.title, source: scanned ? 'qr' : 'link', scheduleWindow: isNight ? 'night' : null, demo: true },
+        metadata: { source: scanned ? 'qr' : 'link', scheduleWindow: isNight ? 'night' : null },
         expiresAt: admin.firestore.Timestamp.fromMillis(ms + 30 * DAY)
       });
     }

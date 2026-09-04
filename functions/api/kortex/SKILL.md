@@ -242,9 +242,9 @@ All Kortex routes use this standard shape:
 ## Operations — deploy, rollback, monitoring
 
 **CI:** `.github/workflows/kortex-ci.yml` runs on every push/PR touching `functions/`.
-The hardening suite (`npm run test:kortex:hardening`) is a required gate; the full
-legacy suite runs informationally until its known pre-existing failures are burned
-down (tracked in [`../../docs/KORTEX_AUDIT.md`](../../docs/KORTEX_AUDIT.md)).
+Two required gates: the fast hardening suite (`npm run test:kortex:hardening`) first,
+then every Kortex suite (`npm run test:kortex:all` — all `__tests__/kortex-*.test.js`,
+`--runInBand`, no `--forceExit`, so an open handle fails the build).
 
 **Deploy:**
 ```bash

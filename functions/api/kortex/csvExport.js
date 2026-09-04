@@ -4,16 +4,22 @@
  * formulas neutralised (a cell starting with = + - @ is prefixed with ')
  * because these files are opened in Excel by people who trust them.
  *
+ * Event rows carry hosts and normalised destinations only, never a visitor
+ * key, a user-agent string or a full referrer — whichever schema the stored
+ * event has.
+ *
  * @module api/kortex/csvExport
  */
 
 'use strict';
 
 const admin = require('firebase-admin');
+const { referrerHostOf, normalizeDestination, outcomeOf, outcomeClassOf } = require('./clickTracking');
 
 const EVENT_COLUMNS = Object.freeze([
   'time', 'link', 'source', 'platform', 'device', 'os', 'browser', 'country',
-  'referrer', 'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'window', 'sent_to', 'delivered', 'outcome'
+  'referrer_host', 'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content',
+  'window', 'sent_to', 'delivered', 'outcome', 'outcome_class'
 ]);
 
 function cell(value) {
@@ -41,16 +47,17 @@ function eventRow(code, e) {
     os: e.deviceInfo?.os || '',
     browser: e.deviceInfo?.browser || '',
     country: e.geo?.country || '',
-    referrer: e.referrer || '',
+    referrer_host: e.referrerHost || referrerHostOf(e.referrer),
     utm_source: e.utm?.utm_source || '',
     utm_medium: e.utm?.utm_medium || '',
     utm_campaign: e.utm?.utm_campaign || '',
     utm_term: e.utm?.utm_term || '',
     utm_content: e.utm?.utm_content || '',
     window: e.metadata?.scheduleWindow || '',
-    sent_to: e.redirectedTo || '',
+    sent_to: normalizeDestination(e.redirectedTo) || '',
     delivered: e.delivered === false ? 'no' : 'yes',
-    outcome: e.outcome || ''
+    outcome: outcomeOf(e) || '',
+    outcome_class: outcomeClassOf(e)
   };
 }
 

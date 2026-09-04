@@ -7,10 +7,12 @@ const { DEFAULT_TENANT_ID } = require('./tenantContext');
 const { evaluateLimits } = require('./linkRules');
 const { getTenantGate } = require('./tenantGate');
 const { isQrScan, mergeTrackingIntoDestination, UTM_KEYS } = require('./utmTools');
-const { trackOutcome } = require('./clickTracking');
-const { getClientIp } = require('./clientIp');
+const { trackOutcome, referrerHostOf } = require('./clickTracking');
+const { getClientIp, hashClientIp } = require('./clientIp');
 
 const db = admin.firestore();
+
+const EVENT_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 const DESTINATION_TYPES = new Set([
   'tenant_admin_login',
@@ -320,10 +322,12 @@ async function recordEvent(type, payload = {}, req = null) {
     intent: payload.intent || null,
     metadata: boundedMetadata,
     userId: payload.userId || null,
-    userAgent: req?.get ? String(req.get('user-agent') || '').slice(0, 300) || null : null,
-    referrer: req?.get ? req.get('referer') || null : null,
-    ip: req ? (require('./clientIp').hashClientIp(require('./clientIp').getClientIp(req)) || null) : null,
-    createdAt: FieldValue.serverTimestamp()
+    // Minimised like the event record (§2): a referrer host rather than the
+    // full URL, no user-agent string, and a keyed hash instead of an address.
+    referrerHost: req?.get ? referrerHostOf(req.get('referer')) : null,
+    ip: req ? (hashClientIp(getClientIp(req)) || null) : null,
+    createdAt: FieldValue.serverTimestamp(),
+    expiresAt: admin.firestore.Timestamp.fromMillis(Date.now() + EVENT_TTL_MS)
   };
 
   const ref = await db.collection('kortex_events').add(event);

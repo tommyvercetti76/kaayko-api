@@ -148,6 +148,7 @@ describe('Read-only sessions', () => {
     expect(full.status).toBe(200);
     expect(full.body.reports).toHaveLength(8);
     expect(full.body.reports.every(r => r.points.length > 0 && r.link && r.link.destinations)).toBe(true);
+    expect(full.body.reports.every(r => r.insights.qualityScore && r.timeZone === 'Asia/Kolkata')).toBe(true);
     expect(full.body.reports.find(r => r.code === 'kx-store').link.schedule.windows[0].label).toBe('night');
     expect(full.body.reports.find(r => r.code === 'kx-ambazari').link.limits.maxClicks).toBe(500);
     expect(JSON.stringify(full.body).length).toBeLessThan(400000);

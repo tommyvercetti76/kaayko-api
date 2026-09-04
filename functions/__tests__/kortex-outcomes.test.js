@@ -1,6 +1,5 @@
 /**
- * The outcome stream, the shared analytics truth, sharing, and the new fields
- * through the guest and admin doors.
+ * The outcome stream and the shared analytics truth through the guest and admin doors.
  */
 require('./helpers/mockSetup');
 const request = require('supertest');
@@ -54,22 +53,33 @@ describe('Outcomes are recorded, never counted', () => {
     await new Promise(r => setTimeout(r, 60));
     const fb = docs('click_events/').find(e => e.outcome === 'fallback');
     expect(fb.delivered).toBe(true); expect(fb.fallbackReason).toBe('clicks'); expect(fb.redirectedTo).toBe('https://kaayko.com/store');
+    expect(fb).toMatchObject({ schemaVersion: 2, destinationKey: 'fallback', referrerHost: 'direct', visitorKeyVersion: 1, metadata: { source: 'link', scheduleWindow: null } });
+    expect(fb).toHaveProperty('visitorKey');
+    expect(fb.ip).toBeUndefined(); expect(fb.userAgent).toBeUndefined(); expect(fb.deviceInfo.rawUserAgent).toBeUndefined();
     await request(app).patch(`/kortex/guest/links/${code}`).set(...UA).set(...session).send({ limits: null, expiresAt: '2020-01-01T00:00:00Z' });
     await scan(code); await new Promise(r => setTimeout(r, 60));
     const a = await request(app).get(`/kortex/guest/links/${code}/analytics?tz=Asia/Kolkata`).set(...UA).set(...session);
     expect(a.status).toBe(200);
     const an = a.body.analytics;
     expect(an.totals.events).toBe(1); // the fallback visit only
+    expect(an.totals).toMatchObject({ observed: 2, delivered: 0, rescued: 1, lost: 1, useful: 1, usefulRate: 0.5, lostRate: 0.5 });
+    expect(an.outcomes.classes).toEqual({ delivered: 0, rescued: 1, lost: 1 });
     expect(an.outcomes.undelivered).toBe(1);
     expect(an.outcomes.byOutcome[0].value).toBe('expired');
+    expect(an.unique.totalEvents).toBe(1);
+    expect(an.truncated).toBe(false);
+    expect(an.checkpoint).toBeNull();
+    expect(an.points[0]).toHaveLength(8); expect(an.points[0][7]).toBe('fallback');
+    expect(an.outcomes.points[0]).toHaveLength(4);
     expect(an.timeZone).toBe('Asia/Kolkata');
     expect(an.insights.missed.detail.total).toBe(1);
     expect(an.insights.fallbackUsage.detail.fallbacks).toBe(1);
     expect(an.insights.anomalies.detail.items.some(i => i.kind === 'expiredScanned')).toBe(true);
     expect(a.body.window.days).toBe(7);
     const csv = await request(app).get(`/kortex/guest/links/${code}/analytics.csv`).set(...UA).set(...session);
-    expect(csv.text.split('\r\n')[0]).toMatch(/,delivered,outcome$/);
-    expect(csv.text).toMatch(/,no,expired/);
+    expect(csv.text.split('\r\n')[0]).toMatch(/,delivered,outcome,outcome_class$/);
+    expect(csv.text).toMatch(/,no,expired,lost/);
+    expect(csv.text).toMatch(/,https:\/\/kaayko\.com\/store,yes,fallback,rescued/);
   });
 
   test('the API resolver records the same outcomes', async () => {
@@ -91,6 +101,9 @@ describe('One truth for both doors', () => {
     expect(res.body.analytics.window.retentionDays).toBe(30);
     expect(res.body.analytics.timeZone).toBe('Europe/London');
     expect(res.body.analytics.insights).toBeDefined();
+    expect(res.body.analytics).toHaveProperty('actionCenter');
+    expect(res.body.analytics.totals).toMatchObject({ events: 0, observed: 0, useful: 0, lost: 0 });
+    expect(res.body.analytics.truncated).toBe(false);
   });
 
   test('the admin workspace analytics uses the same module as the free dashboard', async () => {
@@ -105,59 +118,3 @@ describe('One truth for both doors', () => {
   });
 });
 
-describe('New fields and sharing', () => {
-  test('placement, economics and a campaign window round-trip through the guest door and are validated', async () => {
-    const created = await createGuest({ placement: ' Table Tent ', economics: { printCost: 40, valuePerVisit: 1.5, currency: 'inr' }, campaignWindow: { startAt: '2026-09-01', endAt: '2026-09-30' } });
-    expect(created.status).toBe(201);
-    expect(created.body.link.placement).toBe('table tent');
-    expect(created.body.link.economics).toEqual({ printCost: 40, valuePerVisit: 1.5, currency: 'INR' });
-    expect(created.body.link.campaignWindow.startAt).toMatch(/^2026-09-01/);
-    const bad = await createGuest({ economics: { printCost: -5 } });
-    expect(bad.status).toBe(400);
-    const session = ['X-Kortex-Guest-Session', created.body.session];
-    const cleared = await request(app).patch(`/kortex/guest/links/${created.body.link.code}`).set(...UA).set(...session).send({ placement: null, economics: null, campaignWindow: null });
-    expect(cleared.body.link.placement).toBeNull();
-    expect(cleared.body.link.economics).toBeNull();
-    const a = await request(app).get(`/kortex/guest/links/${created.body.link.code}/analytics`).set(...UA).set(...session);
-    expect(a.body.analytics.insights.roi.status).toBe('none');
-  });
-
-  test('a share token opens a public read-only report; revoking closes it; a client cannot set the token', async () => {
-    const created = await createGuest({ shareToken: 'hacked-token-000000' });
-    expect(doc(`short_links/${created.body.link.code}`).shareToken).toBeUndefined();
-    const code = created.body.link.code; const session = ['X-Kortex-Guest-Session', created.body.session];
-    admin._mocks.docData['tenants/' + created.body.workspace.id].plan = 'pro'; gate.resetCache();
-    await scan(code, '?s=qr'); await new Promise(r => setTimeout(r, 60));
-    const shared = await request(app).post(`/kortex/guest/links/${code}/share`).set(...UA).set(...session).send({});
-    expect(shared.status).toBe(200);
-    const token = shared.body.shareUrl.split('/r/')[1];
-    expect(token.length).toBeGreaterThanOrEqual(20);
-    const pub = await request(app).get(`/kortex/shared/${token}`).set(...UA);
-    expect(pub.status).toBe(200);
-    expect(pub.body.link.code).toBe(code);
-    expect(pub.body.analytics.totals.events).toBe(1);
-    expect(pub.body.analytics.insights.qrSplit.detail.qr).toBe(1);
-    expect(pub.body.analytics.recentScans).toBeUndefined();
-    expect(JSON.stringify(pub.body)).not.toMatch(/accessCodeHash|shareToken/);
-    const other = await createGuest();
-    const denied = await request(app).post(`/kortex/guest/links/${code}/share`).set(...UA).set('X-Kortex-Guest-Session', other.body.session).send({});
-    expect(denied.status).toBe(404);
-    const revoked = await request(app).delete(`/kortex/guest/links/${code}/share`).set(...UA).set(...session);
-    expect(revoked.status).toBe(200);
-    expect((await request(app).get(`/kortex/shared/${token}`).set(...UA)).status).toBe(404);
-    expect((await request(app).get('/kortex/shared/short').set(...UA)).status).toBe(404);
-  });
-
-  test('admins share within their tenant; the sample reports carry insights', async () => {
-    admin._mocks.docData['short_links/lkhouse2'] = { code: 'lkhouse2', tenantId: 'kaayko-default', title: 'House', enabled: true, status: 'active', destinations: { web: 'https://kaayko.com/' }, clickCount: 0, utm: {}, createdAt: new Date() };
-    const shared = await request(app).post('/kortex/lkhouse2/share').set(...UA).set(...SUPER).send({});
-    expect(shared.status).toBe(200);
-    expect((await request(app).delete('/kortex/lkhouse2/share').set(...UA).set(...SUPER)).status).toBe(200);
-    process.env.KORTEX_SYNC_KEY = 'sync-test-key';
-    await request(app).post('/kortex/demo/seed').set(...UA).set('X-Kortex-Sync-Key', 'sync-test-key').send({});
-    require('../api/kortex/demoWorkspace').resetSamplesCache();
-    const full = await request(app).get('/kortex/guest/demo/samples?full=1').set(...UA);
-    expect(full.body.reports.every(r => r.insights && r.insights.qualityScore && r.timeZone === 'Asia/Kolkata')).toBe(true);
-    delete process.env.KORTEX_SYNC_KEY;
-  }, 60000);
-});

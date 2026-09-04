@@ -32,7 +32,10 @@ beforeAll(() => {
 });
 beforeEach(() => admin._mocks.resetAll());
 
-const clickEvents = () => Object.keys(admin._mocks.docData).filter(k => k.startsWith('click_events/'));
+const clickEvents = () => Object.keys(admin._mocks.docData).filter(k => k.startsWith('click_events/')).map(k => admin._mocks.docData[k]);
+// A miss is recorded as an outcome, never as a delivered click.
+const deliveredEvents = () => clickEvents().filter(e => e.delivered !== false);
+const settle = () => new Promise(r => setTimeout(r, 60));
 
 const houseLink = (code, extra = {}) => {
   admin._mocks.docData[`short_links/${code}`] = {
@@ -56,8 +59,11 @@ describe('Held and blocked links', () => {
     expect(res.headers['x-robots-tag']).toBe('noindex');
     expect(res.text).toContain('being reviewed');
     expect(res.text).toContain('/kortex/appeal?code=held1');
-    // a miss is recorded as an outcome, never as a delivered click
-    expect(clickEvents().filter(k => { const d = typeof k === 'string' ? admin._mocks.docData[k] : k; return d && d.delivered !== false; })).toHaveLength(0);
+    await settle();
+    expect(deliveredEvents()).toHaveLength(0);
+    const held = clickEvents().find(e => e.outcome === 'held');
+    expect(held).toMatchObject({ schemaVersion: 2, delivered: false, destinationKey: null, redirectedTo: null, referrerHost: 'direct', metadata: { source: 'link', scheduleWindow: null } });
+    expect(held.userAgent).toBeUndefined(); expect(held.deviceInfo.rawUserAgent).toBeUndefined(); expect(held.ip).toBeUndefined();
     expect(admin._mocks.docData['short_links/held1'].clickCount).toBe(0);
   });
 
@@ -66,8 +72,9 @@ describe('Held and blocked links', () => {
     const res = await request(redirectApp).get('/l/blk1').set(...BROWSER).set(...LANG);
     expect(res.status).toBe(410);
     expect(res.text).toContain('has been disabled');
-    // a miss is recorded as an outcome, never as a delivered click
-    expect(clickEvents().filter(k => { const d = typeof k === 'string' ? admin._mocks.docData[k] : k; return d && d.delivered !== false; })).toHaveLength(0);
+    await settle();
+    expect(deliveredEvents()).toHaveLength(0);
+    expect(clickEvents().map(e => e.outcome)).toEqual(['blocked']);
   });
 
   test('the alumni-host resolver honours the same states', async () => {
@@ -101,6 +108,9 @@ describe('Crawlers and the house tenant', () => {
     expect(res.status).toBe(302);
     expect(res.headers.location).toContain('https://kaayko.com/paddlingout');
     expect(clickEvents()).toHaveLength(1);
+    const [event] = clickEvents();
+    expect(event).toMatchObject({ schemaVersion: 2, delivered: true, outcome: 'delivered', referrerHost: 'direct', redirectedTo: 'https://kaayko.com/paddlingout', visitorKeyVersion: 1 });
+    expect(event.userAgent).toBeUndefined(); expect(event.deviceInfo.rawUserAgent).toBeUndefined(); expect(event.ip).toBeUndefined();
   });
 
   test('a starter tenant still gets the interstitial for real visitors', async () => {
@@ -115,8 +125,7 @@ describe('Crawlers and the house tenant', () => {
     const res = await request(redirectApp).get('/l/seo1').set(...GOOGLEBOT);
     expect(res.status).toBe(302);
     expect(res.headers.location).toContain('https://tenant-a.test/landing');
-    // a miss is recorded as an outcome, never as a delivered click
-    expect(clickEvents().filter(k => { const d = typeof k === 'string' ? admin._mocks.docData[k] : k; return d && d.delivered !== false; })).toHaveLength(0);
+    expect(deliveredEvents()).toHaveLength(0);
     expect(admin._mocks.docData['short_links/seo1'].clickCount).toBe(0);
   });
 
@@ -124,8 +133,7 @@ describe('Crawlers and the house tenant', () => {
     houseLink('wa1');
     const res = await request(redirectApp).get('/l/wa1').set(...WHATSAPP);
     expect(res.status).toBe(302);
-    // a miss is recorded as an outcome, never as a delivered click
-    expect(clickEvents().filter(k => { const d = typeof k === 'string' ? admin._mocks.docData[k] : k; return d && d.delivered !== false; })).toHaveLength(0);
+    expect(deliveredEvents()).toHaveLength(0);
   });
 
   test('a UA-less client is still refused', async () => {

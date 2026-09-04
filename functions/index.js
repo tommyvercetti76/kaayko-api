@@ -244,4 +244,23 @@ exports.kortexGuestHousekeeping = onSchedule({
   if (purged.removed) console.log(`[KortexGuest] Purged ${purged.removed} queued credential emails`);
 });
 
+// KORTEX: daily rollups — one counts-only document per link per UTC day, so
+// the workspace overview reads days instead of replaying events and a day's
+// numbers outlive the 30-day event TTL. Yesterday is re-rolled as complete;
+// today is rolled partial and finished by tomorrow's run.
+const { rollupDay, dailyRollupDates } = require("./api/kortex/rollups");
+
+exports.kortexDailyRollup = onSchedule({
+  schedule: "every day 02:30",
+  timeZone: "UTC",
+  memory: "512MiB",
+  timeoutSeconds: 540
+}, async () => {
+  console.log("[KortexRollup] Rolling up yesterday and today...");
+  for (const dateUtc of dailyRollupDates()) {
+    const result = await rollupDay({ dateUtc });
+    console.log(`[KortexRollup] ${result.date}: links=${result.links} written=${result.written} complete=${result.complete}`);
+  }
+});
+
 console.log("✅ Kaayko API v2 - PUBLIC: fastForecast + paddlingOut | PREMIUM: forecast ($$) | SMARTLINKS: admin portal");

@@ -15,16 +15,16 @@
  */
 
 const admin = require('firebase-admin');
+const { referrerHostOfEvent, normalizeDestination } = require('./clickTracking');
 
 const db = admin.firestore();
 
 // Kept in step with linkAnalytics.js (the source of truth for these rules).
+// Readers accept both event schemas: v2 `visitorKey`/`referrerHost` and v1 `ip`/`referrer`.
 const RETENTION_DAYS = 30;
 const CLIENT_IP_FIX_AT = Date.parse('2026-08-17T23:00:00Z');
-const IP_HASH = /^[0-9a-f]{16}$/;
-const isUsableIpHash = (ip) => typeof ip === 'string' && IP_HASH.test(ip);
-const canAttribute = (e) => e.ms >= CLIENT_IP_FIX_AT && isUsableIpHash(e.ip);
-
+const VISITOR_KEY = /^[0-9a-f]{16}$/;
+const canAttribute = (e) => e.ms >= CLIENT_IP_FIX_AT && typeof e.visitorKey === 'string' && VISITOR_KEY.test(e.visitorKey);
 const dayKey = (ms) => new Date(ms).toISOString().slice(0, 10);
 
 function tally(items, top = 8) {
@@ -88,9 +88,9 @@ async function getPortfolioAnalytics({ tenantId = null } = {}) {
       deviceType: e.deviceInfo?.deviceType || null,
       os: e.deviceInfo?.os || null,
       browser: e.deviceInfo?.browser || null,
-      ip: e.ip || null,
-      referrer: e.referrer || null,
-      redirectedTo: e.redirectedTo || null,
+      visitorKey: e.visitorKey || e.ip || null,
+      referrerHost: referrerHostOfEvent(e),
+      redirectedTo: normalizeDestination(e.redirectedTo),
       country: e.geo?.country || null,       // present once redirect-time geo lands
       tenantId: e.tenantId || null,
       installAttributed: e.installAttributed === true,
@@ -114,10 +114,10 @@ async function getPortfolioAnalytics({ tenantId = null } = {}) {
   const perDay = new Map();
   for (const e of events) {
     const k = dayKey(e.ms);
-    if (!perDay.has(k)) perDay.set(k, { clicks: 0, ips: new Set() });
+    if (!perDay.has(k)) perDay.set(k, { clicks: 0, keys: new Set() });
     const b = perDay.get(k);
     b.clicks += 1;
-    if (canAttribute(e)) b.ips.add(e.ip);
+    if (canAttribute(e)) b.keys.add(e.visitorKey);
   }
   const timeline = [];
   for (let d = new Date(dayKey(events[0].ms) + 'T00:00:00Z');
@@ -125,7 +125,7 @@ async function getPortfolioAnalytics({ tenantId = null } = {}) {
        d.setUTCDate(d.getUTCDate() + 1)) {
     const k = d.toISOString().slice(0, 10);
     const b = perDay.get(k);
-    timeline.push({ date: k, clicks: b ? b.clicks : 0, uniqueVisitors: b ? b.ips.size : 0 });
+    timeline.push({ date: k, clicks: b ? b.clicks : 0, uniqueVisitors: b ? b.keys.size : 0 });
   }
 
   // --- top links by REAL event count (not the counter) --------------------
@@ -181,7 +181,7 @@ async function getPortfolioAnalytics({ tenantId = null } = {}) {
     browser: tally(events.map((e) => e.browser)),
     platform: tally(events.map((e) => e.platform)),
     destination: tally(events.map((e) => e.redirectedTo), 6),
-    referrer: tally(events.map((e) => e.referrer)),
+    referrer: tally(events.map((e) => e.referrerHost)),
     hourOfDayUtc: (() => { const h = new Array(24).fill(0); for (const e of events) h[new Date(e.ms).getUTCHours()]++; return h.map((clicks, hour) => ({ hour, clicks })); })(),
     dayOfWeekUtc: (() => { const names = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']; const d = new Array(7).fill(0); for (const e of events) d[new Date(e.ms).getUTCDay()]++; return d.map((clicks, i) => ({ value: names[i], clicks })); })(),
   };
@@ -198,7 +198,7 @@ async function getPortfolioAnalytics({ tenantId = null } = {}) {
 
   // --- unique visitors (honest, post-boundary) ----------------------------
   const attributable = events.filter(canAttribute);
-  const distinct = new Set(attributable.map((e) => e.ip));
+  const distinct = new Set(attributable.map((e) => e.visitorKey));
   const cov = Math.round((attributable.length / total) * 100);
   const unattributed = total - attributable.length;
   const unique = {
@@ -225,9 +225,9 @@ async function getPortfolioAnalytics({ tenantId = null } = {}) {
       counterSum,
       drift,
       driftNote: drift > 0
-        ? `Lifetime click counters total ${counterSum}, but only ${total} events remain within the ${RETENTION_DAYS}-day retention window. The ${drift}-click gap is expired history, not missing data.`
+        ? `Lifetime scan counters total ${counterSum}, but only ${total} events remain within the ${RETENTION_DAYS}-day retention window. The ${drift}-scan gap is expired history, not missing data.`
         : drift < 0
-          ? `There are ${total} retained events but the lifetime counters total only ${counterSum}${orphanCodes ? ` — ${orphanCodes} link code${orphanCodes === 1 ? '' : 's'} in the events no longer exist in short_links (deleted after being clicked)` : ', so some counters lag their events'}.`
+          ? `There are ${total} retained events but the lifetime counters total only ${counterSum}${orphanCodes ? ` — ${orphanCodes} link code${orphanCodes === 1 ? '' : 's'} in the events no longer exist in short_links (deleted after being scanned)` : ', so some counters lag their events'}.`
           : null,
     },
     window: {

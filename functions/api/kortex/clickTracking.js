@@ -1,27 +1,34 @@
 /**
- * Click Tracking & Attribution Service
- * 
- * Enterprise-grade click tracking with install attribution for Smart Links.
- * Tracks the full funnel: click → redirect → install → first open → attribution.
- * 
- * Features:
- * - Unique clickId generation for each click
- * - Click event persistence with full context
- * - Click-to-install attribution
- * - Deferred deep linking support
- * - Platform detection and routing
- * - UTM parameter preservation
- * 
+ * Click tracking and install attribution for Kortex links.
+ *
+ * Every scan or tap becomes one click_events document built by
+ * buildEventRecord() — the same builder whether the visitor was delivered,
+ * rescued by a fallback, or lost — so the two paths cannot drift.
+ *
+ * The record is minimised (schemaVersion 2): a keyed visitor hash instead of
+ * an address, a referrer host instead of a URL, a destination without query
+ * or fragment, and parsed device fields without the user-agent string.
+ *
  * @module api/kortex/clickTracking
  */
 
 const admin = require('firebase-admin');
 const crypto = require('crypto');
+const { FieldValue } = require('firebase-admin/firestore');
+const { hashClientIp, isPublic } = require('./clientIp');
+const { DEFAULT_TENANT_ID } = require('./tenantContext');
 
 const db = admin.firestore();
-const { FieldValue } = require('firebase-admin/firestore');
 
-// Import webhook service (lazy to avoid circular dependency)
+const EVENT_SCHEMA_VERSION = 2;
+const VISITOR_KEY_VERSION = 1;
+const UA_PARSER_VERSION = 1;
+const EVENT_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+const UTM_KEYS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content'];
+const UTM_VALUE_MAX = 200;
+const DIRECT = 'direct';
+
+// Webhook service is loaded lazily to avoid a circular dependency.
 let webhookService = null;
 function getWebhookService() {
   if (!webhookService) {
@@ -30,154 +37,274 @@ function getWebhookService() {
   return webhookService;
 }
 
-/**
- * Generate unique click ID
- * Format: c_<16 random hex chars>
- * 
- * @returns {string} Unique click ID
- */
-function generateClickId() {
-  const randomBytes = crypto.randomBytes(8).toString('hex');
-  return `c_${randomBytes}`;
+/** Fire-and-forget webhook delivery; a webhook failure never fails tracking. */
+function notifyWebhooks(tenantId, type, payload) {
+  Promise.resolve()
+    .then(() => {
+      const webhooks = getWebhookService();
+      return webhooks.triggerWebhooks({ tenantId, eventType: webhooks.EVENT_TYPES[type], payload });
+    })
+    .catch(err => console.error('[ClickTracking] Webhook trigger failed:', err));
 }
 
-// Privacy: store a salted hash of the client IP, never the raw address.
-// Preserves per-IP dedup/analytics grouping without retaining PII (GDPR/DPDP).
-const { hashClientIp } = require('./clientIp');
-function hashIp(ip) {
-  return hashClientIp(ip);
+/** Unique click ID: c_<16 random hex chars>. */
+function generateClickId() {
+  return `c_${crypto.randomBytes(8).toString('hex')}`;
 }
 
 // Country resolution from the raw IP, offline. The lookup happens here, on the
 // non-blocking tracking path, and the raw IP is discarded immediately after —
-// only the resolved country code and the salted hash are ever stored. Using a
+// only the resolved country code and the keyed hash are ever stored. Using a
 // bundled database (not a third-party API) keeps the visitor IP inside our own
 // infrastructure, consistent with never storing it raw.
-const { isPublic } = require('./clientIp');
-let _geoip = null;
+let geoip = null;
 function resolveGeo(ip) {
   if (!ip || !isPublic(ip)) return null;
   try {
-    if (!_geoip) _geoip = require('geoip-country');
-    const r = _geoip.lookup(ip);
+    if (!geoip) geoip = require('geoip-country');
+    const r = geoip.lookup(ip);
     return r && r.country ? { country: r.country } : null;
-  } catch (e) {
+  } catch (_) {
     return null; // geo is best-effort; a failure must never break tracking
   }
 }
 
+/** Host of a referrer URL, lowercase without a leading www., or 'direct' when there is none. */
+function referrerHostOf(referrer) {
+  if (!referrer) return DIRECT;
+  try {
+    return new URL(String(referrer)).hostname.toLowerCase().replace(/^www\./, '') || DIRECT;
+  } catch (_) {
+    return DIRECT;
+  }
+}
+
+/** Referrer host of a stored event under either schema; null for direct traffic. */
+function referrerHostOfEvent(event) {
+  const host = event.referrerHost || referrerHostOf(event.referrer || event.referer);
+  return host === DIRECT ? null : host;
+}
+
+/** Which configured destination a delivered scan took: the schedule window when one applied, else the platform route. */
+function destinationKeyOf({ platform, destinations, scheduleWindow }) {
+  if (scheduleWindow) return `schedule:${scheduleWindow}`;
+  if (platform === 'ios' && destinations.ios) return 'ios';
+  if (platform === 'android' && destinations.android) return 'android';
+  return 'web';
+}
+
+/** A destination reduced to scheme, host and path: no query, fragment or userinfo. Null when unparseable. */
+function normalizeDestination(url) {
+  if (!url) return null;
+  try {
+    const u = new URL(String(url));
+    return `${u.protocol}//${u.host}${u.pathname}`;
+  } catch (_) {
+    return null;
+  }
+}
+
+/** The stored outcome, or 'delivered' for events written before outcomes existed. */
+function outcomeOf(event) {
+  return event.outcome || (event.delivered === false ? null : 'delivered');
+}
+
+/** Canonical class of an event: delivered, rescued (a fallback) or lost. */
+function outcomeClassOf(event) {
+  const outcome = outcomeOf(event);
+  if (outcome === 'delivered') return 'delivered';
+  if (outcome === 'fallback') return 'rescued';
+  return 'lost';
+}
+
+/** Only the five standard campaign keys, each bounded in length. */
+function boundedUtm(utm) {
+  const out = {};
+  for (const key of UTM_KEYS) {
+    const value = utm && utm[key];
+    if (value !== undefined && value !== null && value !== '') out[key] = String(value).slice(0, UTM_VALUE_MAX);
+  }
+  return out;
+}
+
 /**
- * Track a click event with full context
- * Returns clickId for attribution chain
- * 
- * @param {Object} params
- * @param {string} params.linkCode - Short link code
- * @param {string} params.tenantId - Tenant ID
- * @param {string} params.platform - Detected platform (ios|android|web)
- * @param {string} params.userAgent - Full user agent string
- * @param {string} params.ip - Client IP address
- * @param {string} params.referrer - HTTP referrer
- * @param {Object} params.utm - UTM parameters
- * @param {Object} params.metadata - Additional metadata
+ * Normalised device fields from a user-agent string. The string itself is
+ * never stored; parserVersion says which rules produced these values.
+ */
+function parseUserAgent(userAgent = '') {
+  const ua = String(userAgent).toLowerCase();
+  let os = 'Unknown';
+  let browser = 'Unknown';
+  let deviceType = 'desktop';
+
+  if (ua.includes('iphone') || ua.includes('ipad')) {
+    os = 'iOS';
+    deviceType = ua.includes('ipad') ? 'tablet' : 'mobile';
+  } else if (ua.includes('android')) {
+    os = 'Android';
+    deviceType = ua.includes('mobile') ? 'mobile' : 'tablet';
+  } else if (ua.includes('windows')) {
+    os = 'Windows';
+  } else if (ua.includes('mac')) {
+    os = 'macOS';
+  } else if (ua.includes('linux')) {
+    os = 'Linux';
+  }
+
+  if (ua.includes('safari') && !ua.includes('chrome')) {
+    browser = 'Safari';
+  } else if (ua.includes('chrome')) {
+    browser = 'Chrome';
+  } else if (ua.includes('firefox')) {
+    browser = 'Firefox';
+  } else if (ua.includes('edge')) {
+    browser = 'Edge';
+  }
+
+  return { deviceType, os, browser, parserVersion: UA_PARSER_VERSION };
+}
+
+/**
+ * One record shape for every scan outcome (event record v2).
+ *
+ * @param {object} p
+ * @param {string} p.linkCode
+ * @param {string} [p.tenantId]
+ * @param {number} p.timestampMs
+ * @param {boolean} p.delivered
+ * @param {string} p.outcome              'delivered' | 'fallback' | a lost reason
+ * @param {string|null} p.fallbackReason
+ * @param {string|null} p.platform        ios | android | web
+ * @param {string} p.userAgent            parsed into deviceInfo, never stored
+ * @param {string|null} p.ip              hashed into visitorKey and resolved to a country, never stored
+ * @param {string|null} p.referrer        reduced to its host
+ * @param {object} p.utm
+ * @param {string} p.source               'qr' | 'link'
+ * @param {string|null} p.scheduleWindow
+ * @param {string|null} p.destinationKey  'web' | 'ios' | 'android' | 'schedule:<label>' | 'fallback'
+ * @param {string|null} p.redirectedTo    normalised to scheme, host and path
+ */
+function buildEventRecord(p) {
+  return {
+    clickId: generateClickId(),
+    schemaVersion: EVENT_SCHEMA_VERSION,
+    linkCode: p.linkCode,
+    tenantId: p.tenantId || DEFAULT_TENANT_ID,
+    timestamp: FieldValue.serverTimestamp(),
+    timestampMs: p.timestampMs,
+    delivered: p.delivered,
+    outcome: p.outcome,
+    fallbackReason: p.fallbackReason || null,
+    platform: p.platform || null,
+    deviceInfo: parseUserAgent(p.userAgent),
+    geo: resolveGeo(p.ip),
+    visitorKey: hashClientIp(p.ip),
+    visitorKeyVersion: VISITOR_KEY_VERSION,
+    referrerHost: referrerHostOf(p.referrer),
+    destinationKey: p.destinationKey || null,
+    redirectedTo: normalizeDestination(p.redirectedTo),
+    utm: boundedUtm(p.utm),
+    metadata: { source: p.source === 'qr' ? 'qr' : 'link', scheduleWindow: p.scheduleWindow || null },
+    installAttributed: false,
+    expiresAt: admin.firestore.Timestamp.fromMillis(p.timestampMs + EVENT_TTL_MS)
+  };
+}
+
+function writeEvent(record) {
+  return db.collection('click_events').doc(record.clickId).set(record);
+}
+
+/**
+ * Record a delivered scan or tap and return its clickId for attribution.
+ *
+ * @param {object} params
+ * @param {string} params.linkCode
+ * @param {string} params.tenantId
+ * @param {string} params.platform          ios | android | web
+ * @param {string} params.userAgent
+ * @param {string|null} params.ip
+ * @param {string|null} params.referrer
+ * @param {object} [params.utm]
+ * @param {object} [params.metadata]        { source: 'qr'|'link', scheduleWindow }
+ * @param {string} [params.destinationKey]  which configured destination was chosen
  * @returns {Promise<{clickId: string, timestamp: Date}>}
  */
 async function trackClick(params) {
-  const {
+  const { linkCode, tenantId, platform, userAgent, ip, referrer, utm = {}, metadata = {}, destinationKey = null } = params;
+  const timestamp = new Date();
+  const scheduleWindow = metadata.scheduleWindow || null;
+
+  const record = buildEventRecord({
     linkCode,
     tenantId,
+    timestampMs: timestamp.getTime(),
+    delivered: true,
+    outcome: 'delivered',
+    fallbackReason: null,
     platform,
     userAgent,
     ip,
     referrer,
-    utm = {},
-    metadata = {}
-  } = params;
-
-  const clickId = generateClickId();
-  const timestamp = new Date();
-
-  // Parse user agent for detailed info
-  const deviceInfo = parseUserAgent(userAgent);
-
-  // Create click event document
-  const clickEvent = {
-    clickId,
-    linkCode,
-    tenantId,
-    timestamp: FieldValue.serverTimestamp(),
-    timestampMs: timestamp.getTime(),
-    
-    // Platform & device
-    platform,
-    deviceInfo,
-    userAgent,
-    
-    // Network & location — store a salted hash and a resolved country, never
-    // the raw IP. resolveGeo() reads the raw IP then it is discarded here.
-    ip: hashIp(ip),
-    geo: resolveGeo(ip),
-
-    // Attribution
-    referrer: referrer || null,
     utm,
-    
-    // Status tracking
-    redirectedTo: null, // Set when redirect happens
-    installAttributed: false, // Set when install is attributed
-    installTimestamp: null,
-    
-    // Additional data
-    metadata,
-    
-    // TTL: expire after 30 days (for cleanup)
-    expiresAt: admin.firestore.Timestamp.fromMillis(timestamp.getTime() + (30 * 24 * 60 * 60 * 1000))
-  };
+    source: metadata.source,
+    scheduleWindow,
+    destinationKey: destinationKey || (scheduleWindow ? `schedule:${scheduleWindow}` : null),
+    redirectedTo: null
+  });
+  await writeEvent(record);
 
-  // Save to Firestore
-  await db.collection('click_events').doc(clickId).set(clickEvent);
-
-  console.log('[ClickTracking] Tracked click:', {
-    clickId,
+  notifyWebhooks(record.tenantId, 'CLICK', {
+    event: 'link.clicked',
+    clickId: record.clickId,
     linkCode,
     platform,
-    tenant: tenantId
+    timestamp: timestamp.toISOString(),
+    deviceInfo: record.deviceInfo,
+    utm: record.utm
   });
 
-  // Trigger webhooks (async, non-blocking)
-  try {
-    const webhooks = getWebhookService();
-    webhooks.triggerWebhooks({
-      tenantId,
-      eventType: webhooks.EVENT_TYPES.CLICK,
-      payload: {
-        event: 'link.clicked',
-        clickId,
-        linkCode,
-        platform,
-        timestamp: new Date().toISOString(),
-        deviceInfo,
-        utm
-      }
-    }).catch(err => console.error('[ClickTracking] Webhook trigger failed:', err));
-  } catch (webhookError) {
-    // Ignore webhook errors (don't block click tracking)
-  }
-
-  return { clickId, timestamp };
+  return { clickId: record.clickId, timestamp };
 }
 
 /**
- * Update click event with redirect destination
- * Called after redirect decision is made
- * 
- * @param {string} clickId 
- * @param {string} destination 
- * @returns {Promise<void>}
+ * A scan that did not reach the intended page (expired, capped, held, blocked,
+ * paused, workspace off) or that took a fallback. Same collection as clicks,
+ * flagged `delivered:false` for misses so no count or webhook ever treats it
+ * as a visit; a fallback is delivered, with its reason.
+ */
+async function trackOutcome(params) {
+  const { linkCode, tenantId, outcome, reason = null, delivered = false, redirectedTo = null, platform = null, userAgent = '', ip = null, referrer = null, scanned = false } = params;
+  if (!linkCode || !outcome) return null;
+
+  const record = buildEventRecord({
+    linkCode,
+    tenantId,
+    timestampMs: Date.now(),
+    delivered: delivered === true,
+    outcome,
+    fallbackReason: reason,
+    platform,
+    userAgent,
+    ip,
+    referrer,
+    utm: {},
+    source: scanned ? 'qr' : 'link',
+    scheduleWindow: null,
+    destinationKey: outcome === 'fallback' ? 'fallback' : null,
+    redirectedTo
+  });
+  await writeEvent(record);
+  return { clickId: record.clickId };
+}
+
+/**
+ * Record where a delivered click was sent, once the redirect decision is made.
+ * The destination is stored normalised (no query, fragment or userinfo).
  */
 async function updateClickRedirect(clickId, destination) {
   try {
     await db.collection('click_events').doc(clickId).update({
-      redirectedTo: destination,
+      redirectedTo: normalizeDestination(destination),
       redirectTimestamp: FieldValue.serverTimestamp()
     });
   } catch (error) {
@@ -186,61 +313,39 @@ async function updateClickRedirect(clickId, destination) {
 }
 
 /**
- * Track an install event and attribute to click
- * Called from /resolve endpoint after app install
- * 
- * @param {Object} params
- * @param {string} params.clickId - Click ID from deep link
- * @param {string} params.deviceId - Stable device identifier
- * @param {string} params.platform - ios|android
- * @param {string} params.appVersion - App version string
- * @param {Object} params.metadata - Additional install metadata
- * @returns {Promise<{success: boolean, attributed: boolean, context: Object}>}
+ * Track an install event and attribute it to a click.
+ * Called from /resolve after an app install.
+ *
+ * @param {object} params
+ * @param {string} params.clickId     Click ID from the deep link
+ * @param {string} params.deviceId    Stable device identifier
+ * @param {string} params.platform    ios | android
+ * @param {string} params.appVersion
+ * @param {object} [params.metadata]
+ * @returns {Promise<{success: boolean, attributed: boolean, context?: object}>}
  */
 async function trackInstall(params) {
-  const {
-    clickId,
-    deviceId,
-    platform,
-    appVersion,
-    metadata = {}
-  } = params;
+  const { clickId, deviceId, platform, appVersion, metadata = {} } = params;
 
   if (!clickId) {
-    return {
-      success: false,
-      attributed: false,
-      error: 'clickId required'
-    };
+    return { success: false, attributed: false, error: 'clickId required' };
   }
 
   try {
-    // Look up click event
     const clickDoc = await db.collection('click_events').doc(clickId).get();
-    
+
     if (!clickDoc.exists) {
       console.warn('[ClickTracking] Install without valid click:', clickId);
-      return {
-        success: true,
-        attributed: false,
-        error: 'Click not found'
-      };
+      return { success: true, attributed: false, error: 'Click not found' };
     }
 
     const clickData = clickDoc.data();
 
-    // Check if already attributed (idempotency)
+    // Idempotent: a second install report for the same click changes nothing.
     if (clickData.installAttributed) {
-      console.log('[ClickTracking] Install already attributed:', clickId);
-      return {
-        success: true,
-        attributed: true,
-        isNewInstall: false,
-        context: clickData
-      };
+      return { success: true, attributed: true, isNewInstall: false, context: clickData };
     }
 
-    // Update click event with install info
     await clickDoc.ref.update({
       installAttributed: true,
       installTimestamp: FieldValue.serverTimestamp(),
@@ -250,13 +355,11 @@ async function trackInstall(params) {
       installMetadata: metadata
     });
 
-    // Increment install count on the link
     await db.collection('short_links').doc(clickData.linkCode).update({
       installCount: FieldValue.increment(1),
       lastInstallAt: FieldValue.serverTimestamp()
     });
 
-    // Create install event for analytics
     await db.collection('install_events').add({
       clickId,
       linkCode: clickData.linkCode,
@@ -271,32 +374,16 @@ async function trackInstall(params) {
       metadata
     });
 
-    console.log('[ClickTracking] Install attributed:', {
+    notifyWebhooks(clickData.tenantId, 'INSTALL', {
+      event: 'app.installed',
       clickId,
       linkCode: clickData.linkCode,
-      platform
+      deviceId,
+      platform,
+      appVersion,
+      timestamp: new Date().toISOString(),
+      utm: clickData.utm
     });
-
-    // Trigger webhooks (async, non-blocking)
-    try {
-      const webhooks = getWebhookService();
-      webhooks.triggerWebhooks({
-        tenantId: clickData.tenantId,
-        eventType: webhooks.EVENT_TYPES.INSTALL,
-        payload: {
-          event: 'app.installed',
-          clickId,
-          linkCode: clickData.linkCode,
-          deviceId,
-          platform,
-          appVersion,
-          timestamp: new Date().toISOString(),
-          utm: clickData.utm
-        }
-      }).catch(err => console.error('[ClickTracking] Webhook trigger failed:', err));
-    } catch (webhookError) {
-      // Ignore webhook errors
-    }
 
     return {
       success: true,
@@ -309,86 +396,25 @@ async function trackInstall(params) {
         metadata: clickData.metadata
       }
     };
-
   } catch (error) {
     console.error('[ClickTracking] Install tracking error:', error);
-    return {
-      success: false,
-      attributed: false,
-      error: error.message
-    };
+    return { success: false, attributed: false, error: error.message };
   }
 }
 
-/**
- * Calculate time from click to conversion (in seconds)
- * @param {number} clickTimestampMs 
- * @returns {number} Seconds elapsed
- */
+/** Seconds from click to conversion. */
 function calculateTimeToConversion(clickTimestampMs) {
   return Math.floor((Date.now() - clickTimestampMs) / 1000);
 }
 
 /**
- * Parse user agent string for device info
- * Basic parser - can be enhanced with ua-parser-js library
- * 
- * @param {string} userAgent 
- * @returns {Object} Parsed device info
- */
-function parseUserAgent(userAgent = '') {
-  const ua = userAgent.toLowerCase();
-  
-  // Platform detection
-  let platform = 'web';
-  let os = 'Unknown';
-  let browser = 'Unknown';
-  let deviceType = 'desktop';
-
-  if (ua.includes('iphone') || ua.includes('ipad')) {
-    platform = 'ios';
-    os = 'iOS';
-    deviceType = ua.includes('ipad') ? 'tablet' : 'mobile';
-  } else if (ua.includes('android')) {
-    platform = 'android';
-    os = 'Android';
-    deviceType = ua.includes('mobile') ? 'mobile' : 'tablet';
-  } else if (ua.includes('windows')) {
-    os = 'Windows';
-  } else if (ua.includes('mac')) {
-    os = 'macOS';
-  } else if (ua.includes('linux')) {
-    os = 'Linux';
-  }
-
-  // Browser detection
-  if (ua.includes('safari') && !ua.includes('chrome')) {
-    browser = 'Safari';
-  } else if (ua.includes('chrome')) {
-    browser = 'Chrome';
-  } else if (ua.includes('firefox')) {
-    browser = 'Firefox';
-  } else if (ua.includes('edge')) {
-    browser = 'Edge';
-  }
-
-  return {
-    platform,
-    os,
-    browser,
-    deviceType,
-    rawUserAgent: userAgent
-  };
-}
-
-/**
- * Get analytics for a link (clicks, installs, conversion rate)
- * 
- * @param {string} linkCode 
- * @param {Object} options
- * @param {Date} options.startDate - Filter by start date
- * @param {Date} options.endDate - Filter by end date
- * @returns {Promise<Object>} Analytics data
+ * Click and install counts for the public API (clicks, installs, conversion rate).
+ *
+ * @param {string} linkCode
+ * @param {object} options
+ * @param {Date} [options.startDate]
+ * @param {Date} [options.endDate]
+ * @returns {Promise<object>}
  */
 async function getLinkAnalytics(linkCode, options = {}) {
   const { startDate, endDate } = options;
@@ -408,26 +434,20 @@ async function getLinkAnalytics(linkCode, options = {}) {
     installQuery = installQuery.where('timestamp', '<=', endTimestamp);
   }
 
-  const [clickSnapshot, installSnapshot] = await Promise.all([
-    clickQuery.get(),
-    installQuery.get()
-  ]);
+  const [clickSnapshot, installSnapshot] = await Promise.all([clickQuery.get(), installQuery.get()]);
 
   const clicks = clickSnapshot.docs.map(doc => doc.data());
   const installs = installSnapshot.docs.map(doc => doc.data());
 
-  // Calculate metrics
   const totalClicks = clicks.length;
   const totalInstalls = installs.length;
   const conversionRate = totalClicks > 0 ? (totalInstalls / totalClicks) * 100 : 0;
 
-  // Platform breakdown
   const platformBreakdown = clicks.reduce((acc, click) => {
     acc[click.platform] = (acc[click.platform] || 0) + 1;
     return acc;
   }, {});
 
-  // UTM breakdown
   const utmSources = {};
   clicks.forEach(click => {
     const source = click.utm?.utm_source || 'direct';
@@ -440,82 +460,45 @@ async function getLinkAnalytics(linkCode, options = {}) {
     conversionRate: conversionRate.toFixed(2),
     platformBreakdown,
     utmSources,
-    clicks: clicks.slice(0, 100), // Recent 100
+    clicks: clicks.slice(0, 100),
     installs: installs.slice(0, 100)
   };
 }
 
 /**
- * Cleanup expired click events (for scheduled job)
- * Deletes click_events older than 30 days
- * 
+ * Delete click_events older than 30 days, 500 at a time (scheduled job).
+ *
  * @returns {Promise<{deleted: number}>}
  */
 async function cleanupExpiredClicks() {
-  const expiryDate = new Date(Date.now() - (30 * 24 * 60 * 60 * 1000));
-  const expiryTimestamp = admin.firestore.Timestamp.fromDate(expiryDate);
+  const expiryTimestamp = admin.firestore.Timestamp.fromMillis(Date.now() - EVENT_TTL_MS);
 
   const expiredSnapshot = await db.collection('click_events')
     .where('timestamp', '<', expiryTimestamp)
-    .limit(500) // Batch delete
+    .limit(500)
     .get();
 
   const batch = db.batch();
   expiredSnapshot.docs.forEach(doc => batch.delete(doc.ref));
-  
+
   if (expiredSnapshot.size > 0) {
     await batch.commit();
-    console.log(`[ClickTracking] Cleaned up ${expiredSnapshot.size} expired clicks`);
   }
 
   return { deleted: expiredSnapshot.size };
 }
 
-/**
- * A scan that did not reach the intended page (expired, capped, held, blocked,
- * paused, workspace off) or that took a fallback. Same collection as clicks,
- * flagged `delivered:false` for misses so no count or webhook ever treats it
- * as a visit; a fallback is delivered, with its reason.
- */
-async function trackOutcome(params) {
-  const { linkCode, tenantId, outcome, reason = null, delivered = false, redirectedTo = null, platform = null, userAgent = '', ip = null, referrer = null, scanned = false } = params;
-  if (!linkCode || !outcome) return null;
-  const clickId = generateClickId();
-  const now = Date.now();
-  const doc = {
-    clickId,
-    linkCode,
-    tenantId: tenantId || 'kaayko-default',
-    timestamp: FieldValue.serverTimestamp(),
-    timestampMs: now,
-    delivered: delivered === true,
-    outcome,
-    fallbackReason: reason,
-    platform,
-    deviceInfo: parseUserAgent(userAgent),
-    userAgent: String(userAgent || '').slice(0, 300),
-    ip: hashIp(ip),
-    geo: resolveGeo(ip),
-    referrer: referrer || null,
-    utm: {},
-    redirectedTo,
-    installAttributed: false,
-    metadata: { source: scanned ? 'qr' : 'link' },
-    expiresAt: admin.firestore.Timestamp.fromMillis(now + 30 * 24 * 60 * 60 * 1000)
-  };
-  await db.collection('click_events').doc(clickId).set(doc);
-  return { clickId };
-}
-
 module.exports = {
-  generateClickId,
   trackClick,
   trackOutcome,
-  hashIp,
-  resolveGeo,
   updateClickRedirect,
   trackInstall,
   getLinkAnalytics,
-  parseUserAgent,
-  cleanupExpiredClicks
+  cleanupExpiredClicks,
+  referrerHostOf,
+  referrerHostOfEvent,
+  destinationKeyOf,
+  normalizeDestination,
+  outcomeOf,
+  outcomeClassOf
 };

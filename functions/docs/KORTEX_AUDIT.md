@@ -29,7 +29,7 @@ This document is the source of truth for what Kortex does today. Where it disagr
 
 ## Fixes applied — batch 2 (product-readiness hardening)
 
-Verified by a new required test gate: `npm run test:kortex:hardening` (27 tests, all green). CI runs it on every push (`.github/workflows/kortex-ci.yml`).
+Verified by a new required test gate: `npm run test:kortex:hardening` (27 tests, all green). CI runs it on every push (`.github/workflows/kortex-ci.yml`) as the fast first gate; since Sep 2026 it also requires `npm run test:kortex:all` (every `__tests__/kortex-*.test.js`, `--runInBand`, no `--forceExit`).
 
 | Area | Finding closed | Change |
 |------|----------------|--------|

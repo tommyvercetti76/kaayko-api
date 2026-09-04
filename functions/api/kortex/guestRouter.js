@@ -13,6 +13,8 @@
  *   POST   /recover                email a fresh code to a workspace's address (always 202)
  *   POST   /claim                  attach a signed-in (paid path) user to a guest workspace
  *   GET    /capabilities           what the server can do right now (email delivery, limits)
+ *   POST   /links/:code/share      mint a public report URL (returned once); DELETE revokes
+ *   POST   /links/:code/share/rotate  revoke + mint
  *
  * Everything a guest can touch is scoped to the workspace on the session
  * token; a link that belongs to anyone else answers 404.
@@ -35,7 +37,8 @@ const { expiryDate } = require('./linkRules');
 const demo = require('./demoWorkspace');
 const { windowDaysFor, timeZoneFrom } = require('./analyticsPolicy');
 const { buildWorkspaceAnalytics } = require('./workspaceAnalytics');
-const crypto = require('crypto');
+const { mountGuestActions } = require('./actionRoutes');
+const { issueReportToken, revokeReportToken, shareState } = require('./reportTokens');
 const { getLinkAnalytics } = require('./linkAnalytics');
 const { recordAudit } = require('./auditLog');
 const { rateLimiter } = require('../../middleware/securityMiddleware');
@@ -105,10 +108,10 @@ function publicLink(link) {
     limits: link.limits || null,
     utm: link.utm || {},
     placement: link.placement || null,
+    placementLabel: link.placementLabel || null,
     economics: link.economics || null,
     campaignWindow: link.campaignWindow || null,
-    shared: !!link.shareToken,
-    shareUrl: link.shareToken ? `https://kaayko.com/kortex/r/${link.shareToken}` : null,
+    ...shareState(link),
     expiresAt: expiryDate(link) ? expiryDate(link).toISOString() : null
   };
 }
@@ -388,33 +391,44 @@ router.get('/demo', rateLimiter('guestSession'), async (req, res) => {
 });
 
 /**
- * Sponsor proof: a share token makes one link's report readable at
- * kaayko.com/kortex/r/<token> without a session. Revocable; never a client-set field.
+ * Sponsor proof: a report token makes one link's public report readable at
+ * kaayko.com/kortex/r/<token> without a session. The URL is returned once and
+ * never stored; the link keeps only whether a report is live and when it lapses.
  */
-router.post('/links/:code/share', guest.requireGuestSession, requireWritable, async (req, res) => {
+async function mintShare(req, res, action) {
   const link = await ownedLink(req, res);
   if (!link) return;
   try {
-    const token = crypto.randomBytes(18).toString('base64url');
-    await db.collection('short_links').doc(link.code).update({ shareToken: token, sharedAtMs: Date.now(), updatedAt: FieldValue.serverTimestamp() });
-    recordAudit({ req, actor: { type: 'guest', workspace: req.guest.tenantId }, action: 'link.shared', code: link.code, tenantId: req.guest.tenantId });
-    return res.json({ success: true, shareUrl: `https://kaayko.com/kortex/r/${token}` });
+    const { shareUrl, expiresAt } = await issueReportToken({
+      linkCode: link.code,
+      tenantId: req.guest.tenantId,
+      previousShare: link.share,
+      expiresInDays: (req.body || {}).expiresInDays
+    });
+    recordAudit({ req, actor: { type: 'guest', workspace: req.guest.tenantId }, action, code: link.code, tenantId: req.guest.tenantId });
+    return res.json({ success: true, shareUrl, expiresAt });
   } catch (error) {
     return guestError(res, error);
   }
-});
+}
+
+router.post('/links/:code/share', guest.requireGuestSession, requireWritable, (req, res) => mintShare(req, res, 'link.shared'));
+router.post('/links/:code/share/rotate', guest.requireGuestSession, requireWritable, (req, res) => mintShare(req, res, 'link.share_rotated'));
 
 router.delete('/links/:code/share', guest.requireGuestSession, requireWritable, async (req, res) => {
   const link = await ownedLink(req, res);
   if (!link) return;
   try {
-    await db.collection('short_links').doc(link.code).update({ shareToken: FieldValue.delete(), sharedAtMs: FieldValue.delete(), updatedAt: FieldValue.serverTimestamp() });
+    await revokeReportToken({ linkCode: link.code, share: link.share });
     recordAudit({ req, actor: { type: 'guest', workspace: req.guest.tenantId }, action: 'link.unshared', code: link.code, tenantId: req.guest.tenantId });
     return res.json({ success: true });
   } catch (error) {
     return guestError(res, error);
   }
 });
+
+// Recommendation checkpoints (POST /links/:code/actions)
+mountGuestActions(router, { requireGuestSession: guest.requireGuestSession, requireWritable, ownedLink, guestError, recordAudit, getLinkAnalytics, db, FieldValue });
 
 router.get('/links/:code/analytics.csv', guest.requireGuestSession, rateLimiter('exportCsv'), async (req, res) => {
   const link = await ownedLink(req, res);

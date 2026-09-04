@@ -122,7 +122,7 @@ setInterval(() => {
   for (const [code, entry] of VELOCITY_WINDOWS) {
     if (now - entry.lastReset > maxAge) VELOCITY_WINDOWS.delete(code);
   }
-}, 600000);
+}, 600000).unref();
 
 // ============================================================================
 // 3. HONEYPOT / CANARY LINKS
@@ -267,7 +267,7 @@ setInterval(() => {
     const entries = Array.from(GEO_CLICK_HISTORY.entries());
     entries.slice(0, entries.length - 5000).forEach(([k]) => GEO_CLICK_HISTORY.delete(k));
   }
-}, 900000);
+}, 900000).unref();
 
 // ============================================================================
 // 6. REFERER VALIDATION

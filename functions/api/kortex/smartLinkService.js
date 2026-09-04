@@ -22,6 +22,16 @@ const { normalizePlacement, normalizeEconomics, normalizeCampaignWindow } = requ
 
 const db = admin.firestore();
 
+/**
+ * Storage fields for a placement: the controlled key and the owner's own
+ * label, from normalizePlacement's { key, label }; null clears both.
+ */
+function placementFields(input) {
+  const normalized = normalizePlacement(input);
+  if (!normalized) return { placement: null, placementLabel: null };
+  return { placement: normalized.key, placementLabel: normalized.label ?? null };
+}
+
 /** Fold a schedule's window URLs into the destination set the safety engine checks. */
 function withScheduleUrls(destinations, schedule) {
   const set = { ...destinations };
@@ -307,7 +317,7 @@ async function createShortLink(data) {
   // same safety assessment as the destinations below.
   const schedule = normalizeSchedule(data.schedule);
   const limits = normalizeLimits(data.limits);
-  const placement = normalizePlacement(data.placement);
+  const { placement, placementLabel } = placementFields(data.placement);
   const economics = normalizeEconomics(data.economics);
   const campaignWindow = normalizeCampaignWindow(data.campaignWindow);
 
@@ -415,6 +425,7 @@ async function createShortLink(data) {
     schedule, // time-of-day windows or null
     limits, // scan cap + fallback URL, or null
     placement, // where the code lives (poster, menu, badge…)
+    placementLabel, // the owner's own name for that surface, or null
     economics, // print cost + value per visit, or null
     campaignWindow, // { startAt, endAt } or null
     createdBy, // Audit trail: who created this
@@ -442,6 +453,7 @@ async function createShortLink(data) {
     schedule,
     limits,
     placement,
+    placementLabel,
     economics,
     campaignWindow,
     destinationType,
@@ -671,7 +683,7 @@ async function updateShortLink(code, updates) {
   if (updates.updatedBy) updateData.updatedBy = updates.updatedBy;
   if (scheduleProvided) updateData.schedule = nextSchedule;
   if (limitsProvided) updateData.limits = nextLimits;
-  if (placement !== undefined) updateData.placement = normalizePlacement(placement);
+  if (placement !== undefined) Object.assign(updateData, placementFields(placement));
   if (economics !== undefined) updateData.economics = normalizeEconomics(economics);
   if (campaignWindow !== undefined) updateData.campaignWindow = normalizeCampaignWindow(campaignWindow);
 

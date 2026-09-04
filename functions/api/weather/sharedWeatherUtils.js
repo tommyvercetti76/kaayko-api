@@ -85,7 +85,7 @@ async function fetchPaddlingLocations(db) {
   const snapshot = await Promise.race([
     db.collection('paddlingSpots').get(),
     new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('Firestore timeout after 8s')), 8000)
+      setTimeout(() => reject(new Error('Firestore timeout after 8s')), 8000).unref()
     )
   ]);
 

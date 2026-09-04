@@ -167,6 +167,9 @@ describe('Scans, taps and campaign tags', () => {
     const events = docs('click_events/');
     expect(events).toHaveLength(1);
     expect(events[0].metadata.source).toBe('qr');
+    expect(events[0]).toMatchObject({ schemaVersion: 2, delivered: true, outcome: 'delivered', fallbackReason: null, referrerHost: 'direct', visitorKeyVersion: 1, redirectedTo: 'https://kaayko.com/store', metadata: { source: 'qr', scheduleWindow: null } });
+    expect(events[0].deviceInfo).toEqual({ deviceType: 'mobile', os: 'iOS', browser: 'Safari', parserVersion: 1 });
+    expect(events[0].ip).toBeUndefined(); expect(events[0].userAgent).toBeUndefined(); expect(events[0].referrer).toBeUndefined();
   });
 
   test('a plain tap is a link click and gets no medium added', async () => {
@@ -194,9 +197,11 @@ describe('CSV export', () => {
     expect(csv.headers['content-disposition']).toMatch(/attachment/);
     expect(csv.text.charCodeAt(0)).toBe(0xFEFF);
     const lines = csv.text.slice(1).trim().split('\r\n');
-    expect(lines[0]).toBe('time,link,source,platform,device,os,browser,country,referrer,utm_source,utm_medium,utm_campaign,utm_term,utm_content,window,sent_to,delivered,outcome');
+    expect(lines[0]).toBe('time,link,source,platform,device,os,browser,country,referrer_host,utm_source,utm_medium,utm_campaign,utm_term,utm_content,window,sent_to,delivered,outcome,outcome_class');
     expect(lines).toHaveLength(2);
     expect(lines[1]).toMatch(new RegExp(`,${code},qr,ios,`));
+    expect(lines[1]).toMatch(/,direct,/);
+    expect(lines[1]).toMatch(/,https:\/\/kaayko\.com\/paddlingout,yes,delivered,delivered$/);
 
     const list = await request(app).get('/kortex/guest/workspace/export.csv').set(...UA).set(...session);
     expect(list.status).toBe(200);

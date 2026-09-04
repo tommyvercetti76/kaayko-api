@@ -1,9 +1,9 @@
 name: Kortex CI
 
 # Runs the Kortex test suites on every push/PR that touches the API.
-# The hardening suite is a required gate (must stay green — catches regressions in
-# the security/product hardening). The full legacy suite runs informationally while
-# its known pre-existing failures are burned down (see functions/docs/KORTEX_AUDIT.md).
+# Two required gates: the hardening suite first (fast — catches regressions in the
+# security/product hardening), then every __tests__/kortex-*.test.js suite in band
+# WITHOUT --forceExit, so a leaked handle (a timer or socket left open) fails the build.
 
 on:
   push:
@@ -34,9 +34,8 @@ jobs:
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
 
-      - name: Hardening suite (required gate)
+      - name: Hardening suite (fast gate)
         run: npm run test:kortex:hardening
 
-      - name: Full Kortex suite (informational until legacy failures are fixed)
-        run: npm run test:kortex
-        continue-on-error: true
+      - name: All Kortex suites (required gate)
+        run: npm run test:kortex:all

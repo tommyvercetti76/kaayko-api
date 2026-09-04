@@ -27,6 +27,7 @@ const RATE_LIMITS = {
   guestRecover: { max: 5, window: 60 * 60 * 1000, failClosed: true }, // 5 recovery mails per hour per IP
   guestClaim: { max: 10, window: 60 * 60 * 1000, failClosed: true },
   publicQr: { max: 120, window: 60 * 1000 }, // QR image renders per minute per IP
+  sharedReport: { max: 120, window: 60 * 60 * 1000 }, // public report reads per hour per IP
   resolve: { max: 60, window: 60 * 1000 }, // SDK / API link resolution per IP
   report: { max: 5, window: 60 * 60 * 1000, failClosed: true }, // abuse reports per hour per IP
   support: { max: 5, window: 60 * 60 * 1000, failClosed: true }, // support requests per hour per IP

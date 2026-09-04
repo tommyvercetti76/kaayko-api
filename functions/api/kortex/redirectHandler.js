@@ -15,7 +15,7 @@
 const admin = require('firebase-admin');
 const { getClientIp } = require('./clientIp');
 const { FieldValue } = require('firebase-admin/firestore');
-const { trackClick, updateClickRedirect, trackOutcome } = require('./clickTracking');
+const { trackClick, updateClickRedirect, trackOutcome, destinationKeyOf } = require('./clickTracking');
 const KortexV2 = require('./v2LinkIntents');
 const { respondForStatus, effectiveStatus } = require('./safetyPages');
 const { DEFAULT_TENANT_ID } = require('./tenantContext');
@@ -618,11 +618,8 @@ async function handleRedirect(req, res, code, options = {}) {
           ip: getClientIp(req),
           referrer: req.get('referer') || null,
           utm: trackingContext.utm,
-          metadata: {
-            linkTitle: linkData.title,
-            linkMetadata: linkData.metadata,
-            trackingSource: trackingContext.source
-          }
+          metadata: { source: scanned ? 'qr' : 'link' },
+          destinationKey: 'web'
         }).catch(err => console.error('[Alumni] click tracking failed:', err));
       }
 
@@ -722,13 +719,8 @@ async function handleRedirect(req, res, code, options = {}) {
           ip: getClientIp(req),
           referrer: req.get('referer') || null,
           utm: trackingContext.utm,
-          metadata: {
-            linkTitle: linkData.title,
-            linkMetadata: linkData.metadata,
-            trackingSource: trackingContext.source,
-            source: scanned ? 'qr' : 'link',
-            scheduleWindow
-          }
+          metadata: { source: scanned ? 'qr' : 'link', scheduleWindow },
+          destinationKey: destinationKeyOf({ platform, destinations, scheduleWindow })
         });
         clickId = clickData.clickId;
 

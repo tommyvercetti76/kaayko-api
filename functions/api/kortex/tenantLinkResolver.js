@@ -16,9 +16,9 @@ const admin = require('firebase-admin');
 const db = admin.firestore();
 const router = express.Router();
 const { runSecurityChecks, isCanaryCode } = require('./linkSecurityService');
-const { getClientIp } = require('./clientIp');
+const { getClientIp, ipSalt } = require('./clientIp');
 const { respondForStatus, escapeHtml, effectiveStatus } = require('./safetyPages');
-const { trackOutcome } = require('./clickTracking');
+const { trackClick, trackOutcome, updateClickRedirect, referrerHostOf, destinationKeyOf } = require('./clickTracking');
 const { pickScheduledDestination } = require('./linkSchedule');
 const { evaluateLimits, OVER_LIMIT_COPY } = require('./linkRules');
 const { isQrScan, mergeTrackingIntoDestination, UTM_KEYS } = require('./utmTools');
@@ -35,6 +35,7 @@ const ALUMNI_HOSTS = [
 
 const RESOLVE_RATE_LIMIT = 60; // max resolves per IP per minute
 const CLICK_DEDUP_WINDOW_MS = 30 * 60 * 1000; // 30 min dedup window
+const LEGACY_CLICK_TTL_MS = 30 * 24 * 60 * 60 * 1000; // smartLinkClicks retention, mirrors click_events
 const ABUSE_SPIKE_THRESHOLD = 100; // clicks in 5 min triggers alert
 const CODE_CHARSET = 'abcdefghjkmnpqrstuvwxyz23456789'; // no ambiguous chars (no 0,o,1,l,i)
 
@@ -81,7 +82,12 @@ function generateClickFingerprint(req) {
   const ua = req.headers['user-agent'] || '';
   const accept = req.headers['accept-language'] || '';
   const raw = `${ip}|${ua}|${accept}`;
-  return crypto.createHash('sha256').update(raw).digest('hex').substring(0, 16);
+  // Keyed under the IP salt so the stored value is not a pre-image-enumerable
+  // digest of an address; falls back to a plain digest when no salt exists so
+  // dedup keeps working rather than collapsing every visitor onto one key.
+  const salt = ipSalt();
+  const digest = salt ? crypto.createHmac('sha256', salt).update(raw) : crypto.createHash('sha256').update(raw);
+  return digest.digest('hex').substring(0, 16);
 }
 
 async function isDuplicateClick(code, fingerprint) {
@@ -124,7 +130,7 @@ setInterval(() => {
   for (const [ip, entry] of IP_RESOLVE_COUNTS) {
     if (now - entry.windowStart > 120000) IP_RESOLVE_COUNTS.delete(ip);
   }
-}, 300000);
+}, 300000).unref();
 
 // ============================================================================
 // ABUSE DETECTION
@@ -270,9 +276,10 @@ router.get('/:tenantSlug/:code', async (req, res, next) => {
     }
 
     // Time-of-day routing (server clock, link timezone) wins for every platform.
+    let scheduleWindow = null;
     if (link.schedule) {
       const pick = pickScheduledDestination(link.schedule);
-      if (pick) destination = pick.url;
+      if (pick) { destination = pick.url; scheduleWindow = pick.label; }
     }
 
     if (!destination) {
@@ -294,47 +301,26 @@ router.get('/:tenantSlug/:code', async (req, res, next) => {
         utm_medium: req.query.utm_medium || link.utm?.utm_medium || null,
         utm_campaign: req.query.utm_campaign || link.utm?.utm_campaign || null
       };
-      const ipHash = crypto.createHash('sha256').update(ip).digest('hex').substring(0, 12);
-      const clickId = `c_${crypto.randomBytes(8).toString('hex')}`;
-
-      // Write to BOTH collections for backwards compat + unified analytics
+      // Write to BOTH collections for backwards compat + unified analytics.
+      // The legacy record carries only what its readers use: no address hash,
+      // no user-agent string and a referrer host rather than a full URL.
       const clickBase = {
         code,
         tenantId,
         fingerprint,
-        ipHash,
-        userAgent: userAgent.substring(0, 200),
-        referer: (req.headers.referer || '').substring(0, 500),
         utm: clickUTM,
+        referrerHost: referrerHostOf(req.headers.referer),
         timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        expiresAt: admin.firestore.Timestamp.fromMillis(Date.now() + LEGACY_CLICK_TTL_MS),
         resolvedVia: 'alumni_namespace'
       };
 
-      // click_events — unified analytics collection with device info
-      const ua = userAgent.toLowerCase();
-      const platform = /iphone|ipad/i.test(ua) ? 'ios' : /android/i.test(ua) ? 'android' : 'web';
-      db.collection('click_events').doc(clickId).set({
-        clickId,
-        linkCode: code,
-        tenantId,
-        platform,
-        deviceInfo: {
-          platform,
-          os: /iphone|ipad/i.test(ua) ? 'iOS' : /android/i.test(ua) ? 'Android' : /windows/i.test(ua) ? 'Windows' : /mac/i.test(ua) ? 'macOS' : 'Other',
-          browser: /safari/i.test(ua) && !/chrome/i.test(ua) ? 'Safari' : /chrome/i.test(ua) ? 'Chrome' : /firefox/i.test(ua) ? 'Firefox' : 'Other',
-          deviceType: /mobile|iphone/i.test(ua) ? 'mobile' : /ipad|tablet/i.test(ua) ? 'tablet' : 'desktop'
-        },
-        userAgent: userAgent.substring(0, 200),
-        ip: ipHash,
-        referrer: (req.headers.referer || '').substring(0, 500),
-        utm: clickUTM,
-        redirectedTo: destination,
-        timestamp: admin.firestore.FieldValue.serverTimestamp(),
-        timestampMs: Date.now(),
-        installAttributed: false,
-        metadata: { resolvedVia: 'alumni_namespace', linkTitle: link.title || '', source: isQrScan(req.query) ? 'qr' : 'link' },
-        expiresAt: admin.firestore.Timestamp.fromMillis(Date.now() + 30 * 24 * 60 * 60 * 1000)
-      }).catch(() => {});
+      // click_events — the shared event record (v2), then where the visitor was sent
+      const platform = /iphone|ipad/i.test(userAgent) ? 'ios' : /android/i.test(userAgent) ? 'android' : 'web';
+      const destinationKey = destinationKeyOf({ platform, destinations: link.destinations || {}, scheduleWindow });
+      trackClick({ linkCode: code, tenantId, platform, userAgent, ip, referrer: req.headers.referer || null, utm: clickUTM, metadata: { source: isQrScan(req.query) ? 'qr' : 'link', scheduleWindow }, destinationKey })
+        .then(({ clickId }) => updateClickRedirect(clickId, destination))
+        .catch(() => {});
 
       // smartLinkClicks — legacy collection
       db.collection('smartLinkClicks').add(clickBase).catch(() => {});
