@@ -23,12 +23,8 @@ apiApp.use((req, _res, next) => {
 // and account routes have no legitimate cross-origin consumer, so a browser on
 // another site must not be able to read their responses. Auth is Bearer-token
 // based, so this is defence in depth rather than the primary control.
-const ADMIN_ORIGIN_ALLOWLIST = new Set([
-  "https://kaayko.com",
-  "https://www.kaayko.com",
-  "https://kaaykostore.web.app",
-  "https://kaaykostore.firebaseapp.com",
-]);
+const { KAAYKO_WEB_ORIGINS } = require("./config/origins");
+const ADMIN_ORIGIN_ALLOWLIST = new Set(KAAYKO_WEB_ORIGINS);
 // /createPaymentIntent is included because it creates real Stripe charges from
 // an unauthenticated request; only the Kaayko storefront has any business
 // calling it from a browser. Stripe's webhook (/createPaymentIntent/webhook)
