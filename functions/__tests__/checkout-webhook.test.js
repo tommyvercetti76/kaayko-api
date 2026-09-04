@@ -26,6 +26,21 @@ function buildWebhookApp() {
   return app;
 }
 
+/**
+ * Mirrors how the handler ACTUALLY runs on Firebase: the platform parses the
+ * body before Express sees it and exposes the signed bytes on `req.rawBody`.
+ * The raw-mount above never reproduced this, which is exactly why a webhook
+ * that passed every test still rejected every real Stripe delivery in
+ * production with "Payload was provided as a parsed JavaScript object".
+ */
+function buildFirebaseStyleApp() {
+  const app = express();
+  app.use('/webhook', express.json({
+    verify: (req, _res, buf) => { req.rawBody = buf; }
+  }), require('../api/checkout/stripeWebhook'));
+  return app;
+}
+
 function post(app, event, signature = 'GOOD_SIG') {
   return request(app)
     .post('/webhook')
@@ -112,6 +127,31 @@ describe('Checkout Webhook — signature verification', () => {
 
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ received: true, ignored: true });
+  });
+});
+
+describe('Checkout Webhook — Firebase pre-parsed body', () => {
+  test('verifies against req.rawBody when Firebase has already parsed req.body', async () => {
+    seedPaymentIntentDoc();
+    const app = buildFirebaseStyleApp();
+
+    const res = await post(app, succeededEvent('evt_raw_1', basePaymentIntent()));
+
+    // A 200 alone would not prove the right bytes were verified — the order
+    // documents must actually have been written.
+    expect(res.status).toBe(200);
+    expect(res.body.orders).toBe(2);
+    expect(admin._mocks.docData[`orders/${PI_ID}_item1`]).toBeDefined();
+  });
+
+  test('rejects when neither a raw body nor rawBody is present', async () => {
+    seedPaymentIntentDoc();
+    const app = express();
+    app.use('/webhook', express.json(), require('../api/checkout/stripeWebhook'));
+
+    const res = await post(app, succeededEvent('evt_raw_2', basePaymentIntent()));
+
+    expect(res.status).toBe(400);
   });
 });
 

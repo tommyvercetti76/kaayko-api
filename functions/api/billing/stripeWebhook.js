@@ -32,7 +32,8 @@ async function billingWebhook(req, res) {
   }
 
   const sig = req.headers['stripe-signature'];
-  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+  // Firebase-managed secrets arrive with a trailing newline.
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET?.trim();
 
   if (!webhookSecret) {
     return res.status(503).json({ error: 'Webhook secret not configured' });
@@ -41,9 +42,20 @@ async function billingWebhook(req, res) {
   const db = admin.firestore();
   let event;
 
+  // Same trap as the checkout webhook: Firebase Functions parses the body
+  // before Express sees it and exposes the signed bytes on req.rawBody.
+  const payload = Buffer.isBuffer(req.rawBody) ? req.rawBody
+                : Buffer.isBuffer(req.body)    ? req.body
+                : typeof req.body === 'string' ? req.body
+                : null;
+
+  if (!payload) {
+    console.error('Webhook body is not raw — cannot verify signature');
+    return res.status(400).send('Webhook Error: raw body unavailable');
+  }
+
   try {
-    // req.body is a Buffer here because this route is mounted with express.raw().
-    event = stripeClient.webhooks.constructEvent(req.body, sig, webhookSecret);
+    event = stripeClient.webhooks.constructEvent(payload, sig, webhookSecret);
   } catch (err) {
     console.error('Webhook signature verification failed:', err.message);
     return res.status(400).send(`Webhook Error: ${err.message}`);

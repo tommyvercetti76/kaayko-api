@@ -71,11 +71,27 @@ async function stripeWebhook(req, res) {
     return res.status(500).send('Webhook secret not configured');
   }
 
+  // Signature verification needs the EXACT bytes Stripe signed. Firebase
+  // Functions parses the request body before our Express app ever sees it and
+  // hands the original bytes back on `req.rawBody`, so by the time
+  // express.raw() would run, req.body is already a parsed object and
+  // constructEvent fails with "Payload was provided as a parsed JavaScript
+  // object instead". Prefer rawBody; fall back to the Buffer express.raw()
+  // gives us when running outside Firebase (tests, emulator).
+  const payload = Buffer.isBuffer(req.rawBody) ? req.rawBody
+                : Buffer.isBuffer(req.body)    ? req.body
+                : typeof req.body === 'string' ? req.body
+                : null;
+
+  if (!payload) {
+    console.error('❌ Webhook body is not raw — cannot verify signature');
+    return res.status(400).send('Webhook Error: raw body unavailable');
+  }
+
   let event;
   try {
     const stripeClient = getStripe();
-    // req.body is a Buffer here because this route is mounted with express.raw().
-    event = stripeClient.webhooks.constructEvent(req.body, sig, webhookSecret);
+    event = stripeClient.webhooks.constructEvent(payload, sig, webhookSecret);
   } catch (err) {
     console.error('⚠️  Webhook signature verification failed:', err.message);
     return res.status(400).send(`Webhook Error: ${err.message}`);
