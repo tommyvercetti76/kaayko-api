@@ -327,7 +327,7 @@ async function seedDemo({ nowMs = Date.now() } = {}) {
     summary.links.push({ code: spec.code, title: spec.title, events: events.length, removed, lifetime });
     summary.events += events.length;
   }
-  samplesCache = { at: 0, value: null };
+  resetSamplesCache();
   recordAudit({ actor: { name: 'demo-seed' }, action: 'demo.seeded', tenantId: DEMO_TENANT_ID, extra: { events: summary.events, links: summary.links.length } });
   return { ...summary, tenant: { id: tenant.id, name: tenant.name } };
 }
@@ -362,24 +362,28 @@ function variationName(link) {
   return 'Plain dynamic link';
 }
 
-let samplesCache = { at: 0, value: null };
+let samplesCache = { light: { at: 0, value: null }, full: { at: 0, value: null } };
 const SAMPLES_TTL_MS = 5 * 60 * 1000;
 
 /**
- * Three sample reports for the footer: the lightest, the median and the
- * heaviest of the eight by seven-day scans. Public, no session, cached.
+ * Sample reports, public and cached. The light form carries three summaries
+ * (lightest, median, heaviest by seven-day scans) for the landing page
+ * footer; the full form adds every report with its compact points and the
+ * link settings the samples page needs to explain each variation.
  */
-async function sampleSummaries({ windowDays = 7, nowMs = Date.now() } = {}) {
-  if (samplesCache.value && nowMs - samplesCache.at < SAMPLES_TTL_MS) return samplesCache.value;
+async function sampleSummaries({ windowDays = 7, nowMs = Date.now(), full = false } = {}) {
+  const slot = full ? 'full' : 'light';
+  if (samplesCache[slot].value && nowMs - samplesCache[slot].at < SAMPLES_TTL_MS) return samplesCache[slot].value;
   const tenant = await getDemoTenant();
   if (!tenant) return null;
   const { getLinkAnalytics } = require('./linkAnalytics');
+  const { expiryDate } = require('./linkRules');
   const { links } = await LinkService.listLinks({ tenantId: DEMO_TENANT_ID, limit: 50 });
   const rows = [];
   for (const link of links) {
     const a = await getLinkAnalytics(link.code, link, { windowDays });
     const src = Object.fromEntries((a.breakdowns.source || []).map(r => [r.value, r.clicks]));
-    rows.push({
+    const row = {
       code: link.code,
       title: link.title || link.code,
       variation: variationName(link),
@@ -391,18 +395,37 @@ async function sampleSummaries({ windowDays = 7, nowMs = Date.now() } = {}) {
       people: a.unique ? a.unique.distinctVisitors : 0,
       qrShare: a.totals.events ? Math.round(((src.qr || 0) / a.totals.events) * 100) : 0,
       timeline: a.timeline.slice(-windowDays).map(d => d.clicks)
-    });
+    };
+    if (full) {
+      row.points = (a.points || []).slice(-600);
+      const exp = expiryDate(link);
+      row.link = {
+        destinations: link.destinations || {},
+        schedule: link.schedule || null,
+        limits: link.limits || null,
+        expiresAt: exp ? exp.toISOString() : null,
+        utm: link.utm || {},
+        safety: link.safety && link.safety.review ? { review: link.safety.review } : null,
+        clickCount: link.clickCount || 0
+      };
+    }
+    rows.push(row);
   }
-  rows.sort((x, y) => x.events - y.events);
   if (!rows.length) return null;
-  const pick = [rows[0], rows[Math.floor(rows.length / 2)], rows[rows.length - 1]];
+  const byEvents = [...rows].sort((x, y) => x.events - y.events);
+  const pick = [byEvents[0], byEvents[Math.floor(byEvents.length / 2)], byEvents[byEvents.length - 1]];
+  const summary = r => ({ code: r.code, title: r.title, variation: r.variation, shortUrl: r.shortUrl, qrUrl: r.qrUrl, destination: r.destination, events: r.events, lifetime: r.lifetime, people: r.people, qrShare: r.qrShare, timeline: r.timeline });
   const value = { windowDays, samples: [
-    { tier: 'light', ...pick[0] }, { tier: 'medium', ...pick[1] }, { tier: 'heavy', ...pick[2] }
+    { tier: 'light', ...summary(pick[0]) }, { tier: 'medium', ...summary(pick[1]) }, { tier: 'heavy', ...summary(pick[2]) }
   ] };
-  samplesCache = { at: nowMs, value };
+  if (full) {
+    const order = DEMO_LINKS.map(d => d.code);
+    value.reports = [...rows].sort((x, y) => order.indexOf(x.code) - order.indexOf(y.code));
+  }
+  samplesCache[slot] = { at: nowMs, value };
   return value;
 }
 
-function resetSamplesCache() { samplesCache = { at: 0, value: null }; }
+function resetSamplesCache() { samplesCache = { light: { at: 0, value: null }, full: { at: 0, value: null } }; }
 
 module.exports = { DEMO_TENANT_ID, DEMO_LINKS, seedDemo, issueDemoSession, getDemoTenant, generateEvents, hourWeights, sampleSummaries, resetSamplesCache, variationName };

@@ -144,6 +144,13 @@ describe('Read-only sessions', () => {
     expect(h.qrUrl).toMatch(/^https:\/\/kaayko\.com\/qr\/kx-/);
     expect(typeof h.variation).toBe('string');
     expect(res.headers['cache-control']).toMatch(/max-age/);
+    const full = await request(app).get('/kortex/guest/demo/samples?full=1').set(...UA);
+    expect(full.status).toBe(200);
+    expect(full.body.reports).toHaveLength(8);
+    expect(full.body.reports.every(r => r.points.length > 0 && r.link && r.link.destinations)).toBe(true);
+    expect(full.body.reports.find(r => r.code === 'kx-store').link.schedule.windows[0].label).toBe('night');
+    expect(full.body.reports.find(r => r.code === 'kx-ambazari').link.limits.maxClicks).toBe(500);
+    expect(JSON.stringify(full.body).length).toBeLessThan(400000);
   }, 60000);
 
   test('without a seeded workspace the demo route says so', async () => {

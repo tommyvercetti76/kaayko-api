@@ -372,7 +372,7 @@ router.get('/workspace/analytics', guest.requireGuestSession, async (req, res) =
  */
 router.get('/demo/samples', rateLimiter('publicQr'), async (req, res) => {
   try {
-    const value = await demo.sampleSummaries();
+    const value = await demo.sampleSummaries({ full: req.query.full === '1' });
     if (!value) return res.status(404).json({ success: false, error: 'The sample workspace is not ready yet.', code: 'DEMO_NOT_READY' });
     res.set('Cache-Control', 'public, max-age=300');
     return res.json({ success: true, ...value });
