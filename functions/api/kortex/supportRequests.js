@@ -30,6 +30,10 @@ function targetFor(plan) {
   return TARGETS[String(plan || 'free').toLowerCase()] || TARGETS.free;
 }
 
+function escapeHtml(value = '') {
+  return String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
 function cleanText(value, max) {
   return typeof value === 'string' ? value.trim().slice(0, max) : '';
 }
@@ -83,7 +87,7 @@ async function createRequest({ body, requester, ip, userAgent, email, recordAudi
         to: inbox,
         subject: `[Kortex support · P${target.priority}] ${input.subject}`,
         text: `From: ${input.email}\nPlan: ${doc.plan} (${target.label})\nLink: ${input.code || '-'}\nRequest: ${ref.id}\n\n${input.message}`,
-        html: null
+        html: `<p><b>From:</b> ${escapeHtml(input.email)}<br><b>Plan:</b> ${escapeHtml(doc.plan)} (${escapeHtml(target.label)})<br><b>Link:</b> ${escapeHtml(input.code || '-')}<br><b>Request:</b> ${escapeHtml(ref.id)}</p><p style="white-space:pre-wrap">${escapeHtml(input.message)}</p>`
       });
       delivery = result && result.status ? result.status : 'sent';
     } catch (_) { delivery = 'failed'; }

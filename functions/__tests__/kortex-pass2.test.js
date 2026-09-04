@@ -319,6 +319,19 @@ describe('Tenant kill switch', () => {
   });
 });
 
+describe('Email delivery content parts', () => {
+  test('an empty HTML part is not sent to SendGrid', async () => {
+    process.env.SENDGRID_API_KEY = 'SG.test';
+    const email = require('../services/emailDelivery');
+    const calls = [];
+    const fetchImpl = async (url, opts) => { calls.push(JSON.parse(opts.body)); return { status: 202, ok: true, text: async () => '' }; };
+    const result = await email.deliver({ to: 'ops@example.com', subject: 's', text: 'plain only', html: null }, { fetchImpl });
+    expect(result.status).toBe('sent');
+    expect(calls[0].content).toEqual([{ type: 'text/plain', value: 'plain only' }]);
+    delete process.env.SENDGRID_API_KEY;
+  });
+});
+
 describe('Support requests', () => {
   const ask = (body, extra = {}) => {
     let r = request(app).post('/kortex/support').set(...UA).set('X-Forwarded-For', extra.ip || '203.0.113.50');

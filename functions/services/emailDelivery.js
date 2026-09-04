@@ -52,10 +52,11 @@ async function sendViaSendGrid({ to, subject, text, html }, fetchImpl) {
       personalizations: [{ to: [{ email: to }] }],
       from: { email: fromAddress(), name: 'Kortex by Kaayko' },
       subject,
+      // SendGrid rejects an empty content part, so send only what has a body.
       content: [
         { type: 'text/plain', value: text },
         { type: 'text/html', value: html }
-      ]
+      ].filter(part => typeof part.value === 'string' && part.value.trim())
     })
   });
   if (response.status !== 202 && !response.ok) {

@@ -970,7 +970,7 @@ router.get('/:code/clicks', requireAuth, requireAdmin, async (req, res) => {
 /**
  * Redirect handler for short codes (lk1ngp, lk9xrf, etc.)
  */
-router.get('/r/:code', async (req, res) => {
+router.get('/r/:code', rateLimiter('resolve'), async (req, res) => {
   const code = req.params.code;
   await handleRedirect(req, res, code, { trackAnalytics: true });
 });
