@@ -193,3 +193,47 @@ SendGrid key reveals those controls without a page change.
   `GET /kortex/support`, `POST /kortex/support/:id/resolve`.
 - Public pages: `/kortex/report`, `/kortex/support` (hosting rewrites).
 - Tests: `__tests__/kortex-pass2.test.js` (23). Test double gained `Timestamp.fromDate`.
+
+## Sample workspace (4 Sep 2026)
+
+`api/kortex/demoWorkspace.js`. Tenant `g_demo00` (kind guest, `demo: true`, an
+unusable code hash: no access code exists for it). Eight links made on the
+ordinary link service, each pointing at a Kaayko product and each showing one
+delivered variation (plain, night/day, device routing, cap + fallback, end
+date, campaign tags, QR table tent, safety review). Scans are synthetic, with
+per-link hour/day/device/country/source profiles; visitor hashes are 16 hex
+so the analytics module counts people.
+
+- Seed or refresh: `POST /kortex/demo/seed` with `X-Kortex-Sync-Key`
+  (= `KORTEX_SYNC_KEY`) or a super-admin token. Idempotent: existing demo
+  events are removed and regenerated. `kortexDemoRefresh` does this every
+  Monday 03:20 IST so the 7-day window is always full.
+- Open it: `GET /kortex/guest/demo` issues a two-hour read-only session
+  (`ro: 1`). Every write route answers 403 `READ_ONLY_DEMO`; creating a link
+  with a demo session opens a fresh workspace instead. Housekeeping never
+  expires the demo tenant.
+- `GET /kortex/guest/workspace/analytics` returns per-link 7-day rows plus a
+  merged compact event list for the overview charts; per-link analytics now
+  carry compact `points` ([ms, platform, device, country, source, window,
+  referrerHost]).
+
+## Independent review fixes (4 Sep 2026)
+
+Backend (21 findings) and frontend (18 findings), all addressed; see commits
+`c8c3cab` (kaayko-api) and `f853d3b` (kaayko). Operational notes:
+
+- `KORTEX_IP_SALT` is now set in `.env`; without it the salt derives from the
+  pepper chain, and outside the emulator it is never a public constant.
+- Pepper rotation: set `KORTEX_ACCESS_PEPPER` to the new value and put the old
+  one in `KORTEX_ACCESS_PEPPER_PREVIOUS` (comma-separated list). Codes verified
+  under an old pepper are re-hashed on use.
+- The mail log (`pending_emails`) stores no bodies. Credential-bearing
+  templates are not queued without a provider; recovery does nothing without
+  a sender. Housekeeping deletes any old queued bodies.
+- Abuse auto-hold: three distinct reporters within 24 h, 7-day cooldown after
+  a review. Holds survive owner edits; only a reviewer releases them.
+- Still a decision for the owner: retention enforcement. Events carry a
+  30-day `expiresAt`; nothing deletes them until a TTL policy is enabled:
+  `gcloud firestore fields ttls update expiresAt --collection-group=click_events --enable-ttl --project kaaykostore`
+- Still unset in production: `GOOGLE_SAFE_BROWSING_API_KEY`, `SENDGRID_API_KEY`,
+  Stripe keys.
