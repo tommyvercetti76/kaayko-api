@@ -204,6 +204,26 @@ describe('linkInsights v2', () => {
     expect(compute({ ...base, checkpoint: { type: 'ADD_FALLBACK', applied: false, dismissed: 'remind_later', atMs: now - 8 * DAY } }).missed.status).toBe('warn');
     expect(compute({ ...base, checkpoint: { type: 'ADD_FALLBACK', applied: true, atMs: now - DAY } }).missed.status).toBe('warn');
   });
+
+  test('a finding that carries no action is dismissed by its key, and only that key', () => {
+    // A steadily falling week: trend warns and offers no action, so only a key can clear it.
+    const events = [];
+    for (let d = 13; d >= 0; d--) for (let i = 0; i < (d >= 7 ? 12 : 2); i++) events.push(ev(d, 19));
+    const link = { destinations: { web: 'https://kaayko.com/' } };
+    const base = { link, events, windowDays: 14 };
+    const before = compute(base).trend;
+    expect(before.status).toBe('warn');
+    expect(before.action).toBeNull();
+
+    const byKey = compute({ ...base, checkpoint: { key: 'trend', applied: false, dismissed: 'not_relevant', atMs: now - DAY } });
+    expect(byKey.trend.status).toBe('info');
+    expect(byKey.trend.severity).toBeNull();
+    expect(byKey.trend.reasonCodes).toContain('DISMISSED');
+
+    // A different key leaves it alone, and so does an action-type dismissal.
+    expect(compute({ ...base, checkpoint: { key: 'geoDrift', applied: false, dismissed: 'not_relevant', atMs: now - DAY } }).trend.status).toBe('warn');
+    expect(compute({ ...base, checkpoint: { type: 'ADD_FALLBACK', applied: false, dismissed: 'not_relevant', atMs: now - DAY } }).trend.status).toBe('warn');
+  });
 });
 
 describe('rankFindings', () => {

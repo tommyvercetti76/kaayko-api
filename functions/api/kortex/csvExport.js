@@ -14,7 +14,7 @@
 'use strict';
 
 const admin = require('firebase-admin');
-const { referrerHostOf, normalizeDestination, outcomeOf, outcomeClassOf } = require('./clickTracking');
+const { referrerHostOfEvent, normalizeDestination, outcomeOf, outcomeClassOf } = require('./clickTracking');
 
 const EVENT_COLUMNS = Object.freeze([
   'time', 'link', 'source', 'platform', 'device', 'os', 'browser', 'country',
@@ -47,7 +47,7 @@ function eventRow(code, e) {
     os: e.deviceInfo?.os || '',
     browser: e.deviceInfo?.browser || '',
     country: e.geo?.country || '',
-    referrer_host: e.referrerHost || referrerHostOf(e.referrer),
+    referrer_host: referrerHostOfEvent(e) || 'direct',
     utm_source: e.utm?.utm_source || '',
     utm_medium: e.utm?.utm_medium || '',
     utm_campaign: e.utm?.utm_campaign || '',

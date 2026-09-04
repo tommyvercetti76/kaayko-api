@@ -6,15 +6,17 @@
  *   POST /kortex/guest/links/:code/actions   session + writable, workspace-scoped
  *   POST /kortex/:code/actions               requireAuth + requireAdmin, tenant-scoped
  *
- * Body `{ type, applied, dismissed? }` → `{ success, checkpoint }`. The link
- * keeps `checkpoint` (the newest) and `checkpointHistory` (the previous ten).
+ * Body `{ type, applied, dismissed? }` → `{ success, checkpoint }`. A finding
+ * that carries no action is dismissed by `{ key, applied: false, dismissed }`
+ * instead, so it can leave the attention list too. The link keeps `checkpoint`
+ * (the newest) and `checkpointHistory` (the previous ten).
  *
  * @module api/kortex/actionRoutes
  */
 
 'use strict';
 
-const { ACTION_TYPES } = require('./linkInsights');
+const { ACTION_TYPES, FINDING_KEYS } = require('./linkInsights');
 const { windowDaysFor, timeZoneFrom } = require('./analyticsPolicy');
 const { getTenantGate } = require('./tenantGate');
 
@@ -24,15 +26,24 @@ const CODE_PATTERN = /^[a-zA-Z0-9_-]{3,80}$/;
 
 function validationError(message) { const e = new Error(message); e.code = 'VALIDATION_ERROR'; return e; }
 
-/** `{ type, applied, dismissed }` from a request body; anything off the lists is a VALIDATION_ERROR. */
+/**
+ * `{ type, applied, dismissed }` from a request body, or `{ type: null, key,
+ * applied: false, dismissed }` when an actionless finding is dismissed by key.
+ * Anything an owner applied must name a real action type. Anything off the
+ * lists is a VALIDATION_ERROR.
+ */
 function parseActionBody(body) {
   const b = body && typeof body === 'object' && !Array.isArray(body) ? body : {};
-  if (!ACTION_TYPES.includes(b.type)) throw validationError('Unknown action type');
   if (typeof b.applied !== 'boolean') throw validationError('applied must be true or false');
   const dismissed = b.dismissed === undefined || b.dismissed === null ? null : b.dismissed;
   if (dismissed !== null && !DISMISS_REASONS.includes(dismissed)) throw validationError('Unknown dismiss reason');
   if (b.applied && dismissed) throw validationError('An action is either applied or dismissed, not both');
-  return { type: b.type, applied: b.applied, dismissed };
+  if (b.applied || b.type !== undefined || b.key === undefined) {
+    if (!ACTION_TYPES.includes(b.type)) throw validationError('Unknown action type');
+    return { type: b.type, applied: b.applied, dismissed };
+  }
+  if (!FINDING_KEYS.has(b.key)) throw validationError('Unknown finding key');
+  return { type: null, key: b.key, applied: b.applied, dismissed };
 }
 
 /** The outcome counts a later window is compared against, from the analytics response. */
@@ -53,7 +64,7 @@ async function recordCheckpoint({ db, FieldValue, getLinkAnalytics, link, code, 
   return checkpoint;
 }
 
-function auditExtra(action) { return { type: action.type, applied: action.applied, dismissed: action.dismissed }; }
+function auditExtra(action) { return { type: action.type, key: action.key || null, applied: action.applied, dismissed: action.dismissed }; }
 
 /**
  * @param {import('express').Router} router  the guest router (mounted at /kortex/guest)

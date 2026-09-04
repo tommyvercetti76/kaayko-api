@@ -47,7 +47,8 @@ describe('Canonical totals', () => {
     expect(a.points.filter(p => p[7] === 'fallback')).toHaveLength(2);
     expect(a.points.filter(p => p[7] === 'delivered')).toHaveLength(4);
     expect(a.outcomes.points).toHaveLength(2);
-    expect(a.outcomes.points.every(p => p.length === 4)).toBe(true);
+    expect(a.outcomes.points.every(p => p.length === 5)).toBe(true);
+    expect(a.outcomes.points.every(p => p[4] === 'qr' || p[4] === 'link')).toBe(true);
     expect(a.outcomes.points.map(p => p[1]).sort()).toEqual(['capped', 'expired']);
     expect(a.truncated).toBe(false);
     expect(a.checkpoint).toBeNull();

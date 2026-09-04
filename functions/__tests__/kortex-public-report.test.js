@@ -135,6 +135,26 @@ describe('PublicReportDTO', () => {
     report.findings.forEach(f => expect(Object.keys(f)).toEqual(['key', 'title', 'status', 'headline']));
     expect(report.findings[0]).toEqual({ key: 'qrSplit', title: 'qrSplit title', status: 'info', headline: 'qrSplit headline' });
   });
+
+  test('the missed finding is counts only: a real headline naming held or blocked never reaches the share page', () => {
+    const { computeInsights } = require('../api/kortex/linkInsights');
+    const now = Date.now();
+    const lost = (outcome, i) => ({ ms: now - (i + 1) * 60000, outcome, outcomeClass: 'lost', platform: 'ios', country: 'IN', source: 'qr' });
+    const undelivered = [lost('held', 0), lost('held', 1), lost('blocked', 2), lost('blocked', 3)];
+    const events = Array.from({ length: 10 }, (_, i) => ({
+      ms: now - (i + 5) * 60000, outcome: 'delivered', outcomeClass: 'delivered',
+      platform: 'ios', country: 'IN', source: 'qr', visitorKey: `v${i}`, referrerHost: null
+    }));
+    const insights = computeInsights({ link: { code: 'kx-test', status: 'active' }, events, undelivered, windowDays: 30, timeZone: 'UTC' });
+    // The owner's own headline names the reasons; that is what must not travel.
+    expect(insights.missed.headline).toMatch(/held|blocked/);
+
+    const report = build({ insights, totals: { events: 10, observed: 14, useful: 10, delivered: 10, rescued: 0, lost: 4, usefulRate: 0.714 } });
+    const missed = report.findings.find(f => f.key === 'missed');
+    expect(missed).toBeDefined();
+    expect(missed.headline).toBe('4 of 14 scans in this window reached nothing.');
+    expect(JSON.stringify(report.findings)).not.toMatch(/\bheld\b|\bblocked\b|\bpaused\b|workspace_off|churned/);
+  });
 });
 
 describe('GET /kortex/shared/:token', () => {

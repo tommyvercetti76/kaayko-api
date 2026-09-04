@@ -53,6 +53,10 @@ describe('Seeding', () => {
     expect(events.length).toBe(seeded.body.events);
     expect(events.some(e => e.metadata.source === 'qr')).toBe(true);
     expect(events.some(e => e.metadata.scheduleWindow === 'night')).toBe(true);
+    // Event record v2: destinations carry no query or fragment, and the record
+    // carries only the two metadata keys the shape allows.
+    expect(events.every(e => !e.redirectedTo || !/[?#]/.test(e.redirectedTo))).toBe(true);
+    expect(events.every(e => Object.keys(e.metadata).sort().join() === 'scheduleWindow,source')).toBe(true);
   }, 60000);
 
   test('re-seeding replaces the events instead of stacking them', async () => {

@@ -59,6 +59,9 @@ const EXPLORE_GROUPS = Object.freeze({
   trust: ['safetyImpact', 'qualityScore']
 });
 
+/** Every finding key computeInsights can produce; the checkpoint routes validate a dismissal against this set. */
+const FINDING_KEYS = Object.freeze(new Set(Object.values(EXPLORE_GROUPS).flat()));
+
 const MIN = {
   early: 5, adequate: 10, timing: 30, timingDays: 3, period: 10, campaign: 10,
   identity: 10, geo: 10, geoCountry: 5, baseline: 30, baselineDays: 2, bucket: 10, quality: 10
@@ -515,14 +518,20 @@ function qualityScoreFinding(ctx, { fit, flags, rescuedCount }) {
 }
 
 /**
- * A dismissed recommendation stops alerting: the finding carrying that action
- * drops from warn to info (for `remind_later`, only for a week).
+ * A dismissed recommendation stops alerting: the finding drops from warn to
+ * info (for `remind_later`, only for a week). A finding that carries no action
+ * is dismissed by its own key, so it too can leave the attention list.
  */
+function isDismissed(finding, checkpoint) {
+  if (checkpoint.key) return finding.key === checkpoint.key;
+  return !!finding.action && finding.action.type === checkpoint.type;
+}
+
 function applyCheckpoint(out, checkpoint, now) {
   if (!checkpoint || !checkpoint.dismissed) return out;
   if (checkpoint.dismissed === 'remind_later' && now - (checkpoint.atMs || 0) > REMIND_LATER_DAYS * DAY) return out;
   Object.values(out).forEach(f => {
-    if (f.status === 'warn' && f.action && f.action.type === checkpoint.type) {
+    if (f.status === 'warn' && isDismissed(f, checkpoint)) {
       f.status = 'info'; f.severity = null; f.reasonCodes = [...f.reasonCodes, 'DISMISSED'];
     }
   });
@@ -701,4 +710,4 @@ function computeWorkspaceInsights({ links = [], reports = 0, appeals = 0, window
   return out;
 }
 
-module.exports = { computeInsights, computeWorkspaceInsights, rankFindings, ACTION_TYPES, EXPLORE_GROUPS };
+module.exports = { computeInsights, computeWorkspaceInsights, rankFindings, ACTION_TYPES, FINDING_KEYS, EXPLORE_GROUPS };

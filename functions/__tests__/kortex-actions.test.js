@@ -101,6 +101,20 @@ describe('Checkpoints — guest door', () => {
     expect(audits[0]).toMatchObject({ tenantId, extra: { type: 'ADD_FALLBACK', applied: true, dismissed: null }, actor: { type: 'guest' } });
   });
 
+  test('a finding that carries no action is dismissed by its key', async () => {
+    const { code, session, tenantId } = await guestLink();
+    seedScans(code, tenantId, { useful: 6, lost: 3 });
+    const res = await guestPost(code, session, { key: 'trend', applied: false, dismissed: 'not_relevant' });
+    expect(res.status).toBe(200);
+    expect(Object.keys(res.body.checkpoint).sort()).toEqual([...CHECKPOINT_FIELDS, 'key'].sort());
+    expect(res.body.checkpoint).toMatchObject({ type: null, key: 'trend', applied: false, dismissed: 'not_relevant' });
+    expect(doc(`short_links/${code}`).checkpoint.key).toBe('trend');
+
+    // A key is only a dismissal: nothing can be recorded as applied without a real action type.
+    expect((await guestPost(code, session, { key: 'trend', applied: true })).status).toBe(400);
+    expect((await guestPost(code, session, { key: 'not_a_finding', applied: false, dismissed: 'bad_data' })).status).toBe(400);
+  });
+
   test('junk is refused with a 400 and nothing is written', async () => {
     const { code, session } = await guestLink();
     for (const body of JUNK) {

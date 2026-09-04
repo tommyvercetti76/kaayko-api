@@ -30,7 +30,9 @@ const TIMELINE_DAYS = 7;
 const MIN_PERIOD_USEFUL = 10;
 const UNIQUE_NOTE = 'one person may scan several links; per-link people are not summed';
 const RECOVERABLE_VIA_FALLBACK = ['capped', 'expired'];
-// Which warning leads a row when the analytics response carries no ranked Action Center.
+// Lead warning for a row the Action Center ranked nothing for. needsAttention keeps
+// only warn findings with high|medium confidence, so a low-sample warn (confidence
+// null) never ranks; this order picks the lead warning for those rows.
 const ISSUE_ORDER = ['missed', 'deviceMatch', 'anomalies', 'trend', 'safetyImpact', 'fallbackUsage', 'utmHealth', 'campaignLift', 'repeatPattern', 'geoDrift', 'qualityScore'];
 
 const cache = new Map();
@@ -120,7 +122,7 @@ function recoverableLostOf(link, lostByReason) {
   return viaFallback + viaResume;
 }
 
-/** The finding an owner should look at first: the Action Center's top pick, else the first warning that carries a fix. */
+/** The finding an owner should look at first: the Action Center's top pick, else, when nothing ranked, the first low-confidence warning that carries a fix. */
 function topFindingOf(a) {
   const insights = a.insights || {};
   const ranked = (a.actionCenter && Array.isArray(a.actionCenter.needsAttention) ? a.actionCenter.needsAttention : []).filter(k => insights[k]);

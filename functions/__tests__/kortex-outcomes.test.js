@@ -70,7 +70,8 @@ describe('Outcomes are recorded, never counted', () => {
     expect(an.truncated).toBe(false);
     expect(an.checkpoint).toBeNull();
     expect(an.points[0]).toHaveLength(8); expect(an.points[0][7]).toBe('fallback');
-    expect(an.outcomes.points[0]).toHaveLength(4);
+    expect(an.outcomes.points[0]).toHaveLength(5);
+    expect(an.outcomes.points[0][4]).toBe('link'); // a lost scan keeps the source it arrived by
     expect(an.timeZone).toBe('Asia/Kolkata');
     expect(an.insights.missed.detail.total).toBe(1);
     expect(an.insights.fallbackUsage.detail.fallbacks).toBe(1);
@@ -80,6 +81,29 @@ describe('Outcomes are recorded, never counted', () => {
     expect(csv.text.split('\r\n')[0]).toMatch(/,delivered,outcome,outcome_class$/);
     expect(csv.text).toMatch(/,no,expired,lost/);
     expect(csv.text).toMatch(/,https:\/\/kaayko\.com\/store,yes,fallback,rescued/);
+  });
+
+  test('a link whose every scan was lost is not reported as never scanned', async () => {
+    const created = await createGuest({ limits: { maxClicks: 1 } });
+    const code = created.body.link.code; const session = ['X-Kortex-Guest-Session', created.body.session];
+    admin._mocks.docData[`short_links/${code}`].clickCount = 1;
+    for (let i = 0; i < 3; i++) expect((await scan(code, '?s=qr')).status).toBe(410);
+    await new Promise(r => setTimeout(r, 60));
+
+    const a = await request(app).get(`/kortex/guest/links/${code}/analytics`).set(...UA).set(...session);
+    expect(a.status).toBe(200);
+    const an = a.body.analytics;
+    expect(an.totals).toMatchObject({ events: 0, observed: 3, useful: 0, lost: 3 });
+    expect(an.timeline).toEqual([]);
+    // A measured zero, not an absent measurement: the window carries real dates
+    // and explicit zeroes, and the ledger names the loss instead of denying it.
+    expect(an.window.daysWithTraffic).toBe(0);
+    expect(an.window.daysSpanned).toBe(0);
+    expect(typeof an.window.firstEvent).toBe('string');
+    expect(typeof an.window.lastEvent).toBe('string');
+    expect(an.unavailable[0].metric).toBe('all');
+    expect(an.unavailable[0].reason).not.toMatch(/never been scanned/);
+    expect(an.unavailable[0].reason).toMatch(/All 3 scans in this window were lost/);
   });
 
   test('the API resolver records the same outcomes', async () => {

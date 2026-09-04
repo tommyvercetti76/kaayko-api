@@ -297,7 +297,7 @@ async function getLinkAnalytics(code, linkData, options = {}) {
     byOutcome: tally(undelivered.map(e => e.outcome)),
     fallbacks: fallbacks.length,
     fallbackByReason: tally(fallbacks.map(e => e.reason)),
-    points: undelivered.slice(-500).map(e => [e.ms, e.outcome, e.platform, e.country])
+    points: undelivered.slice(-500).map(e => [e.ms, e.outcome, e.platform, e.country, e.source])
   };
 
   const total = events.length;
@@ -308,7 +308,15 @@ async function getLinkAnalytics(code, linkData, options = {}) {
     return {
       code,
       totals,
-      window: { retentionDays: windowDays, firstEvent: null, lastEvent: null },
+      // Built from every scan, lost ones included: a link whose scans were all
+      // lost still has a first and last scan, and a measured zero active days.
+      window: {
+        retentionDays: windowDays,
+        firstEvent: all.length ? new Date(all[0].ms).toISOString() : null,
+        lastEvent: all.length ? new Date(all[all.length - 1].ms).toISOString() : null,
+        daysWithTraffic: 0,
+        daysSpanned: 0
+      },
       timeline: [],
       unique: null,
       breakdowns: {},
@@ -320,10 +328,13 @@ async function getLinkAnalytics(code, linkData, options = {}) {
       ...findings({ link, events: [], undelivered, windowDays, timeZone, unique: null, checkpoint, totals }),
       unavailable: [{
         metric: 'all',
-        reason: (storedClickCount || 0) > 0
-          ? `The link's lifetime counter is ${storedClickCount}, but no events remain. ` +
-            `Events expire after ${RETENTION_DAYS} days, so this link has had no traffic within the retention window.`
-          : 'This link has never been scanned.'
+        reason: undelivered.length
+          ? `All ${undelivered.length} scan${undelivered.length === 1 ? '' : 's'} in this window were lost before reaching a destination, ` +
+            'so nothing about the visit itself could be measured — see the outcome breakdown.'
+          : (storedClickCount || 0) > 0
+            ? `The link's lifetime counter is ${storedClickCount}, but no events remain. ` +
+              `Events expire after ${RETENTION_DAYS} days, so this link has had no traffic within the retention window.`
+            : 'This link has never been scanned.'
       }]
     };
   }

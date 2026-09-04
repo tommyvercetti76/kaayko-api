@@ -142,3 +142,33 @@ describe('Crawlers and the house tenant', () => {
     expect(res.status).toBe(404);
   });
 });
+
+describe('The legacy smartLinkClicks record', () => {
+  test('carries no user-agent, no full referrer and no address hash, and expires', async () => {
+    tenantLink('al-min');
+    const res = await request(alumniApp)
+      .get('/tenant-a/al-min')
+      .set('Host', 'alumni.kaayko.com')
+      .set(...BROWSER)
+      .set(...LANG)
+      .set('X-Forwarded-For', '203.0.113.9')
+      .set('Referer', 'https://mail.example.com/inbox?token=SECRET123&u=alice%40example.com');
+    expect(res.status).toBe(302);
+    await settle();
+
+    const legacy = Object.entries(admin._mocks.docData)
+      .filter(([k]) => k.startsWith('smartLinkClicks/'))
+      .map(([, v]) => v);
+    expect(legacy).toHaveLength(1);
+    const [click] = legacy;
+    expect(click.userAgent).toBeUndefined();
+    expect(click.referer).toBeUndefined();
+    expect(click.referrer).toBeUndefined();
+    expect(click.ipHash).toBeUndefined();
+    expect(click.referrerHost).toBe('mail.example.com');
+    expect(click.expiresAt).toBeDefined();
+    expect(JSON.stringify(click)).not.toContain('SECRET123');
+    expect(JSON.stringify(click)).not.toContain('alice');
+    expect(click.fingerprint).toMatch(/^[0-9a-f]{16}$/);
+  });
+});

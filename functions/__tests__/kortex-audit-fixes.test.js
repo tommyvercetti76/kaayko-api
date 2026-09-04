@@ -175,6 +175,27 @@ describe('Events cannot be invented', () => {
     expect(stored.metadata.a.length).toBe(500);
     expect(stored.ip).not.toBe('203.0.113.10');
   });
+
+  test('an event record keeps no user-agent and no full referrer, only the referrer host', async () => {
+    const created = await createGuest();
+    const code = created.body.link.code;
+    admin._mocks.docData['tenants/' + created.body.workspace.id].plan = 'pro'; gate.resetCache();
+    await request(redirectApp).get(`/l/${code}`).set(...UA).set(...LANG);
+    const click = docs('click_events/')[0];
+    const posted = await request(app)
+      .post('/kortex/events')
+      .set(...UA)
+      .set('Referer', 'https://mail.example.com/inbox?token=SECRET123')
+      .send({ type: 'registration_submitted', linkCode: code, clickId: click.clickId });
+    expect(posted.status).toBe(201);
+    const stored = docs('kortex_events/').find(e => e.type === 'registration_submitted');
+    expect(stored.userAgent).toBeUndefined();
+    expect(stored.referrer).toBeUndefined();
+    expect(stored.referrerHost).toBe('mail.example.com');
+    expect(stored.expiresAt).toBeDefined();
+    expect(JSON.stringify(stored)).not.toContain('SECRET123');
+    expect(JSON.stringify(stored)).not.toContain('iPhone');
+  });
 });
 
 describe('Rate limiter counts atomically', () => {
