@@ -47,6 +47,8 @@ const { getTenantGate, forgetTenant } = require('./tenantGate');
 const guestAccess = require('./guestAccess');
 const emailDelivery = require('../../services/emailDelivery');
 const { PLAN_LIMITS: PLAN_WINDOWS } = require('../billing/planLimits');
+const { windowDaysFor, timeZoneFrom } = require('./analyticsPolicy');
+const { buildWorkspaceAnalytics } = require('./workspaceAnalytics');
 
 function hashIpForStorage(ip) {
   return require('./clientIp').hashClientIp(ip);
@@ -405,7 +407,8 @@ router.get('/links/:code/analytics', requireAuth, requireAdmin, async (req, res)
     }
 
     const { getLinkAnalytics } = require('./linkAnalytics');
-    const analytics = await getLinkAnalytics(code, linkData);
+    const gateForWindow = await getTenantGate(linkData.tenantId || DEFAULT_TENANT_ID);
+    const analytics = await getLinkAnalytics(code, linkData, { windowDays: windowDaysFor({ plan: gateForWindow.plan, kind: gateForWindow.kind }, { superAdmin: tenantContext.isSuperAdmin }), timeZone: timeZoneFrom(req.query.tz) });
 
     return res.json({
       success: true,
@@ -414,6 +417,13 @@ router.get('/links/:code/analytics', requireAuth, requireAdmin, async (req, res)
         title: linkData.title || null,
         description: linkData.description || null,
         shortUrl: linkData.shortUrl || null,
+        shared: !!linkData.shareToken,
+        shareUrl: linkData.shareToken ? `https://kaayko.com/kortex/r/${linkData.shareToken}` : null,
+        placement: linkData.placement || null,
+        economics: linkData.economics || null,
+        campaignWindow: linkData.campaignWindow || null,
+        schedule: linkData.schedule || null,
+        limits: linkData.limits || null,
         destination: linkData.destinations?.web || linkData.webDestination || null,
         destinations: linkData.destinations || null,
         destinationType: linkData.destinationType || null,
@@ -1172,6 +1182,86 @@ router.delete('/webhooks/:id', requireAuth, requireAdmin, async (req, res) => {
 // ============================================================================
 // REVIEW QUEUE, APPEALS, SAFETY JOBS (Must be BEFORE /:code)
 // ============================================================================
+
+/**
+ * GET /kortex/workspace/analytics — the signed-in tenant's links, four ways,
+ * through the same module the free dashboard uses.
+ */
+router.get('/workspace/analytics', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const tenantContext = await getTenantFromRequest(req);
+    const gate = await getTenantGate(tenantContext.tenantId);
+    const data = await buildWorkspaceAnalytics(tenantContext.tenantId, {
+      windowDays: windowDaysFor({ plan: gate.plan, kind: gate.kind }, { superAdmin: tenantContext.isSuperAdmin }),
+      timeZone: timeZoneFrom(req.query.tz)
+    });
+    return res.json({ success: true, tenantId: tenantContext.tenantId, ...data });
+  } catch (error) {
+    console.error('[Kortex] workspace analytics failed:', error);
+    return res.status(500).json({ success: false, error: 'Could not load the workspace analytics' });
+  }
+});
+
+/**
+ * GET /kortex/shared/:token — a shared report, public and read-only: the link's
+ * public shape, its analytics inside the owner's window, and the findings.
+ */
+router.get('/shared/:token', rateLimiter('publicQr'), async (req, res) => {
+  try {
+    const token = String(req.params.token || '');
+    if (!/^[A-Za-z0-9_-]{16,64}$/.test(token)) return res.status(404).json({ success: false, error: 'Not found' });
+    const snap = await db.collection('short_links').where('shareToken', '==', token).limit(1).get();
+    if (snap.empty) return res.status(404).json({ success: false, error: 'Not found' });
+    const link = { code: snap.docs[0].id, ...snap.docs[0].data() };
+    if (link.enabled === false || (link.status && link.status !== 'active')) return res.status(404).json({ success: false, error: 'Not found' });
+    const gate = await getTenantGate(link.tenantId || DEFAULT_TENANT_ID);
+    const { getLinkAnalytics } = require('./linkAnalytics');
+    const analytics = await getLinkAnalytics(link.code, link, { windowDays: windowDaysFor({ plan: gate.plan, kind: gate.kind }), timeZone: timeZoneFrom(req.query.tz) });
+    res.set('Cache-Control', 'public, max-age=300');
+    return res.json({
+      success: true,
+      link: { code: link.code, title: link.title || '', shortUrl: link.shortUrl, qrUrl: `https://kaayko.com/qr/${link.code}.png`, placement: link.placement || null, destination: (link.destinations && link.destinations.web) || null, schedule: link.schedule || null, limits: link.limits || null, expiresAt: link.expiresAt && link.expiresAt.toDate ? link.expiresAt.toDate().toISOString() : (link.expiresAt || null), utm: link.utm || {}, clickCount: link.clickCount || 0 },
+      analytics: { ...analytics, recentScans: undefined },
+      sharedAtMs: link.sharedAtMs || null
+    });
+  } catch (error) {
+    console.error('[Kortex] shared report failed:', error);
+    return res.status(500).json({ success: false, error: 'Could not load the report' });
+  }
+});
+
+/**
+ * POST / DELETE /kortex/:code/share — admin share tokens, tenant-scoped.
+ */
+router.post('/:code/share', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const tenantContext = await getTenantFromRequest(req);
+    const doc = await db.collection('short_links').doc(req.params.code).get();
+    if (!doc.exists) return res.status(404).json({ success: false, error: 'Link not found' });
+    if (!tenantContext.isSuperAdmin) { try { assertTenantAccess(req.user, doc.data().tenantId || DEFAULT_TENANT_ID); } catch (_) { return res.status(403).json({ success: false, error: 'Access denied' }); } }
+    const token = crypto.randomBytes(18).toString('base64url');
+    await doc.ref.update({ shareToken: token, sharedAtMs: Date.now(), updatedAt: FieldValue.serverTimestamp() });
+    recordAudit({ req, action: 'link.shared', code: req.params.code, tenantId: doc.data().tenantId || DEFAULT_TENANT_ID });
+    return res.json({ success: true, shareUrl: `https://kaayko.com/kortex/r/${token}` });
+  } catch (error) {
+    console.error('[Kortex] share failed:', error);
+    return res.status(500).json({ success: false, error: 'Could not share the report' });
+  }
+});
+router.delete('/:code/share', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const tenantContext = await getTenantFromRequest(req);
+    const doc = await db.collection('short_links').doc(req.params.code).get();
+    if (!doc.exists) return res.status(404).json({ success: false, error: 'Link not found' });
+    if (!tenantContext.isSuperAdmin) { try { assertTenantAccess(req.user, doc.data().tenantId || DEFAULT_TENANT_ID); } catch (_) { return res.status(403).json({ success: false, error: 'Access denied' }); } }
+    await doc.ref.update({ shareToken: FieldValue.delete(), sharedAtMs: FieldValue.delete(), updatedAt: FieldValue.serverTimestamp() });
+    recordAudit({ req, action: 'link.unshared', code: req.params.code, tenantId: doc.data().tenantId || DEFAULT_TENANT_ID });
+    return res.json({ success: true });
+  } catch (error) {
+    console.error('[Kortex] unshare failed:', error);
+    return res.status(500).json({ success: false, error: 'Could not revoke the report' });
+  }
+});
 
 /**
  * GET /kortex/:code/clicks.csv — one link's click events as CSV, inside the

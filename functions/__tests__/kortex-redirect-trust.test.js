@@ -56,7 +56,8 @@ describe('Held and blocked links', () => {
     expect(res.headers['x-robots-tag']).toBe('noindex');
     expect(res.text).toContain('being reviewed');
     expect(res.text).toContain('/kortex/appeal?code=held1');
-    expect(clickEvents()).toHaveLength(0);
+    // a miss is recorded as an outcome, never as a delivered click
+    expect(clickEvents().filter(k => { const d = typeof k === 'string' ? admin._mocks.docData[k] : k; return d && d.delivered !== false; })).toHaveLength(0);
     expect(admin._mocks.docData['short_links/held1'].clickCount).toBe(0);
   });
 
@@ -65,7 +66,8 @@ describe('Held and blocked links', () => {
     const res = await request(redirectApp).get('/l/blk1').set(...BROWSER).set(...LANG);
     expect(res.status).toBe(410);
     expect(res.text).toContain('has been disabled');
-    expect(clickEvents()).toHaveLength(0);
+    // a miss is recorded as an outcome, never as a delivered click
+    expect(clickEvents().filter(k => { const d = typeof k === 'string' ? admin._mocks.docData[k] : k; return d && d.delivered !== false; })).toHaveLength(0);
   });
 
   test('the alumni-host resolver honours the same states', async () => {
@@ -113,7 +115,8 @@ describe('Crawlers and the house tenant', () => {
     const res = await request(redirectApp).get('/l/seo1').set(...GOOGLEBOT);
     expect(res.status).toBe(302);
     expect(res.headers.location).toContain('https://tenant-a.test/landing');
-    expect(clickEvents()).toHaveLength(0);
+    // a miss is recorded as an outcome, never as a delivered click
+    expect(clickEvents().filter(k => { const d = typeof k === 'string' ? admin._mocks.docData[k] : k; return d && d.delivered !== false; })).toHaveLength(0);
     expect(admin._mocks.docData['short_links/seo1'].clickCount).toBe(0);
   });
 
@@ -121,7 +124,8 @@ describe('Crawlers and the house tenant', () => {
     houseLink('wa1');
     const res = await request(redirectApp).get('/l/wa1').set(...WHATSAPP);
     expect(res.status).toBe(302);
-    expect(clickEvents()).toHaveLength(0);
+    // a miss is recorded as an outcome, never as a delivered click
+    expect(clickEvents().filter(k => { const d = typeof k === 'string' ? admin._mocks.docData[k] : k; return d && d.delivered !== false; })).toHaveLength(0);
   });
 
   test('a UA-less client is still refused', async () => {

@@ -33,6 +33,9 @@ const { scanUrl } = require('./utmTools');
 const { linkEventsCsv, workspaceCsv, sendCsv } = require('./csvExport');
 const { expiryDate } = require('./linkRules');
 const demo = require('./demoWorkspace');
+const { windowDaysFor, timeZoneFrom } = require('./analyticsPolicy');
+const { buildWorkspaceAnalytics } = require('./workspaceAnalytics');
+const crypto = require('crypto');
 const { getLinkAnalytics } = require('./linkAnalytics');
 const { recordAudit } = require('./auditLog');
 const { rateLimiter } = require('../../middleware/securityMiddleware');
@@ -101,6 +104,11 @@ function publicLink(link) {
     schedule: link.schedule || null,
     limits: link.limits || null,
     utm: link.utm || {},
+    placement: link.placement || null,
+    economics: link.economics || null,
+    campaignWindow: link.campaignWindow || null,
+    shared: !!link.shareToken,
+    shareUrl: link.shareToken ? `https://kaayko.com/kortex/r/${link.shareToken}` : null,
     expiresAt: expiryDate(link) ? expiryDate(link).toISOString() : null
   };
 }
@@ -202,7 +210,10 @@ router.post('/links', rateLimiter('guestCreate'), async (req, res) => {
       schedule: body.schedule !== undefined ? body.schedule : undefined,
       limits: body.limits !== undefined ? body.limits : undefined,
       expiresAt: parseExpiry(body.expiresAt),
-      utm: cleanUtm(body.utm)
+      utm: cleanUtm(body.utm),
+      placement: body.placement !== undefined ? body.placement : undefined,
+      economics: body.economics !== undefined ? body.economics : undefined,
+      campaignWindow: body.campaignWindow !== undefined ? body.campaignWindow : undefined
     });
 
     recordAudit({
@@ -319,7 +330,7 @@ router.get('/links/:code/analytics', guest.requireGuestSession, async (req, res)
   const link = await ownedLink(req, res);
   if (!link) return;
   try {
-    const analytics = await getLinkAnalytics(link.code || req.params.code, link, { windowDays: ANALYTICS_WINDOW_DAYS });
+    const analytics = await getLinkAnalytics(link.code || req.params.code, link, { windowDays: windowDaysFor(req.guest.tenant), timeZone: timeZoneFrom(req.query.tz) });
     return res.json({
       success: true,
       link: publicLink(link),
@@ -328,7 +339,7 @@ router.get('/links/:code/analytics', guest.requireGuestSession, async (req, res)
         clicks: link.clickCount || 0,
         lastClickedAt: publicLink(link).lastClickedAt
       },
-      window: { days: ANALYTICS_WINDOW_DAYS, upgradeFor: 'Longer history, exports and team access are on paid plans.' }
+      window: { days: windowDaysFor(req.guest.tenant), timeZone: timeZoneFrom(req.query.tz), upgradeFor: 'Longer history, exports and team access are on paid plans.' }
     });
   } catch (error) {
     return guestError(res, error);
@@ -342,23 +353,8 @@ router.get('/links/:code/analytics', guest.requireGuestSession, async (req, res)
  */
 router.get('/workspace/analytics', guest.requireGuestSession, async (req, res) => {
   try {
-    const { links } = await LinkService.listLinks({ tenantId: req.guest.tenantId, limit: 100 });
-    const rows = [];
-    let merged = [];
-    for (const link of links.slice(0, 25)) {
-      const a = await getLinkAnalytics(link.code, link, { windowDays: ANALYTICS_WINDOW_DAYS });
-      const src = Object.fromEntries((a.breakdowns.source || []).map(r => [r.value, r.clicks]));
-      const topCountry = (a.breakdowns.country || []).find(r => r.value) || null;
-      rows.push({
-        code: link.code, title: link.title || link.code, status: link.status || 'active', enabled: link.enabled !== false,
-        lifetime: link.clickCount || 0, events: a.totals.events, qr: src.qr || 0, taps: src.link || 0,
-        unique: a.unique ? a.unique.distinctVisitors : 0, topCountry: topCountry ? topCountry.value : null,
-        timeline: a.timeline.slice(-7).map(d => d.clicks)
-      });
-      merged = merged.concat((a.points || []).map(p => [link.code].concat(p)));
-    }
-    merged.sort((x, y) => x[1] - y[1]);
-    return res.json({ success: true, window: { days: ANALYTICS_WINDOW_DAYS }, links: rows, points: merged.slice(-3000) });
+    const data = await buildWorkspaceAnalytics(req.guest.tenantId, { windowDays: windowDaysFor(req.guest.tenant), timeZone: timeZoneFrom(req.query.tz) });
+    return res.json({ success: true, ...data });
   } catch (error) {
     return guestError(res, error);
   }
@@ -391,12 +387,41 @@ router.get('/demo', rateLimiter('guestSession'), async (req, res) => {
   }
 });
 
+/**
+ * Sponsor proof: a share token makes one link's report readable at
+ * kaayko.com/kortex/r/<token> without a session. Revocable; never a client-set field.
+ */
+router.post('/links/:code/share', guest.requireGuestSession, requireWritable, async (req, res) => {
+  const link = await ownedLink(req, res);
+  if (!link) return;
+  try {
+    const token = crypto.randomBytes(18).toString('base64url');
+    await db.collection('short_links').doc(link.code).update({ shareToken: token, sharedAtMs: Date.now(), updatedAt: FieldValue.serverTimestamp() });
+    recordAudit({ req, actor: { type: 'guest', workspace: req.guest.tenantId }, action: 'link.shared', code: link.code, tenantId: req.guest.tenantId });
+    return res.json({ success: true, shareUrl: `https://kaayko.com/kortex/r/${token}` });
+  } catch (error) {
+    return guestError(res, error);
+  }
+});
+
+router.delete('/links/:code/share', guest.requireGuestSession, requireWritable, async (req, res) => {
+  const link = await ownedLink(req, res);
+  if (!link) return;
+  try {
+    await db.collection('short_links').doc(link.code).update({ shareToken: FieldValue.delete(), sharedAtMs: FieldValue.delete(), updatedAt: FieldValue.serverTimestamp() });
+    recordAudit({ req, actor: { type: 'guest', workspace: req.guest.tenantId }, action: 'link.unshared', code: link.code, tenantId: req.guest.tenantId });
+    return res.json({ success: true });
+  } catch (error) {
+    return guestError(res, error);
+  }
+});
+
 router.get('/links/:code/analytics.csv', guest.requireGuestSession, rateLimiter('exportCsv'), async (req, res) => {
   const link = await ownedLink(req, res);
   if (!link) return;
   try {
     const code = link.code || req.params.code;
-    const { csv, rows } = await linkEventsCsv(code, { windowDays: ANALYTICS_WINDOW_DAYS });
+    const { csv, rows } = await linkEventsCsv(code, { windowDays: windowDaysFor(req.guest.tenant) });
     recordAudit({ req, actor: { type: 'guest', workspace: req.guest.tenantId }, action: 'analytics.exported', code, tenantId: req.guest.tenantId, extra: { rows, windowDays: ANALYTICS_WINDOW_DAYS, format: 'csv' } });
     return sendCsv(res, `kortex-${code}-scans.csv`, csv);
   } catch (error) {
@@ -439,6 +464,9 @@ router.patch('/links/:code', guest.requireGuestSession, requireWritable, async (
     if (body.schedule !== undefined) updates.schedule = body.schedule; // object sets, null clears
     if (body.limits !== undefined) updates.limits = body.limits; // object sets, null clears
     if (body.utm !== undefined) updates.utm = cleanUtm(body.utm) || {};
+    if (body.placement !== undefined) updates.placement = body.placement;
+    if (body.economics !== undefined) updates.economics = body.economics;
+    if (body.campaignWindow !== undefined) updates.campaignWindow = body.campaignWindow;
     if (body.expiresAt !== undefined) updates.expiresAt = parseExpiry(body.expiresAt);
     if (updates.enabled === true && link.disabledReason === 'guest_expired') updates.disabledReason = null;
     if (!Object.keys(updates).length) {

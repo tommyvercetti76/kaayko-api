@@ -15,9 +15,9 @@
 const admin = require('firebase-admin');
 const { getClientIp } = require('./clientIp');
 const { FieldValue } = require('firebase-admin/firestore');
-const { trackClick, updateClickRedirect } = require('./clickTracking');
+const { trackClick, updateClickRedirect, trackOutcome } = require('./clickTracking');
 const KortexV2 = require('./v2LinkIntents');
-const { respondForStatus } = require('./safetyPages');
+const { respondForStatus, effectiveStatus } = require('./safetyPages');
 const { DEFAULT_TENANT_ID } = require('./tenantContext');
 const { pickScheduledDestination } = require('./linkSchedule');
 const { evaluateLimits, OVER_LIMIT_COPY } = require('./linkRules');
@@ -478,11 +478,17 @@ async function handleRedirect(req, res, code, options = {}) {
     const linkData = linkDoc.data();
     const trackingContext = buildTrackingContext(req.query, linkData.utm);
     const scanned = isQrScan(req.query);
+    // A scan that ends here is still a finding: recorded as an outcome, never as a visit.
+    const miss = (outcome, extra = {}) => {
+      if (isCrawler || options.trackAnalytics === false) return;
+      trackOutcome({ linkCode: code, tenantId: linkData.tenantId || DEFAULT_TENANT_ID, outcome, ...extra, platform, userAgent, ip: getClientIp(req), referrer: req.get('referer') || null, scanned }).catch(() => {});
+    };
 
     // Tenant kill switch: a workspace switched off by a reviewer stops every
     // one of its links on the next request (one cached read, 60 s).
     const gate = await getTenantGate(linkData.tenantId || DEFAULT_TENANT_ID);
     if (!gate.enabled) {
+      miss('workspace_off');
       return res.status(410).send(errorPage(
         410,
         'Link No Longer Active',
@@ -492,6 +498,7 @@ async function handleRedirect(req, res, code, options = {}) {
 
     // Case 2: Link disabled by creator
     if (linkData.enabled === false) {
+      miss('paused');
       return res.status(410).send(errorPage(
         410,
         'Link Disabled',
@@ -502,6 +509,7 @@ async function handleRedirect(req, res, code, options = {}) {
     // Case 2a: Safety / review state — held links show a review page (200,
     // noindex), blocked links a 410. Read fresh on every request, so a block
     // takes effect immediately.
+    if (effectiveStatus(linkData) !== 'active') miss(effectiveStatus(linkData));
     if (respondForStatus(res, linkData, code)) return;
 
     // Case 2b: Tenant churned — 30-day grace period then deactivation
@@ -511,6 +519,7 @@ async function handleRedirect(req, res, code, options = {}) {
       const graceDays = 30;
       const deactivateAt = new Date(churnDate.getTime() + graceDays * 24 * 60 * 60 * 1000);
       if (new Date() > deactivateAt) {
+        miss('churned');
         return res.status(410).send(errorPage(
           410,
           'Link No Longer Active',
@@ -523,7 +532,11 @@ async function handleRedirect(req, res, code, options = {}) {
     // creator gets a redirect (not counted as a click); otherwise a 410 page.
     const overLimit = evaluateLimits(linkData);
     if (overLimit.over) {
-      if (overLimit.fallbackUrl) return res.redirect(302, overLimit.fallbackUrl);
+      if (overLimit.fallbackUrl) {
+        miss('fallback', { delivered: true, reason: overLimit.reason, redirectedTo: overLimit.fallbackUrl });
+        return res.redirect(302, overLimit.fallbackUrl);
+      }
+      miss(overLimit.reason === 'expired' ? 'expired' : 'capped');
       const copy = OVER_LIMIT_COPY[overLimit.reason];
       return res.status(410).send(errorPage(410, copy.title, copy.message));
     }

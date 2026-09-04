@@ -17,8 +17,19 @@
  */
 
 const admin = require('firebase-admin');
+const { computeInsights } = require('./linkInsights');
 
 const db = admin.firestore();
+
+/** Hour and weekday of an instant in a zone (Intl, DST-safe). */
+function localParts(ms, timeZone) {
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', { timeZone, hour: 'numeric', hour12: false, weekday: 'short' }).formatToParts(new Date(ms));
+    const hour = Number(parts.find(p => p.type === 'hour').value) % 24;
+    const dow = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(parts.find(p => p.type === 'weekday').value);
+    return { hour, dow: dow < 0 ? new Date(ms).getUTCDay() : dow };
+  } catch (_) { const d = new Date(ms); return { hour: d.getUTCHours(), dow: d.getUTCDay() }; }
+}
 
 // click_events carry a 30-day expiresAt TTL, so aggregates are a rolling window.
 const RETENTION_DAYS = 30;
@@ -75,11 +86,15 @@ async function getLinkAnalytics(code, linkData, options = {}) {
     ? Math.min(Number(options.windowDays), RETENTION_DAYS)
     : RETENTION_DAYS;
   const windowStartMs = Date.now() - windowDays * 86400000;
+  const timeZone = options.timeZone || 'UTC';
 
-  const events = snap.docs
+  const allEvents = snap.docs
     .map(d => d.data())
     .map(e => ({
       ms: e.timestampMs || (e.timestamp?.toMillis ? e.timestamp.toMillis() : null),
+      delivered: e.delivered !== false,
+      outcome: e.outcome || null,
+      reason: e.fallbackReason || null,
       platform: e.platform || null,
       deviceType: e.deviceInfo?.deviceType || null,
       os: e.deviceInfo?.os || null,
@@ -96,7 +111,20 @@ async function getLinkAnalytics(code, linkData, options = {}) {
       redirectMs: (e.redirectTimestamp?.toMillis ? e.redirectTimestamp.toMillis() : null),
     }))
     .filter(e => e.ms && e.ms >= windowStartMs)
+    .map(e => ({ ...e, ...localParts(e.ms, timeZone) }))
     .sort((a, b) => a.ms - b.ms);
+
+  // Misses (expired, capped, held, blocked, paused, workspace off) are kept
+  // apart: they are findings, never visits.
+  const undelivered = allEvents.filter(e => !e.delivered);
+  const events = allEvents.filter(e => e.delivered);
+  const outcomes = {
+    undelivered: undelivered.length,
+    byOutcome: tally(undelivered.map(e => e.outcome)),
+    fallbacks: events.filter(e => e.outcome === 'fallback').length,
+    fallbackByReason: tally(events.filter(e => e.outcome === 'fallback').map(e => e.reason)),
+    points: undelivered.slice(-500).map(e => [e.ms, e.outcome, e.platform, e.country])
+  };
 
   const unavailable = [];
   const total = events.length;
@@ -109,6 +137,10 @@ async function getLinkAnalytics(code, linkData, options = {}) {
       timeline: [],
       unique: null,
       breakdowns: {},
+      points: [],
+      timeZone,
+      outcomes,
+      insights: computeInsights({ link: linkData || {}, events: [], undelivered, windowDays, timeZone, unique: null }),
       unavailable: [{
         metric: 'all',
         reason: total === 0 && (linkData?.clickCount || 0) > 0
@@ -188,6 +220,18 @@ async function getLinkAnalytics(code, linkData, options = {}) {
       for (const e of events) h[new Date(e.ms).getUTCHours()] += 1;
       return h.map((clicks, hour) => ({ hour, clicks }));
     })(),
+    // The same two, in the viewer's zone (what the dashboards show).
+    dayOfWeek: (() => {
+      const names = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      const d = new Array(7).fill(0);
+      for (const e of events) d[e.dow] += 1;
+      return d.map((clicks, i) => ({ value: names[i], clicks }));
+    })(),
+    hourOfDay: (() => {
+      const h = new Array(24).fill(0);
+      for (const e of events) h[e.hour] += 1;
+      return h.map((clicks, hour) => ({ hour, clicks }));
+    })(),
   };
 
   if (breakdowns.referrer.every(r => r.value === null)) {
@@ -257,7 +301,7 @@ async function getLinkAnalytics(code, linkData, options = {}) {
   // Compact per-event points for the client's clock, spider and sky views:
   // [ms, platform, deviceType, country, source, window, referrerHost]. Newest 2000.
   const hostOf = (r) => { try { return r ? new URL(r).hostname.replace(/^www\./, '') : null; } catch (_) { return null; } };
-  const points = events.slice(-2000).map(e => [e.ms, e.platform, e.deviceType, e.country, e.source, e.window, hostOf(e.referrer)]);
+  const points = events.slice(-2000).map(e => [e.ms, e.platform, e.deviceType, e.country, e.source, e.window, hostOf(e.referrer), e.outcome]);
 
   const storedClickCount = linkData?.clickCount ?? null;
   const drift = storedClickCount == null ? null : storedClickCount - total;
@@ -283,6 +327,9 @@ async function getLinkAnalytics(code, linkData, options = {}) {
       daysSpanned: timeline.length,
     },
     unique: { ...unique, clicksPerVisitor },
+    timeZone,
+    outcomes,
+    insights: computeInsights({ link: linkData || {}, events, undelivered, windowDays, timeZone, unique: { ...unique, clicksPerVisitor } }),
     installs: {
       attributed: events.filter(e => e.installAttributed).length,
     },

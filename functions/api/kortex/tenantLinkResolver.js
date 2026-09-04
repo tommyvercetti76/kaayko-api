@@ -17,7 +17,8 @@ const db = admin.firestore();
 const router = express.Router();
 const { runSecurityChecks, isCanaryCode } = require('./linkSecurityService');
 const { getClientIp } = require('./clientIp');
-const { respondForStatus, escapeHtml } = require('./safetyPages');
+const { respondForStatus, escapeHtml, effectiveStatus } = require('./safetyPages');
+const { trackOutcome } = require('./clickTracking');
 const { pickScheduledDestination } = require('./linkSchedule');
 const { evaluateLimits, OVER_LIMIT_COPY } = require('./linkRules');
 const { isQrScan, mergeTrackingIntoDestination, UTM_KEYS } = require('./utmTools');
@@ -218,13 +219,20 @@ router.get('/:tenantSlug/:code', async (req, res, next) => {
     }
 
     const link = linkDoc.data();
+    const miss = (outcome, extra = {}) => {
+      const ua0 = req.headers['user-agent'] || '';
+      if (isSocialCrawler(ua0)) return;
+      trackOutcome({ linkCode: code, tenantId, outcome, ...extra, platform: /iphone|ipad/i.test(ua0) ? 'ios' : /android/i.test(ua0) ? 'android' : 'web', userAgent: ua0, ip: getClientIp(req), referrer: req.headers.referer || null, scanned: isQrScan(req.query) }).catch(() => {});
+    };
 
     // Check if link is enabled
     if (link.enabled === false) {
+      miss('paused');
       return res.status(410).send(gonePage('Link Disabled', 'This link has been deactivated by the administrator.'));
     }
 
     // Safety / review state (held → review page, blocked → 410)
+    if (effectiveStatus(link) !== 'active') miss(effectiveStatus(link));
     if (respondForStatus(res, link, code)) return;
 
     // Past expiry or over its cap (the legacy maxUses field still counts).
@@ -234,7 +242,11 @@ router.get('/:tenantSlug/:code', async (req, res, next) => {
       : link;
     const overLimit = evaluateLimits(withLegacyCap);
     if (overLimit.over) {
-      if (overLimit.fallbackUrl) return res.redirect(302, overLimit.fallbackUrl);
+      if (overLimit.fallbackUrl) {
+        miss('fallback', { delivered: true, reason: overLimit.reason, redirectedTo: overLimit.fallbackUrl });
+        return res.redirect(302, overLimit.fallbackUrl);
+      }
+      miss(overLimit.reason === 'expired' ? 'expired' : 'capped');
       const copy = OVER_LIMIT_COPY[overLimit.reason];
       return res.status(410).send(gonePage(copy.title, copy.message));
     }

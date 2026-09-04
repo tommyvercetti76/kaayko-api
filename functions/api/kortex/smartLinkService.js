@@ -18,6 +18,7 @@ const safety = require('./destinationSafety');
 const { LINK_STATUS, effectiveStatus } = require('./safetyPages');
 const { normalizeSchedule, scheduleUrls } = require('./linkSchedule');
 const { normalizeLimits, limitUrls } = require('./linkRules');
+const { normalizePlacement, normalizeEconomics, normalizeCampaignWindow } = require('./linkFields');
 
 const db = admin.firestore();
 
@@ -306,6 +307,9 @@ async function createShortLink(data) {
   // same safety assessment as the destinations below.
   const schedule = normalizeSchedule(data.schedule);
   const limits = normalizeLimits(data.limits);
+  const placement = normalizePlacement(data.placement);
+  const economics = normalizeEconomics(data.economics);
+  const campaignWindow = normalizeCampaignWindow(data.campaignWindow);
 
   // Destination safety — private hosts, blocklists, Safe Browsing, domain
   // reputation. Blocks throw; unknown domains for new tenants come back 'held'.
@@ -410,6 +414,9 @@ async function createShortLink(data) {
     safety: safetyOutcome.safety,
     schedule, // time-of-day windows or null
     limits, // scan cap + fallback URL, or null
+    placement, // where the code lives (poster, menu, badge…)
+    economics, // print cost + value per visit, or null
+    campaignWindow, // { startAt, endAt } or null
     createdBy, // Audit trail: who created this
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp()
@@ -434,6 +441,9 @@ async function createShortLink(data) {
     safety: safetyOutcome.safety,
     schedule,
     limits,
+    placement,
+    economics,
+    campaignWindow,
     destinationType,
     campaignId,
     requiresAuth,
@@ -562,7 +572,10 @@ async function updateShortLink(code, updates) {
     destinationCategory,
     destinationTemplate,
     schedule,
-    limits
+    limits,
+    placement,
+    economics,
+    campaignWindow
   } = updates;
 
   const linkRef = db.collection('short_links').doc(code);
@@ -658,6 +671,9 @@ async function updateShortLink(code, updates) {
   if (updates.updatedBy) updateData.updatedBy = updates.updatedBy;
   if (scheduleProvided) updateData.schedule = nextSchedule;
   if (limitsProvided) updateData.limits = nextLimits;
+  if (placement !== undefined) updateData.placement = normalizePlacement(placement);
+  if (economics !== undefined) updateData.economics = normalizeEconomics(economics);
+  if (campaignWindow !== undefined) updateData.campaignWindow = normalizeCampaignWindow(campaignWindow);
 
   if (metadata !== undefined) {
     const currentDestinations = currentData.destinations || {};

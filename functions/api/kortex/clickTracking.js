@@ -471,9 +471,48 @@ async function cleanupExpiredClicks() {
   return { deleted: expiredSnapshot.size };
 }
 
+/**
+ * A scan that did not reach the intended page (expired, capped, held, blocked,
+ * paused, workspace off) or that took a fallback. Same collection as clicks,
+ * flagged `delivered:false` for misses so no count or webhook ever treats it
+ * as a visit; a fallback is delivered, with its reason.
+ */
+async function trackOutcome(params) {
+  const { linkCode, tenantId, outcome, reason = null, delivered = false, redirectedTo = null, platform = null, userAgent = '', ip = null, referrer = null, scanned = false } = params;
+  if (!linkCode || !outcome) return null;
+  const clickId = generateClickId();
+  const now = Date.now();
+  const doc = {
+    clickId,
+    linkCode,
+    tenantId: tenantId || 'kaayko-default',
+    timestamp: FieldValue.serverTimestamp(),
+    timestampMs: now,
+    delivered: delivered === true,
+    outcome,
+    fallbackReason: reason,
+    platform,
+    deviceInfo: parseUserAgent(userAgent),
+    userAgent: String(userAgent || '').slice(0, 300),
+    ip: hashIp(ip),
+    geo: resolveGeo(ip),
+    referrer: referrer || null,
+    utm: {},
+    redirectedTo,
+    installAttributed: false,
+    metadata: { source: scanned ? 'qr' : 'link' },
+    expiresAt: admin.firestore.Timestamp.fromMillis(now + 30 * 24 * 60 * 60 * 1000)
+  };
+  await db.collection('click_events').doc(clickId).set(doc);
+  return { clickId };
+}
+
 module.exports = {
   generateClickId,
   trackClick,
+  trackOutcome,
+  hashIp,
+  resolveGeo,
   updateClickRedirect,
   trackInstall,
   getLinkAnalytics,

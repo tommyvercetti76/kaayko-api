@@ -194,7 +194,7 @@ describe('CSV export', () => {
     expect(csv.headers['content-disposition']).toMatch(/attachment/);
     expect(csv.text.charCodeAt(0)).toBe(0xFEFF);
     const lines = csv.text.slice(1).trim().split('\r\n');
-    expect(lines[0]).toBe('time,link,source,platform,device,os,browser,country,referrer,utm_source,utm_medium,utm_campaign,utm_term,utm_content,window,sent_to');
+    expect(lines[0]).toBe('time,link,source,platform,device,os,browser,country,referrer,utm_source,utm_medium,utm_campaign,utm_term,utm_content,window,sent_to,delivered,outcome');
     expect(lines).toHaveLength(2);
     expect(lines[1]).toMatch(new RegExp(`,${code},qr,ios,`));
 

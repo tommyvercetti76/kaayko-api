@@ -20,7 +20,7 @@ const CREATE_FIELDS = Object.freeze([
   'utm', 'metadata', 'sourceRules', 'expiresAt', 'enabled',
   'destinationType', 'campaignId', 'requiresAuth', 'audience', 'source', 'intent',
   'returnTo', 'conversionGoal', 'destinationCategory', 'destinationTemplate',
-  'generateQR', 'tags', 'schedule', 'limits'
+  'generateQR', 'tags', 'schedule', 'limits', 'placement', 'economics', 'campaignWindow'
 ]);
 
 const UPDATE_FIELDS = Object.freeze([
@@ -28,7 +28,7 @@ const UPDATE_FIELDS = Object.freeze([
   'webDestination', 'iosDestination', 'androidDestination', 'destinations',
   'utm', 'metadata', 'metadataPatch', 'sourceRules', 'expiresAt', 'enabled',
   'destinationType', 'campaignId', 'requiresAuth', 'audience', 'source', 'intent',
-  'returnTo', 'conversionGoal', 'destinationCategory', 'destinationTemplate', 'tags', 'schedule', 'limits'
+  'returnTo', 'conversionGoal', 'destinationCategory', 'destinationTemplate', 'tags', 'schedule', 'limits', 'placement', 'economics', 'campaignWindow'
 ]);
 
 /** Fields a client must never be able to set, kept for documentation and tests. */

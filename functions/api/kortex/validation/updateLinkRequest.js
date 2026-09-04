@@ -25,7 +25,10 @@ const ALLOWED_FIELDS = new Set([
   'conversionGoal',
   'sourceRules',
   'schedule',
-  'limits'
+  'limits',
+  'placement',
+  'economics',
+  'campaignWindow'
 ]);
 
 function validateUpdateRequest(req, res, next) {

@@ -13,7 +13,7 @@ const admin = require('firebase-admin');
 
 const EVENT_COLUMNS = Object.freeze([
   'time', 'link', 'source', 'platform', 'device', 'os', 'browser', 'country',
-  'referrer', 'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'window', 'sent_to'
+  'referrer', 'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'window', 'sent_to', 'delivered', 'outcome'
 ]);
 
 function cell(value) {
@@ -48,7 +48,9 @@ function eventRow(code, e) {
     utm_term: e.utm?.utm_term || '',
     utm_content: e.utm?.utm_content || '',
     window: e.metadata?.scheduleWindow || '',
-    sent_to: e.redirectedTo || ''
+    sent_to: e.redirectedTo || '',
+    delivered: e.delivered === false ? 'no' : 'yes',
+    outcome: e.outcome || ''
   };
 }
 

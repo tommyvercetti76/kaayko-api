@@ -7,6 +7,8 @@ const { DEFAULT_TENANT_ID } = require('./tenantContext');
 const { evaluateLimits } = require('./linkRules');
 const { getTenantGate } = require('./tenantGate');
 const { isQrScan, mergeTrackingIntoDestination, UTM_KEYS } = require('./utmTools');
+const { trackOutcome } = require('./clickTracking');
+const { getClientIp } = require('./clientIp');
 
 const db = admin.firestore();
 
@@ -388,10 +390,16 @@ async function resolveLink({ code, namespace, host, path, query = {}, req = null
     : normalizedCode;
 
   const link = await LinkService.getShortLink(shortCode);
+  const ua = req && req.get ? String(req.get('user-agent') || '') : '';
+  const miss = (outcome, extra = {}) => {
+    if (!req) return;
+    trackOutcome({ linkCode: link.code || shortCode, tenantId: link.tenantId || DEFAULT_TENANT_ID, outcome, ...extra, platform: /iphone|ipad/i.test(ua) ? 'ios' : /android/i.test(ua) ? 'android' : 'web', userAgent: ua, ip: getClientIp(req), referrer: req.get ? req.get('referer') || null : null, scanned: isQrScan(query) }).catch(() => {});
+  };
 
   // The API resolver must honour the same gates as the redirect: a disabled,
   // expired, held or blocked link is never handed out as a destination.
   if (link.enabled === false) {
+    miss('paused');
     const error = new Error('Link disabled');
     error.code = 'LINK_DISABLED';
     throw error;
@@ -399,6 +407,7 @@ async function resolveLink({ code, namespace, host, path, query = {}, req = null
   // The same gates as the redirect: the tenant kill switch, the churn grace period, the legacy cap.
   const gateInfo = await getTenantGate(link.tenantId || DEFAULT_TENANT_ID);
   if (!gateInfo.enabled) {
+    miss('workspace_off');
     const error = new Error('Workspace switched off');
     error.code = 'TENANT_DISABLED';
     throw error;
@@ -406,6 +415,7 @@ async function resolveLink({ code, namespace, host, path, query = {}, req = null
   if (link.tenantChurnedAt) {
     const churn = link.tenantChurnedAt.toDate ? link.tenantChurnedAt.toDate() : new Date(link.tenantChurnedAt);
     if (!Number.isNaN(churn.getTime()) && Date.now() > churn.getTime() + 30 * 86400000) {
+      miss('churned');
       const error = new Error('Link no longer active');
       error.code = 'TENANT_CHURNED';
       throw error;
@@ -418,6 +428,7 @@ async function resolveLink({ code, namespace, host, path, query = {}, req = null
   if (overLimit.over) {
     if (overLimit.fallbackUrl) {
       // Same rule as the redirect: the creator's fallback, and no click counted.
+      miss('fallback', { delivered: true, reason: overLimit.reason, redirectedTo: overLimit.fallbackUrl });
       return {
         link: { code: link.code || shortCode, shortUrl: link.shortUrl, title: link.title || '' },
         overLimit: overLimit.reason,
@@ -427,11 +438,13 @@ async function resolveLink({ code, namespace, host, path, query = {}, req = null
         campaignId: null
       };
     }
+    miss(overLimit.reason === 'expired' ? 'expired' : 'capped');
     const error = new Error(overLimit.reason === 'expired' ? 'Link expired' : 'Link limit reached');
     error.code = overLimit.reason === 'expired' ? 'LINK_EXPIRED' : 'LINK_CAPPED';
     throw error;
   }
   if (link.status === 'held' || link.status === 'blocked') {
+    miss(link.status);
     const error = new Error(link.status === 'held' ? 'Link is under review' : 'Link has been blocked');
     error.code = link.status === 'held' ? 'LINK_HELD' : 'LINK_BLOCKED';
     throw error;

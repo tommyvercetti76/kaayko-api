@@ -381,7 +381,7 @@ async function sampleSummaries({ windowDays = 7, nowMs = Date.now(), full = fals
   const { links } = await LinkService.listLinks({ tenantId: DEMO_TENANT_ID, limit: 50 });
   const rows = [];
   for (const link of links) {
-    const a = await getLinkAnalytics(link.code, link, { windowDays });
+    const a = await getLinkAnalytics(link.code, link, { windowDays, timeZone: 'Asia/Kolkata' });
     const src = Object.fromEntries((a.breakdowns.source || []).map(r => [r.value, r.clicks]));
     const row = {
       code: link.code,
@@ -398,6 +398,9 @@ async function sampleSummaries({ windowDays = 7, nowMs = Date.now(), full = fals
     };
     if (full) {
       row.points = (a.points || []).slice(-600);
+      row.insights = a.insights;
+      row.timeZone = 'Asia/Kolkata';
+      row.outcomes = a.outcomes;
       const exp = expiryDate(link);
       row.link = {
         destinations: link.destinations || {},
