@@ -42,8 +42,12 @@ pending → processing → shipped → delivered → returned
 - `pending`: Payment not yet received
 - `paid`: Payment successful
 - `failed`: Payment failed
-- `refunded`: Full refund issued
+- `refunded`: Full refund issued (`charge.refunded`, or a dispute closed as `charge_refunded`)
 - `partially_refunded`: Partial refund issued
+- `disputed`: A chargeback is open (`charge.dispute.created`); funds withheld
+- `dispute_lost`: The chargeback was lost (`charge.dispute.closed` with status `lost`)
+
+A dispute closed as `won` or `warning_closed` restores `paid`.
 
 ---
 
@@ -416,7 +420,9 @@ await fetch(`${API_URL}/admin/updateOrderStatus`, {
 
 ## Email Notifications
 
-Triggered automatically via Firebase Extensions (to be configured):
+Queued as documents in the Firestore `mail` collection and delivered by the
+in-repo `mailSender` trigger (`functions/triggers/mailSender.js`) — see
+`STRIPE_EMAIL_SETUP_GUIDE.md` for the one secret it needs:
 
 ### Order Confirmation Email
 - Sent when: `paymentStatus` = `succeeded`
@@ -464,18 +470,20 @@ TODO: Add authentication middleware to admin endpoints
 4. ⏳ Add authentication to admin endpoints
 5. ⏳ Build admin dashboard UI
 6. ⏳ Build customer order tracking page
-7. ⏳ Configure Firebase email extension
-8. ⏳ Set up automated email triggers
-9. ⏳ Add return/refund workflow
+7. ✅ Email delivery — `mailSender` trigger over SMTP (`MAIL_SMTP_URL` secret)
+8. ✅ Automated email triggers — confirmation, shipping, delay notice, refund/dispute alerts
+9. ✅ Refund / chargeback bookkeeping (`charge.refunded`, `charge.dispute.*`); returns intake still manual
 10. ⏳ Integrate with shipping label APIs (ShipStation, EasyPost)
 
 ---
 
 ## Fulfilment cycle — how the owner actually works an order (Sep 2026)
 
-**Prerequisite:** none of the emails below are delivered until the
-`firestore-send-email` extension is installed. See the banner at the top of
-`STRIPE_EMAIL_SETUP_GUIDE.md`.
+**Prerequisite:** the `MAIL_SMTP_URL` secret must be set and the `mailSender`
+function deployed, or the emails below sit in the `mail` collection with
+`delivery.state = ERROR` ("secret is not set"). See the banner at the top of
+`STRIPE_EMAIL_SETUP_GUIDE.md`. Do NOT also install the `firestore-send-email`
+extension — mail would go out twice.
 
 ### 1. See what to ship
 ```
@@ -516,8 +524,12 @@ Same call with `"orderStatus": "delivered"` — sets `deliveredAt` and
 | Payment succeeded | `{pi}_admin` | `ORDER_NOTIFY_EMAIL` |
 | Payment failed | `{pi}_failed` | `ORDER_NOTIFY_EMAIL` |
 | Unprocessable webhook (`webhook_failures`) | `{eventId}_webhook_failure` | `ORDER_NOTIFY_EMAIL` |
+| Refund, full or partial | `{pi}_refund_{cumulativeRefundedCents}` | `ORDER_NOTIFY_EMAIL` |
+| Chargeback opened | `{pi}_dispute_{disputeId}` | `ORDER_NOTIFY_EMAIL` |
+| Chargeback closed | `{pi}_dispute_{disputeId}_closed` | `ORDER_NOTIFY_EMAIL` |
 | Order confirmation | `{pi}_customer` | buyer |
 | Shipping confirmation | `{pi}_shipped` | buyer |
+| Delay notice (FTC) | `{pi}_delay_{YYYYMMDD}` | buyer |
 
 `ORDER_NOTIFY_EMAIL` (functions/.env) → `metadata.notifyEmail` →
 `rohanramekar17@gmail.com`. Every mail id is deterministic, so no event replay
@@ -532,10 +544,63 @@ with `latest_charge` expanded. The winning source is recorded on the order as
 `shippingSource`, and `shippingAddressMissing: true` marks an order nobody can
 ship.
 
+### Refunds and chargebacks (Sep 2026)
+The store webhook also handles the events that move money back. Each one
+updates `payment_intents/{pi}` and every `orders/{pi}_item*` document, appends
+a `statusHistory` entry (timestamped from Stripe, so a replay unions instead of
+duplicating), records the Stripe event id in `stripe_events`, and alerts the
+owner once. `chargeId` is stored on both records at payment time so a Charge
+or Dispute is matched to its order without a Stripe lookup.
+
+| Event | Effect |
+|---|---|
+| `charge.refunded` (full) | `paymentStatus: refunded`, `refundedCents`, `refundedAt`. An order that has not shipped is also cancelled (`orderStatus`/`fulfillmentStatus: cancelled`) so it does not get packed. A shipped one is left for the owner to mark `returned`. |
+| `charge.refunded` (partial) | `paymentStatus: partially_refunded`, cumulative `refundedCents`; fulfilment untouched. |
+| `charge.dispute.created` | `paymentStatus: disputed`, `disputeId`, `disputeReason`, `disputeStatus`, `disputeDeadline` (evidence due), `disputeAmountCents`. Fulfilment untouched — the alert says not to ship. |
+| `charge.dispute.closed` | `disputeOutcome` = `won` / `lost` / `warning_closed` / `charge_refunded`; `paymentStatus` becomes `paid`, `dispute_lost`, `paid`, `refunded` respectively. |
+
+Per-item `refundedCents` is a **pro-rata share** of the order-level refund
+(Stripe refunds carry no line items), capped at each line total, so
+`SUM(lineTotalCents − refundedCents)` over `orders` is still net revenue. The
+authoritative figure is `payment_intents.refundedCents`. A refund or dispute on
+a charge with no `payment_intents` record (a Kortex subscription on the same
+Stripe account) is acknowledged and ignored — disputes still alert the owner.
+
+The Stripe endpoint must subscribe to `charge.refunded`,
+`charge.dispute.created` and `charge.dispute.closed` — see
+`STRIPE_EMAIL_SETUP_GUIDE.md`, Step 1.
+
+### Ship time and the delay notice (FTC Mail Order Rule)
+The ship time promised at checkout is ONE constant —
+`SHIP_TIME_TEXT` in `functions/api/email/policy.js`
+("Made to order — ships in 5–7 business days, delivered within 7–14.") —
+injected into every customer email by `renderEmail()`. The storefront must say
+the same thing; compare `kaayko/src/cart.html` against the export.
+
+When an order will miss that window:
+```
+POST /api/admin/orders/delay-notice
+{ "parentOrderId": "pi_…", "newEstimatedDate": "2026-10-06", "reason": "Blank stock arrived late" }
+```
+* Queues `delayNotice.html` to the buyer — apology, the original promise, the
+  new date, and the choice to **keep the order** or **cancel for a full
+  refund** by replying — with a link to `/legal/returns`. Keyed
+  `mail/{pi}_delay_{YYYYMMDD}`: one notice per order per date, a later date
+  sends a fresh one.
+* Writes `estimatedDelivery` on every line item and the payment intent, a
+  `statusHistory` entry (`delay_notice`) and `payment_intents.delayNotices[]`.
+* If the new date is more than 30 days past the originally promised delivery
+  window (order date + 14 days), the notice states that silence cancels the
+  order (`consentRequired: true` in the response); otherwise silence keeps it
+  open. The cancellation and refund themselves are manual — refund in Stripe,
+  the webhook records it.
+
 ### Still missing (by design, not oversight)
 * **No admin UI.** These are API-only endpoints behind `requireAuth` +
   `requireAdmin`; there is no orders screen in the frontend yet.
-* **No refund / return handling** beyond the `returned` status string.
+* **No returns intake** beyond the `returned` status string; refunds are issued
+  in the Stripe dashboard and recorded here by the webhook.
+* **No automatic re-drive** of `mail` documents left in `RETRY`.
 * **No inventory decrement** on a successful order.
 * The composite indexes these queries need are in `firestore.indexes.json` but
   must be deployed (`firebase deploy --only firestore:indexes`).

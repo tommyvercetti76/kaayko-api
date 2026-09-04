@@ -9,7 +9,7 @@
   "main": "index.js",
   "scripts": {
     "serve": "firebase emulators:start --only functions,firestore,storage",
-    "deploy": "firebase deploy --config ../firebase.json --only functions:api,functions:earlyMorningForecast,functions:morningForecastUpdate,functions:afternoonForecastUpdate,functions:eveningForecastUpdate,functions:emergencyForecastRefresh,functions:forecastSchedulerHealth",
+    "deploy": "firebase deploy --config ../firebase.json --only functions:api,functions:mailSender,functions:orderRetention",
     "deploy:api": "firebase deploy --config ../firebase.json --only functions:api",
     "deploy:fast": "npm run deploy:api",
     "deploy:scheduled": "firebase deploy --config ../firebase.json --only functions:earlyMorningForecast,functions:morningForecastUpdate,functions:afternoonForecastUpdate,functions:eveningForecastUpdate,functions:emergencyForecastRefresh,functions:forecastSchedulerHealth",
@@ -30,7 +30,8 @@
     "predeploy:check": "npm run catalog:cameras && npm run reviewpacket:cameras && npm run audit:cameras && npm run validate:cameras && node scripts/predeploy-check.js && npm run test:smoke && npm run test:paddlingout",
     "test:performance": "node ../tests/firebase_performance_test.js",
     "install-python": "pip3 install -r requirements.txt",
-    "postinstall": "pip3 install -r requirements.txt || echo 'Python dependencies installation failed, will fallback to JS'"
+    "postinstall": "pip3 install -r requirements.txt || echo 'Python dependencies installation failed, will fallback to JS'",
+    "deploy:store": "firebase deploy --config ../firebase.json --only functions:api,functions:mailSender,functions:orderRetention,firestore:rules,firestore:indexes"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
@@ -43,6 +44,7 @@
     "firebase-functions": "^7.0.3",
     "geoip-country": "^5.0.202608142355",
     "multer": "^2.0.2",
+    "nodemailer": "^10.0.0",
     "openai": "^4.77.0",
     "qrcode": "^1.5.4",
     "stripe": "^17.5.0",

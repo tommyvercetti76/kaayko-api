@@ -1,27 +1,76 @@
 # Stripe Email Notification Setup Guide
 
-> ## ⛔ NOT DONE YET — no email is being delivered
+> ## ✅ Email delivery is in-repo — ONE secret to set before launch
 >
-> Verified 4 Sep 2026 with `firebase ext:list --project kaaykostore`:
-> **"there are no extensions installed on project kaaykostore."**
+> Every email the store sends (order confirmation, owner alerts, shipping
+> confirmation, delay notice, refund and chargeback alerts) is a document in
+> the Firestore `mail` collection, delivered over SMTP by the `mailSender`
+> Cloud Function (`functions/triggers/mailSender.js`, nodemailer). The
+> `firestore-send-email` extension is NOT installed and must NOT be:
+> **if the extension is ever installed alongside this trigger, every email is
+> sent twice. It is one or the other — never both.**
 >
-> Every email in this system is written to the Firestore `mail` collection and
-> is sent by the `firestore-send-email` extension. With no extension installed
-> those documents just accumulate — the customer gets no confirmation, the
-> owner gets no order alert, and nothing errors. Step 2 Option A below is a
-> REQUIREMENT, not a suggestion:
+> ### The one command
+>
+> Copy the SMTP URL (format below) to the clipboard, then:
 >
 > ```bash
-> firebase ext:install firebase/firestore-send-email --project=kaaykostore
-> #   Email documents collection: mail
-> #   SMTP connection URI:        smtps://apikey:SG.xxxx@smtp.sendgrid.net:465
-> #   Default FROM address:       orders@kaayko.com  (must be a verified sender)
-> firebase ext:list --project kaaykostore   # confirm it is there
+> cd /Users/Rohan/Kaayko_v6/kaayko-api && pbpaste > /tmp/k.txt && firebase functions:secrets:set MAIL_SMTP_URL --data-file=/tmp/k.txt; rm -f /tmp/k.txt
 > ```
 >
-> The owner notification address is now `ORDER_NOTIFY_EMAIL`
-> (default `rohanramekar17@gmail.com`), not the hardcoded `rohan@kaayko.com`
-> this document describes below.
+> ### Gmail URL format
+>
+> ```
+> smtps://your.name%40gmail.com:abcdefghijklmnop@smtp.gmail.com:465
+> ```
+>
+> * The `@` in the username **must be written `%40`** — a bare `@` breaks the URL.
+>   nodemailer decodes it back to `your.name@gmail.com` (covered by a test).
+> * `abcdefghijklmnop` is a Google **App Password** (Google Account → Security →
+>   2-Step Verification → App passwords). Google displays it with spaces — remove them.
+> * `smtps://` on port 465 (implicit TLS). Consumer Gmail caps sending at
+>   roughly 500 recipients/day, which is plenty for order mail.
+> * Gmail rewrites the From header to the authenticated account unless the
+>   address is a verified "Send mail as" alias, so leave `MAIL_FROM` unset when
+>   sending through Gmail. Reply-To is the owner address (`ORDER_NOTIFY_EMAIL`,
+>   default `rohanramekar17@gmail.com`), so customer replies land where they are read.
+>
+> ### Then deploy and verify
+>
+> ```bash
+> firebase deploy --only functions:mailSender,functions:api
+> firebase functions:secrets:access MAIL_SMTP_URL | sed 's/:[^:@]*@/:***@/'   # set? (password masked)
+> firebase functions:log --only mailSender
+> ```
+>
+> Make a test purchase (or create a `mail` document in the shape shown under
+> "Firestore Mail Collection Structure" below) and read it back:
+> `delivery.state` becomes `SUCCESS`, or `ERROR` with `delivery.error` saying
+> exactly why — a missing secret says so in plain words, it never fails silently.
+>
+> ### Delivery states — `mail/{id}.delivery` (same field names as the extension)
+>
+> | state | meaning |
+> |---|---|
+> | `PROCESSING` | claimed by a running invocation, in a transaction — a duplicate trigger delivery skips it, so nothing double-sends |
+> | `SUCCESS` | accepted by SMTP; `info.messageId`, `info.accepted`, `endTime` |
+> | `RETRY` | transient failure (connection, timeout, SMTP 4xx); `attempts` and `error` recorded. Nothing re-drives these automatically yet |
+> | `ERROR` | permanent failure (SMTP 5xx, bad credentials, no recipient, secret missing) or the 4th failed attempt; see `error` |
+>
+> To re-send a `RETRY`/`ERROR` document by hand: copy it under a new document
+> id (creation fires the trigger), or run `deliverMailDocument(id, { force: true })`
+> from `functions/triggers/mailSender.js` in a Node script with admin credentials.
+>
+> ### Secret and env summary
+>
+> | name | where | purpose |
+> |---|---|---|
+> | `MAIL_SMTP_URL` | Secret Manager (`firebase functions:secrets:set`) | the only required value — full `smtps://` URL |
+> | `MAIL_FROM` | `functions/.env`, optional | From header; default is the owner address |
+> | `ORDER_NOTIFY_EMAIL` | `functions/.env`, optional | owner alert address and default From / Reply-To |
+>
+> The rest of this document is the original checkout + webhook guide. Where it
+> mentions the extension or SendGrid, the banner above supersedes it.
 
 ## Overview
 Complete guide for setting up email notifications for Stripe checkout, including customer order confirmations and admin notifications to rohan@kaayko.com.
@@ -109,6 +158,9 @@ STRIPE_WEBHOOK_SECRET=whsec_abc123...
 4. Select events to listen to:
    - `payment_intent.succeeded`
    - `payment_intent.payment_failed`
+   - `charge.refunded` — full and partial refunds (marks the order refunded / partially_refunded)
+   - `charge.dispute.created` — chargebacks (marks the order disputed, records the evidence deadline)
+   - `charge.dispute.closed` — dispute outcome (won / lost / warning_closed / charge_refunded)
 5. Click "Add endpoint"
 6. Copy the "Signing secret" (starts with `whsec_`)
 7. Add to `.env.local` and production config
@@ -117,60 +169,9 @@ STRIPE_WEBHOOK_SECRET=whsec_abc123...
 
 ### Step 2: Set Up Email Service
 
-You have **3 options** for sending emails:
-
-#### Option A: Firebase Extension (Recommended - Easiest)
-
-1. Install Trigger Email extension:
-```bash
-firebase ext:install firestore-send-email --project=kaaykostore
-```
-
-2. Configuration during install:
-   - **SMTP Connection URI**: Use SendGrid, Gmail, or other SMTP
-   - **Email documents collection**: `mail`
-   - **Default FROM address**: `orders@kaayko.com`
-
-3. SendGrid SMTP URI format:
-```
-smtps://apikey:YOUR_SENDGRID_API_KEY@smtp.sendgrid.net:465
-```
-
-#### Option B: SendGrid API (Custom Implementation)
-
-Already have `SENDGRID_API_KEY` in `.env.local`, just need to implement sender:
-
-```javascript
-// api/functions/api/email/sendEmail.js
-const sgMail = require('@sendgrid/mail');
-sgMail.setApiKey(process.env.SENDGRID_API_KEY);
-
-async function sendEmail(to, subject, html) {
-  const msg = {
-    to,
-    from: 'orders@kaayko.com',
-    subject,
-    html,
-  };
-  await sgMail.send(msg);
-}
-
-module.exports = { sendEmail };
-```
-
-Then update `stripeWebhook.js` to call this instead of writing to Firestore.
-
-#### Option C: Gmail SMTP (Quick Testing)
-
-1. Enable 2FA on your Gmail account
-2. Generate App Password: https://myaccount.google.com/apppasswords
-3. Update `.env.local`:
-```
-EMAIL_HOST=smtp.gmail.com
-EMAIL_PORT=587
-EMAIL_USER=your-email@gmail.com
-EMAIL_PASS=your-app-password
-```
+Done in-repo — see the banner at the top of this document. Set the
+`MAIL_SMTP_URL` secret, deploy `functions:mailSender`, and do NOT install the
+`firestore-send-email` extension (it would double-send).
 
 ---
 
@@ -306,7 +307,7 @@ cd api/deployment
 
 2. **Configure webhook in Stripe Dashboard**:
    - URL: `https://us-central1-kaaykostore.cloudfunctions.net/api/createPaymentIntent/webhook`
-   - Events: `payment_intent.succeeded`, `payment_intent.payment_failed`
+   - Events: `payment_intent.succeeded`, `payment_intent.payment_failed`, `charge.refunded`, `charge.dispute.created`, `charge.dispute.closed`
 
 3. **Test with real Stripe test mode**:
    - Visit: https://kaayko.com/store.html
@@ -324,10 +325,11 @@ cd api/deployment
 - [ ] Check Firebase Functions logs: `firebase functions:log`
 
 ### Emails Not Sending
-- [ ] Email service configured (Extension or SendGrid)
-- [ ] `mail` collection has documents
-- [ ] Check email service logs
-- [ ] Verify sender email is verified/authorized
+- [ ] `MAIL_SMTP_URL` secret set (`firebase functions:secrets:access MAIL_SMTP_URL`) and `mailSender` deployed
+- [ ] `mail` collection has documents — read `delivery.state` and `delivery.error` on them
+- [ ] `firebase functions:log --only mailSender`
+- [ ] Gmail: App Password (not the account password), `%40` for the `@` in the username, spaces removed
+- [ ] The `firestore-send-email` extension is NOT installed (`firebase ext:list`) — with both, mail double-sends
 - [ ] Check spam folder
 
 ### Order Not Stored
@@ -366,9 +368,10 @@ stripeWebhook.js
        ├─ to: customer@email.com (order confirmation)
        └─ to: rohan@kaayko.com (new order alert)
      ↓
-Firebase Email Extension/Service
+mailSender Firestore trigger (functions/triggers/mailSender.js, SMTP via MAIL_SMTP_URL)
   ├─ Send email to customer
-  └─ Send email to rohan@kaayko.com
+  └─ Send email to the owner (ORDER_NOTIFY_EMAIL)
+  └─ delivery.state written back: SUCCESS | RETRY | ERROR
 ```
 
 ---
@@ -381,8 +384,8 @@ cd api/functions
 nano .env.local
 # Add: STRIPE_WEBHOOK_SECRET=whsec_...
 
-# 2. Install email extension (optional)
-firebase ext:install firestore-send-email --project=kaaykostore
+# 2. Set the SMTP secret (required — see the banner at the top)
+pbpaste > /tmp/k.txt && firebase functions:secrets:set MAIL_SMTP_URL --data-file=/tmp/k.txt; rm -f /tmp/k.txt
 
 # 3. Deploy
 cd ../deployment
@@ -412,9 +415,9 @@ Each email document in `mail` collection:
     subject: 'Order Confirmation - Kaayko',
     html: '<html>...</html>'
   },
-  delivery: {
-    state: 'PENDING', // Changes to SUCCESS/ERROR
-    attempts: 0,
+  delivery: {            // written by mailSender; absent until the trigger runs
+    state: 'PROCESSING', // → SUCCESS | RETRY | ERROR
+    attempts: 1,
     startTime: timestamp,
     endTime: timestamp,
     error: null

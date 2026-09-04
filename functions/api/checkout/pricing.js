@@ -22,6 +22,10 @@
  *   availableSizes   string[] — size options; used to validate the client's size.
  *   productID        string   — a SECONDARY id (storage prefix). The Firestore
  *                               document id is canonical.
+ *   taxCode          string   — OPTIONAL Stripe Tax product tax code
+ *                               ("txcd_30011000"). Absent on every product the
+ *                               uploader writes today; see ./tax.js for the
+ *                               default applied when it is missing.
  *
  * There is no `gender` field on product documents, so gender cannot be validated
  * against the catalogue; it is instead constrained to the fixed UI enum.
@@ -116,6 +120,22 @@ async function loadProduct(db, id) {
     `[checkout/pricing] LEGACY_PRODUCT_LOOKUP productID="${id}" resolved to doc "${query.docs[0].id}" — client is sending the wrong identifier`
   );
   return { id: query.docs[0].id, data: query.docs[0].data() || {}, viaLegacyField: true };
+}
+
+/** Stripe Tax product tax codes look like "txcd_30011000". */
+const TAX_CODE_RE = /^txcd_\d{6,12}$/;
+
+/**
+ * Per-product Stripe Tax code override. Only a well-formed code is honoured —
+ * anything else is treated as absent so a typo in a product document cannot
+ * turn into a failed tax calculation (and therefore a blocked checkout).
+ *
+ * @param {object} data Raw Firestore product data.
+ * @returns {string|null}
+ */
+function resolveTaxCode(data) {
+  const raw = typeof data?.taxCode === 'string' ? data.taxCode.trim() : '';
+  return TAX_CODE_RE.test(raw) ? raw : null;
 }
 
 /** A product is purchasable unless it is explicitly switched off. */
@@ -287,11 +307,17 @@ async function resolveCart(rawItems, opts = {}) {
       gender: line.gender,
       quantity: line.quantity,
       unitPriceCents: price.cents,
-      lineTotalCents
+      lineTotalCents,
+      // null when the product carries no override; ./tax.js applies the default.
+      taxCode: resolveTaxCode(product.data)
     });
   }
 
-  const totalCents = subtotalCents; // no shipping/tax lines today
+  // Sales tax is NOT part of this total. It depends on the shipping address,
+  // which is unknown at pricing time; POST /createPaymentIntent/tax adds it to
+  // the PaymentIntent once the address is complete (see ./tax.js). Shipping is
+  // still free, so subtotal and total coincide here.
+  const totalCents = subtotalCents;
   if (totalCents <= 0) {
     return fail('INVALID_TOTAL', 'Order total must be greater than zero');
   }
@@ -308,6 +334,8 @@ async function resolveCart(rawItems, opts = {}) {
 module.exports = {
   resolveCart,
   resolveUnitPriceCents,
+  resolveTaxCode,
+  TAX_CODE_RE,
   PRICE_SYMBOL_CENTS,
   ALLOWED_GENDERS,
   LIMITS,

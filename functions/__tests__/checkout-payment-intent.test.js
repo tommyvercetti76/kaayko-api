@@ -402,6 +402,34 @@ describe('Checkout — Firestore contract for the webhook', () => {
     // Legacy aliases still populated for existing readers
     expect(doc.totalAmount).toBe(8948);
     expect(doc.totalAmountFormatted).toBe('$89.48');
+
+    // Sales tax placeholders: the address is unknown at creation, so tax is
+    // zero and total == subtotal until POST /createPaymentIntent/tax runs.
+    expect(doc.taxCents).toBe(0);
+    expect(doc.totalCents).toBe(doc.subtotalCents);
+    expect(doc.taxStatus).toBe('not_calculated');
+    expect(doc.taxCalculationId).toBeNull();
+  });
+
+  test('a product taxCode is carried onto the stored line item; absent codes add no key', async () => {
+    seedProduct('taxed-1', { actualPrice: 10, taxCode: 'txcd_99999999' });
+    seedProduct('taxed-2', { actualPrice: 10, taxCode: 'not-a-code' });
+    seedProduct('taxed-3', { actualPrice: 10 });
+    const app = buildHandlerApp();
+
+    const res = await post(app, {
+      items: [
+        { productId: 'taxed-1', size: 'M' },
+        { productId: 'taxed-2', size: 'M' },
+        { productId: 'taxed-3', size: 'M' }
+      ]
+    });
+
+    expect(res.status).toBe(200);
+    const doc = admin._mocks.docData['payment_intents/pi_test_123'];
+    expect(doc.items[0].taxCode).toBe('txcd_99999999');
+    expect(Object.keys(doc.items[1])).not.toContain('taxCode');
+    expect(Object.keys(doc.items[2])).not.toContain('taxCode');
   });
 
   test('the document is written before the client secret is returned', async () => {
@@ -496,6 +524,23 @@ describe('Checkout — Stripe call hygiene', () => {
     await post(app, { items: [{ productId: 'stable-2', size: 'M' }] });
 
     expect(mockStripeCreate.mock.calls[0][0].metadata.timestamp).toBeUndefined();
+  });
+
+  // Sales tax is added to the PaymentIntent later (POST /createPaymentIntent/tax).
+  // The derived idempotency key must therefore depend on the cart alone: the
+  // same cart from the same client yields the same key whatever happened to a
+  // previous intent's tax, and the PaymentIntent is always created pre-tax.
+  test('the derived idempotency key is stable for the same cart and client', async () => {
+    seedProduct('stable-3', { actualPrice: 39.99 });
+    const app = buildHandlerApp();
+
+    await post(app, { items: [{ productId: 'stable-3', size: 'M' }] }, { 'X-Forwarded-For': '198.51.100.42' });
+    await post(app, { items: [{ productId: 'stable-3', size: 'M' }] }, { 'X-Forwarded-For': '198.51.100.42' });
+
+    const [first, second] = mockStripeCreate.mock.calls.map(c => c[1].idempotencyKey);
+    expect(first).toBe(second);
+    expect(mockStripeCreate.mock.calls[0][0].amount).toBe(3999);
+    expect(mockStripeCreate.mock.calls[0][0].metadata.taxCalculationId).toBeUndefined();
   });
 });
 

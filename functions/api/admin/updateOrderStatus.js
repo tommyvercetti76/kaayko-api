@@ -15,7 +15,12 @@
  *     webhook uses (see api/email/render.js).
  *
  * NOTE ON DELIVERY: the email is queued into the Firestore `mail` collection
- * and is only really sent if the `firestore-send-email` extension is installed.
+ * and delivered by the in-repo `mailSender` trigger
+ * (functions/triggers/mailSender.js) over SMTP — see
+ * docs/STRIPE_EMAIL_SETUP_GUIDE.md for the one secret it needs.
+ *
+ * A delay notice (FTC Mail Order Rule) is a separate endpoint:
+ * POST /admin/orders/delay-notice in ./orderNotices.js.
  */
 
 const admin = require('firebase-admin');

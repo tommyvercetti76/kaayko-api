@@ -10,6 +10,11 @@
  *   4. Queue the customer + admin emails EXACTLY once per payment intent.
  *   5. Fail loudly (5xx) on transient errors so Stripe retries; return 2xx for
  *      events we intentionally ignore and for permanent, non-retryable errors.
+ *   6. Keep Firestore honest after the money moves back: `charge.refunded`
+ *      (full or partial) and `charge.dispute.created/closed` update the
+ *      payment intent and every line item, append statusHistory and alert the
+ *      owner — otherwise a refunded or charged-back order keeps claiming to
+ *      be paid. The Stripe endpoint must subscribe to those events.
  *
  * REVENUE MODEL (important): each `orders` doc carries only its OWN money
  * (`unitPriceCents`, `quantity`, `lineTotalCents`). The order-level total lives
@@ -20,6 +25,7 @@
 const admin = require('firebase-admin');
 const { renderTemplate, escapeHtml, renderEmail, formatMoney, queueMailOnce } = require('../email/render');
 const { resolveNotifyEmail } = require('../email/notifyAddress');
+const { recordTaxTransaction, reverseTaxTransaction } = require('./tax');
 
 // ─── Stripe client ─────────────────────────────────────────────
 // Firebase secrets are delivered with trailing newlines, so every read of a
@@ -106,6 +112,21 @@ async function stripeWebhook(req, res) {
 
       case 'payment_intent.payment_failed': {
         const result = await handlePaymentFailure(event.data.object, event);
+        return res.json({ received: true, ...result });
+      }
+
+      case 'charge.refunded': {
+        const result = await handleChargeRefunded(event.data.object, event);
+        return res.json({ received: true, ...result });
+      }
+
+      case 'charge.dispute.created': {
+        const result = await handleDisputeCreated(event.data.object, event);
+        return res.json({ received: true, ...result });
+      }
+
+      case 'charge.dispute.closed': {
+        const result = await handleDisputeClosed(event.data.object, event);
         return res.json({ received: true, ...result });
       }
 
@@ -401,11 +422,15 @@ async function handlePaymentSuccess(paymentIntent, event) {
   const nowIso = new Date().toISOString();
   const customerEmail = resolveCustomerEmail(paymentIntent, ctx.piDoc);
   const shipping = await resolveShipping(paymentIntent, ctx.piDoc);
+  // Stored now so a later refund or dispute (which arrive as Charge objects)
+  // can be matched to this order without a Stripe lookup.
+  const chargeId = resolveChargeId(paymentIntent);
 
   // 1. Update the payment intent record (order-level money lives HERE, once).
   //    set(merge) rather than update() so a missing doc does not throw NOT_FOUND.
   await db.collection('payment_intents').doc(paymentIntent.id).set({
     paymentIntentId: paymentIntent.id,
+    chargeId,
     status: 'succeeded',
     paymentStatus: 'succeeded',
     fulfillmentStatus: 'processing',
@@ -434,11 +459,14 @@ async function handlePaymentSuccess(paymentIntent, event) {
   //    that would double-count revenue across the collection.
   const sharedFields = {
     parentOrderId: paymentIntent.id,
+    chargeId,
     currency: ctx.currency,
 
     orderStatus: 'pending',          // pending → processing → shipped → delivered → returned
     fulfillmentStatus: 'processing', // processing → ready_to_ship → shipped → delivered
-    paymentStatus: 'paid',           // paid → refunded → partially_refunded
+    paymentStatus: 'paid',           // paid → refunded | partially_refunded | disputed | dispute_lost
+    refundedCents: 0,                // per-item share of any later refund (see allocateRefund)
+    refundedAt: null,
 
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -501,7 +529,39 @@ async function handlePaymentSuccess(paymentIntent, event) {
   await batch.commit();
   console.log(`✅ Wrote ${ctx.items.length} order documents for ${paymentIntent.id} (items from ${ctx.source})`);
 
-  // 4. Emails — exactly once per payment intent.
+  // 4. File the tax transaction with Stripe. Stripe Tax only remits what has
+  //    been *recorded*; a calculation alone is not a filing. Deliberately
+  //    before the emails and outside their try/catch: if this throws we want
+  //    Stripe to redeliver the event rather than quietly under-report tax.
+  let taxTransactionId = null;
+  try {
+    taxTransactionId = await recordTaxTransaction(paymentIntent);
+    if (taxTransactionId) console.log(`🧾 Tax transaction ${taxTransactionId} filed for ${paymentIntent.id}`);
+  } catch (err) {
+    if (err && err.code === 'TAX_AMOUNT_MISMATCH') {
+      // The charged amount does not match what tax was calculated on. Filing
+      // it would be wrong; redelivering would not help. Record and alert.
+      console.error(`❌ Tax amount mismatch on ${paymentIntent.id} — not filed:`, err.message);
+      await db.collection('payment_intents').doc(paymentIntent.id)
+        .set({ taxStatus: 'mismatch', taxError: err.message }, { merge: true });
+      await notifyOwner(db, `${paymentIntent.id}_tax_mismatch`, {
+        subject: '🧾 Sales tax NOT filed - Kaayko Store',
+        alertTitle: '🧾 An order was charged but its tax was not filed',
+        alertText: 'The amount charged does not match the amount sales tax was calculated on, so the tax transaction was not filed with Stripe. The order itself is fine and shippable. File or correct this one by hand in the Stripe dashboard before your next return.',
+        rows: [
+          { label: 'Payment Intent', value: paymentIntent.id },
+          { label: 'Charged', value: formatMoney(paymentIntent.amount, paymentIntent.currency || 'usd') },
+          { label: 'Detail', value: err.message }
+        ],
+        stripeUrl: `https://dashboard.stripe.com/payments/${paymentIntent.id}`,
+        stripeLabel: 'Open the payment in Stripe'
+      }, paymentIntent).catch(() => {});
+    } else {
+      throw err;   // transient — let Stripe retry the whole event
+    }
+  }
+
+  // 5. Emails — exactly once per payment intent.
   const emailsSent = await sendOrderConfirmationEmails(db, paymentIntent, ctx, customerEmail, shipping);
 
   await markEventProcessed(db, event, { paymentIntentId: paymentIntent.id, itemCount: ctx.items.length });
@@ -561,6 +621,432 @@ async function handlePaymentFailure(paymentIntent, event) {
 
   console.log(`⚠️  Payment failed for: ${paymentIntent.id}`);
   return { failed: true, ownerNotified: notified };
+}
+
+// ─── Refunds & disputes ────────────────────────────────────────
+
+function idOf(value) {
+  if (typeof value === 'string' && value) return value;
+  if (value && typeof value === 'object' && typeof value.id === 'string') return value.id;
+  return null;
+}
+
+/** The charge behind a PaymentIntent: expanded object, bare id, or the legacy charges list. */
+function resolveChargeId(paymentIntent) {
+  return idOf(paymentIntent?.latest_charge) || idOf(paymentIntent?.charges?.data?.[0]) || null;
+}
+
+function unixToIso(seconds, fallback = new Date()) {
+  const n = Number(seconds);
+  return Number.isFinite(n) && n > 0 ? new Date(n * 1000).toISOString() : fallback.toISOString();
+}
+
+function dashboardUrl(event, path) {
+  return `https://dashboard.stripe.com/${event?.livemode ? '' : 'test/'}${path}`;
+}
+
+function hasShipped(status) {
+  return ['shipped', 'delivered', 'returned'].includes(status);
+}
+
+/**
+ * A Charge or Dispute names its PaymentIntent directly (`payment_intent`).
+ * When it does not (very old charges), the `chargeId` stored on
+ * payment_intents at payment_intent.succeeded time avoids a Stripe round-trip;
+ * asking Stripe for the charge is the last resort.
+ */
+async function resolvePaymentIntentId(db, object) {
+  const direct = idOf(object?.payment_intent);
+  if (direct) return direct;
+
+  const chargeId = object?.object === 'charge' ? idOf(object) : idOf(object?.charge);
+  if (chargeId) {
+    const snap = await db.collection('payment_intents').where('chargeId', '==', chargeId).limit(1).get();
+    if (!snap.empty) return snap.docs[0].id;
+
+    try {
+      const stripeClient = getStripe();
+      if (typeof stripeClient?.charges?.retrieve === 'function') {
+        const charge = await stripeClient.charges.retrieve(chargeId);
+        const fromStripe = idOf(charge?.payment_intent);
+        if (fromStripe) return fromStripe;
+      }
+    } catch (err) {
+      console.warn(`⚠️  Could not read charge ${chargeId} from Stripe: ${err.message}`);
+    }
+  }
+
+  throw new PermanentWebhookError(
+    `Cannot resolve a payment intent for ${object?.object || 'object'} ${object?.id || '?'}`
+  );
+}
+
+async function loadOrderItems(db, paymentIntentId) {
+  const snap = await db.collection('orders').where('parentOrderId', '==', paymentIntentId).get();
+  return snap.docs
+    .map(d => ({ id: d.id, ref: d.ref, data: d.data() }))
+    .sort((a, b) => (a.data.itemIndex || 0) - (b.data.itemIndex || 0));
+}
+
+/**
+ * Stripe refunds carry no line items, so per-item `refundedCents` is a
+ * pro-rata share of the order-level refund (largest-remainder rounding, each
+ * item capped at its own line total). The authoritative figure is
+ * payment_intents.refundedCents; the per-item split exists so that
+ * SUM(lineTotalCents − refundedCents) over `orders` is still net revenue.
+ */
+function allocateRefund(lineTotals, refundedCents) {
+  const lines = lineTotals.map(v => Math.max(0, toCents(v) ?? 0));
+  const sum = lines.reduce((a, b) => a + b, 0);
+  if (sum <= 0 || refundedCents <= 0) return lines.map(() => 0);
+  if (refundedCents >= sum) return lines;
+
+  const shares = lines.map(l => Math.floor((refundedCents * l) / sum));
+  let remainder = refundedCents - shares.reduce((a, b) => a + b, 0);
+  for (let i = 0; remainder > 0 && i < shares.length; i++) {
+    const add = Math.min(lines[i] - shares[i], remainder);
+    shares[i] += add;
+    remainder -= add;
+  }
+  return shares;
+}
+
+/**
+ * Apply one order-level patch, one per-item patch and the same statusHistory
+ * entry to the payment intent and every line item of an order. The history
+ * entry's timestamp comes from Stripe, so a redelivery under a new event id
+ * unions to the same entry instead of appending a twin.
+ */
+async function applyOrderPatch(db, paymentIntentId, { items, piPatch, itemPatch, historyEntry }) {
+  const now = admin.firestore.FieldValue.serverTimestamp();
+
+  await db.collection('payment_intents').doc(paymentIntentId).set({
+    paymentIntentId,
+    ...piPatch,
+    updatedAt: now,
+    statusHistory: admin.firestore.FieldValue.arrayUnion(historyEntry)
+  }, { merge: true });
+
+  if (items.length) {
+    const batch = db.batch();
+    items.forEach((item, index) => {
+      const patch = typeof itemPatch === 'function' ? itemPatch(item, index) : itemPatch;
+      batch.update(item.ref, {
+        ...patch,
+        updatedAt: now,
+        statusHistory: admin.firestore.FieldValue.arrayUnion(historyEntry)
+      });
+    });
+    await batch.commit();
+  }
+}
+
+/**
+ * charge.refunded — fires for every refund, full or partial, with the
+ * CUMULATIVE `amount_refunded`. Marks the order (and cancels fulfilment of a
+ * fully refunded order that has not shipped), then tells the owner once per
+ * distinct refunded amount.
+ */
+async function handleChargeRefunded(charge, event) {
+  const db = admin.firestore();
+
+  if (await isEventProcessed(db, event)) {
+    console.log(`↩️  Event ${event.id} already processed — acknowledging duplicate`);
+    return { duplicate: true };
+  }
+
+  const paymentIntentId = await resolvePaymentIntentId(db, charge);
+  const piSnap = await db.collection('payment_intents').doc(paymentIntentId).get();
+  if (!piSnap.exists) {
+    // The Stripe account also takes Kortex subscription payments; their
+    // refunds reach this endpoint too and are not store orders.
+    console.log(`ℹ️  charge.refunded for ${paymentIntentId} is not a store order — ignoring`);
+    await markEventProcessed(db, event, { paymentIntentId, ignored: true });
+    return { ignored: true, reason: 'not_a_store_payment' };
+  }
+  const piDoc = piSnap.data();
+
+  const currency = charge.currency || piDoc.currency || 'usd';
+  const amountCents = toCents(charge.amount) ?? toCents(piDoc.totalCents) ?? 0;
+  const refundedCents = toCents(charge.amount_refunded) ?? 0;
+  const full = charge.refunded === true || (amountCents > 0 && refundedCents >= amountCents);
+  const paymentStatus = full ? 'refunded' : 'partially_refunded';
+  // Since API version 2022-11-15 Stripe no longer expands `refunds` on the
+  // Charge by default, so the list may be absent: the cumulative
+  // `amount_refunded` is still authoritative and the event time stands in for
+  // the refund time. Refund-level details are recorded only when present.
+  const refundsExpanded = Array.isArray(charge.refunds?.data);
+  const refunds = refundsExpanded ? charge.refunds.data : [];
+  const latest = refunds[0] || null; // Stripe lists newest first
+  const reason = latest?.reason || null;
+  const refundedAtIso = unixToIso(latest?.created ?? event.created);
+
+  const historyEntry = {
+    status: paymentStatus,
+    timestamp: refundedAtIso,
+    note: `${full ? 'Full' : 'Partial'} refund: ${formatMoney(refundedCents, currency)} of ` +
+          `${formatMoney(amountCents, currency)}${reason ? ` (${reason})` : ''}`
+  };
+
+  const items = await loadOrderItems(db, paymentIntentId);
+  const shares = allocateRefund(items.map(i => i.data.lineTotalCents), refundedCents);
+  const cancelFulfilment = full && !hasShipped(piDoc.fulfillmentStatus);
+
+  await applyOrderPatch(db, paymentIntentId, {
+    items,
+    historyEntry,
+    piPatch: {
+      chargeId: charge.id || piDoc.chargeId || null,
+      paymentStatus,
+      refundedCents,
+      refundedAt: admin.firestore.FieldValue.serverTimestamp(),
+      ...(refundsExpanded && { refundCount: refunds.length }),
+      ...(latest && { lastRefundId: latest.id || null, refundReason: reason }),
+      // A fully refunded order that has not left the building must not ship.
+      ...(cancelFulfilment && {
+        fulfillmentStatus: 'cancelled',
+        cancelledAt: admin.firestore.FieldValue.serverTimestamp()
+      })
+    },
+    itemPatch: (item, index) => ({
+      chargeId: charge.id || item.data.chargeId || null,
+      paymentStatus,
+      refundedCents: shares[index],
+      refundedAt: refundedAtIso,
+      ...(full && !hasShipped(item.data.orderStatus) && {
+        orderStatus: 'cancelled',
+        fulfillmentStatus: 'cancelled',
+        cancelledAt: refundedAtIso
+      })
+    })
+  });
+
+  // Money going back has to go back in the tax ledger too. Stripe Tax remits
+  // what was recorded, so a refund without a reversal leaves the shop owing
+  // tax on a sale that no longer exists. Never fail the webhook over it — the
+  // refund itself already happened at Stripe — but make the gap loud.
+  try {
+    const taxCents = Number(piDoc.taxCents) || 0;
+    if (taxCents > 0) {
+      const subtotal = Number(piDoc.subtotalCents) || 0;
+      const total = Number(piDoc.totalCents) || (subtotal + taxCents);
+      // Refunds carry no line items, so split the refund the same way the
+      // order was: the tax share of what came back.
+      const taxBack = full
+        ? taxCents
+        : (total > 0 ? Math.round(refundedCents * (taxCents / total)) : 0);
+      const reversalId = await reverseTaxTransaction(paymentIntentId, {
+        taxCents: taxBack, full, refundedCents
+      });
+      if (reversalId) console.log(`🧾 Tax reversal ${reversalId} filed for ${paymentIntentId}`);
+    }
+  } catch (err) {
+    console.error(`❌ Tax reversal failed for ${paymentIntentId}:`, err.message);
+    await db.collection('payment_intents').doc(paymentIntentId)
+      .set({ taxStatus: 'reversal_failed', taxError: err.message }, { merge: true })
+      .catch(() => {});
+    await notifyOwner(db, `${paymentIntentId}_tax_reversal_failed_${refundedCents}`, {
+      subject: '🧾 Sales tax NOT reversed - Kaayko Store',
+      alertTitle: '🧾 A refund went out but its sales tax was not reversed',
+      alertText: 'The buyer has their money back. The tax on that sale is still recorded with Stripe Tax, so unless it is reversed by hand you will remit tax you no longer owe. Reverse this transaction in the Stripe dashboard before your next filing.',
+      rows: [
+        { label: 'Payment Intent', value: paymentIntentId },
+        { label: 'Refunded', value: formatMoney(refundedCents, charge.currency || 'usd') },
+        { label: 'Detail', value: err.message }
+      ],
+      stripeUrl: `https://dashboard.stripe.com/payments/${paymentIntentId}`,
+      stripeLabel: 'Open the payment in Stripe'
+    }, { id: paymentIntentId }).catch(() => {});
+  }
+
+  const notified = await notifyOwner(db, `${paymentIntentId}_refund_${refundedCents}`, {
+    subject: full ? '↩️ Order refunded - Kaayko Store' : '↩️ Partial refund - Kaayko Store',
+    alertTitle: full ? '↩️ An order was refunded in full' : '↩️ An order was partially refunded',
+    alertText: full
+      ? (cancelFulfilment
+        ? 'Stripe reports this charge fully refunded. The order is marked refunded and its unshipped items are cancelled — do not ship it.'
+        : 'Stripe reports this charge fully refunded. The order had already shipped, so it is marked refunded but not cancelled; mark it returned when the goods come back.')
+      : 'Stripe reports a partial refund on this charge. The order stays open; the refunded amount is recorded on the order record.',
+    rows: [
+      { label: 'Order', value: paymentIntentId },
+      { label: 'Charge', value: charge.id || '—' },
+      { label: 'Refunded', value: `${formatMoney(refundedCents, currency)} of ${formatMoney(amountCents, currency)}` },
+      { label: 'Reason', value: reason || '—' },
+      { label: 'Customer Email', value: piDoc.customerEmail || '—' },
+      { label: 'When', value: formatTimestamp(new Date(refundedAtIso)) }
+    ],
+    stripeUrl: dashboardUrl(event, `payments/${paymentIntentId}`),
+    stripeLabel: 'View in Stripe Dashboard →'
+  }, { id: paymentIntentId, metadata: charge.metadata || {} });
+
+  await markEventProcessed(db, event, { paymentIntentId, paymentStatus, refundedCents });
+
+  console.log(`↩️  ${full ? 'Full' : 'Partial'} refund recorded for ${paymentIntentId}: ${refundedCents} cents`);
+  return { refunded: true, paymentIntentId, paymentStatus, refundedCents, items: items.length, ownerNotified: notified };
+}
+
+/**
+ * charge.dispute.created — a chargeback. The funds are already withheld;
+ * what the owner needs is the deadline and a warning not to ship.
+ */
+async function handleDisputeCreated(dispute, event) {
+  const db = admin.firestore();
+
+  if (await isEventProcessed(db, event)) {
+    console.log(`↩️  Event ${event.id} already processed — acknowledging duplicate`);
+    return { duplicate: true };
+  }
+
+  const paymentIntentId = await resolvePaymentIntentId(db, dispute);
+  const piSnap = await db.collection('payment_intents').doc(paymentIntentId).get();
+  const piDoc = piSnap.exists ? piSnap.data() : null;
+
+  const currency = dispute.currency || piDoc?.currency || 'usd';
+  const reason = dispute.reason || 'unknown';
+  const chargeId = idOf(dispute.charge);
+  const deadlineIso = dispute.evidence_details?.due_by ? unixToIso(dispute.evidence_details.due_by) : null;
+  const openedIso = unixToIso(dispute.created ?? event.created);
+
+  const historyEntry = {
+    status: 'disputed',
+    timestamp: openedIso,
+    note: `Dispute ${dispute.id} opened (${reason})${deadlineIso ? `; evidence due ${deadlineIso.slice(0, 10)}` : ''}`
+  };
+
+  let items = [];
+  if (piDoc) {
+    items = await loadOrderItems(db, paymentIntentId);
+    await applyOrderPatch(db, paymentIntentId, {
+      items,
+      historyEntry,
+      piPatch: {
+        ...(chargeId && { chargeId }),
+        paymentStatus: 'disputed',
+        disputeId: dispute.id,
+        disputeReason: reason,
+        disputeStatus: dispute.status || 'needs_response',
+        disputeAmountCents: toCents(dispute.amount),
+        disputeDeadline: deadlineIso,
+        disputedAt: admin.firestore.FieldValue.serverTimestamp()
+      },
+      itemPatch: {
+        paymentStatus: 'disputed',
+        disputeId: dispute.id,
+        disputeReason: reason,
+        disputeDeadline: deadlineIso,
+        disputedAt: openedIso
+      }
+    });
+  } else {
+    console.warn(`⚠️  Dispute ${dispute.id} references ${paymentIntentId}, which is not a store order — alerting only`);
+  }
+
+  const notified = await notifyOwner(db, `${paymentIntentId}_dispute_${dispute.id}`, {
+    subject: '🚨 Chargeback opened - Kaayko Store',
+    alertTitle: '🚨 A customer has disputed a payment',
+    alertText: 'The card issuer has opened a dispute and the funds are on hold. Respond with evidence in the Stripe dashboard before the deadline below or the dispute is lost by default. The order is marked disputed — do not ship anything that has not already left until this is resolved.',
+    rows: [
+      { label: 'Order', value: paymentIntentId },
+      { label: 'Dispute', value: dispute.id },
+      { label: 'Amount', value: formatMoney(toCents(dispute.amount) ?? 0, currency) },
+      { label: 'Reason', value: reason },
+      { label: 'Status', value: dispute.status || '—' },
+      { label: 'Respond By', value: deadlineIso ? formatTimestamp(new Date(deadlineIso)) : 'Not stated' },
+      { label: 'Customer Email', value: piDoc?.customerEmail || '—' },
+      { label: 'Store Order', value: piDoc ? 'Yes' : 'No — not a store order' }
+    ],
+    stripeUrl: dashboardUrl(event, `disputes/${dispute.id}`),
+    stripeLabel: 'Respond in Stripe →'
+  }, { id: paymentIntentId, metadata: {} });
+
+  await markEventProcessed(db, event, { paymentIntentId, disputeId: dispute.id });
+
+  console.log(`🚨 Dispute ${dispute.id} recorded for ${paymentIntentId} (${reason})`);
+  return { disputed: true, paymentIntentId, disputeId: dispute.id, orderFound: !!piDoc, items: items.length, ownerNotified: notified };
+}
+
+// What a closed dispute means for the money. `won` and `warning_closed` (an
+// inquiry that never became a chargeback) restore the paid state.
+const DISPUTE_OUTCOME_STATUS = {
+  won:             { pi: 'succeeded',    item: 'paid' },
+  warning_closed:  { pi: 'succeeded',    item: 'paid' },
+  lost:            { pi: 'dispute_lost', item: 'dispute_lost' },
+  charge_refunded: { pi: 'refunded',     item: 'refunded' }
+};
+
+/** charge.dispute.closed — record the outcome and restore or finalise the payment state. */
+async function handleDisputeClosed(dispute, event) {
+  const db = admin.firestore();
+
+  if (await isEventProcessed(db, event)) {
+    console.log(`↩️  Event ${event.id} already processed — acknowledging duplicate`);
+    return { duplicate: true };
+  }
+
+  const paymentIntentId = await resolvePaymentIntentId(db, dispute);
+  const piSnap = await db.collection('payment_intents').doc(paymentIntentId).get();
+  const piDoc = piSnap.exists ? piSnap.data() : null;
+
+  const currency = dispute.currency || piDoc?.currency || 'usd';
+  const outcome = dispute.status || 'closed';
+  const mapped = DISPUTE_OUTCOME_STATUS[outcome] || { pi: 'disputed', item: 'disputed' };
+  const closedIso = unixToIso(event.created);
+
+  const historyEntry = {
+    status: `dispute_${outcome}`,
+    timestamp: closedIso,
+    note: `Dispute ${dispute.id} closed: ${outcome}`
+  };
+
+  let items = [];
+  if (piDoc) {
+    items = await loadOrderItems(db, paymentIntentId);
+    await applyOrderPatch(db, paymentIntentId, {
+      items,
+      historyEntry,
+      piPatch: {
+        paymentStatus: mapped.pi,
+        disputeId: dispute.id,
+        disputeStatus: outcome,
+        disputeOutcome: outcome,
+        disputeClosedAt: admin.firestore.FieldValue.serverTimestamp(),
+        ...(outcome === 'lost' && { disputeLostCents: toCents(dispute.amount) })
+      },
+      itemPatch: {
+        paymentStatus: mapped.item,
+        disputeId: dispute.id,
+        disputeStatus: outcome,
+        disputeOutcome: outcome,
+        disputeClosedAt: closedIso
+      }
+    });
+  }
+
+  const lost = outcome === 'lost';
+  const notified = await notifyOwner(db, `${paymentIntentId}_dispute_${dispute.id}_closed`, {
+    subject: lost ? '🚨 Chargeback LOST - Kaayko Store' : `✅ Chargeback closed (${outcome}) - Kaayko Store`,
+    alertTitle: lost ? '🚨 A dispute was lost' : `✅ A dispute was closed: ${outcome}`,
+    alertText: lost
+      ? 'The card issuer sided with the customer. The disputed amount plus the dispute fee has been taken from the Stripe balance; the order is marked dispute_lost. If it has not shipped, do not ship it.'
+      : outcome === 'charge_refunded'
+        ? 'The dispute closed because the charge was refunded. The order is marked refunded.'
+        : 'The dispute is closed and the funds are back in the Stripe balance. The order is marked paid again.',
+    rows: [
+      { label: 'Order', value: paymentIntentId },
+      { label: 'Dispute', value: dispute.id },
+      { label: 'Outcome', value: outcome },
+      { label: 'Amount', value: formatMoney(toCents(dispute.amount) ?? 0, currency) },
+      { label: 'Customer Email', value: piDoc?.customerEmail || '—' },
+      { label: 'When', value: formatTimestamp(new Date(closedIso)) }
+    ],
+    stripeUrl: dashboardUrl(event, `disputes/${dispute.id}`),
+    stripeLabel: 'View in Stripe →'
+  }, { id: paymentIntentId, metadata: {} });
+
+  await markEventProcessed(db, event, { paymentIntentId, disputeId: dispute.id, outcome });
+
+  console.log(`${lost ? '🚨' : '✅'} Dispute ${dispute.id} closed for ${paymentIntentId}: ${outcome}`);
+  return { disputeClosed: true, paymentIntentId, disputeId: dispute.id, outcome, paymentStatus: mapped.item, orderFound: !!piDoc, items: items.length, ownerNotified: notified };
 }
 
 // ─── View models ───────────────────────────────────────────────
@@ -728,3 +1214,5 @@ module.exports.normalizeItem = normalizeItem;
 module.exports.PermanentWebhookError = PermanentWebhookError;
 module.exports.resolveShipping = resolveShipping;
 module.exports.buildShipToView = buildShipToView;
+module.exports.resolveChargeId = resolveChargeId;
+module.exports.allocateRefund = allocateRefund;

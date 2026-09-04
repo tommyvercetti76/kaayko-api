@@ -185,9 +185,10 @@
     
     <div class="message">
       <strong>📦 What's Next?</strong><br><br>
-      Your order is being processed and will ship shortly. You'll receive a shipping confirmation email with tracking information once your package is on the way.
+      <strong>{{shipTimeText}}</strong><br>
+      Every piece is made when you order it, which is why it takes a few days. You'll receive a shipping confirmation email with tracking information the moment your package is on the way. If anything changes that timing, we'll email you the new date and the choice to keep your order or cancel it for a full refund.
       <br><br>
-      <strong>Questions?</strong> Reply to this email or contact us at <a href="mailto:orders@kaayko.com" style="color: #ffd700;">orders@kaayko.com</a>
+      <strong>Questions?</strong> Reply to this email — a person reads it — or write to <a href="mailto:{{supportEmail}}" style="color: #ffd700;">{{supportEmail}}</a>
     </div>
     
     <div class="footer">
@@ -196,10 +197,11 @@
       <p style="margin-top: 20px;">
         <a href="https://kaayko.com">Visit Our Store</a> | 
         <a href="https://kaayko.com/paddlingout.html">Check Conditions</a> | 
-        <a href="https://kaayko.com/about.html">About Us</a>
+        <a href="https://kaayko.com/about.html">About Us</a> |
+        <a href="{{returnsUrl}}">Returns Policy</a>
       </p>
       <p style="margin-top: 15px; font-size: 12px; color: #bbb;">
-        This is an automated message. Please do not reply directly to this email.
+        {{returnsWindowText}} on every order. Replies to this email go straight to us.
       </p>
     </div>
   </div>

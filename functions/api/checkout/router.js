@@ -14,6 +14,7 @@ const router = express.Router();
 const rateLimit = require('../../middleware/rateLimit');
 const createPaymentIntent = require('./createPaymentIntent');
 const updatePaymentIntentEmail = require('./updatePaymentIntentEmail');
+const { applyTaxHandler } = require('./tax');
 const stripeWebhook = require('./stripeWebhook');
 
 // Mirrors ADMIN_ORIGIN_ALLOWLIST in functions/index.js. Checkout is a
@@ -66,6 +67,14 @@ router.options('/', restrictCheckoutOrigin);
 // POST /api/updatePaymentIntentEmail - Update payment intent with email
 router.post('/updateEmail', restrictCheckoutOrigin, checkoutRateLimit, updatePaymentIntentEmail);
 router.options('/updateEmail', restrictCheckoutOrigin);
+
+// POST /api/createPaymentIntent/tax - Calculate sales tax for a complete
+// shipping address and raise the PaymentIntent amount to subtotal + tax.
+// Same origin guard and the SAME rate-limit bucket as intent creation: the
+// budget is shared across the checkout routes, so the storefront must call
+// this only when the Address Element reports `complete`, not on every keystroke.
+router.post('/tax', restrictCheckoutOrigin, checkoutRateLimit, applyTaxHandler);
+router.options('/tax', restrictCheckoutOrigin);
 
 // POST /api/stripeWebhook - Handle Stripe webhook events
 // Note: this needs the raw body, so index.js mounts it ahead of express.json();

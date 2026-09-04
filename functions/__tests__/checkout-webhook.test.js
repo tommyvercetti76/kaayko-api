@@ -123,7 +123,9 @@ describe('Checkout Webhook — signature verification', () => {
 
   test('unknown event type is acknowledged with 200 and ignored', async () => {
     const app = buildWebhookApp();
-    const res = await post(app, { id: 'evt_other', type: 'charge.refunded', data: { object: { id: 'ch_1' } } });
+    // charge.refunded / charge.dispute.* are handled now (see
+    // checkout-refunds-disputes.test.js); use a type nothing listens for.
+    const res = await post(app, { id: 'evt_other', type: 'customer.created', data: { object: { id: 'cus_1' } } });
 
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ received: true, ignored: true });
@@ -202,6 +204,26 @@ describe('Checkout Webhook — order documents', () => {
     expect(pi.status).toBe('succeeded');
     expect(pi.totalCents).toBe(13996);
     expect(pi.itemsSource).toBe('firestore');
+  });
+
+  test('the charge id is stored on the payment intent and every line item for later refund/dispute matching', async () => {
+    seedPaymentIntentDoc();
+    const app = buildWebhookApp();
+
+    await post(app, succeededEvent('evt_charge', basePaymentIntent({ latest_charge: 'ch_abc123' })));
+
+    expect(admin._mocks.docData[`payment_intents/${PI_ID}`].chargeId).toBe('ch_abc123');
+    expect(admin._mocks.docData[`orders/${PI_ID}_item1`].chargeId).toBe('ch_abc123');
+    expect(admin._mocks.docData[`orders/${PI_ID}_item2`].chargeId).toBe('ch_abc123');
+    // Nothing refunded yet, but the field exists so revenue queries can subtract it.
+    expect(admin._mocks.docData[`orders/${PI_ID}_item1`].refundedCents).toBe(0);
+  });
+
+  test('an expanded latest_charge object also yields the charge id', () => {
+    const { resolveChargeId } = require('../api/checkout/stripeWebhook');
+    expect(resolveChargeId({ latest_charge: { id: 'ch_obj', shipping: null } })).toBe('ch_obj');
+    expect(resolveChargeId({ latest_charge: null, charges: { data: [{ id: 'ch_legacy' }] } })).toBe('ch_legacy');
+    expect(resolveChargeId({})).toBeNull();
   });
 
   test('items come from Firestore, not Stripe metadata, when both are present', async () => {

@@ -55,7 +55,7 @@ decoded.kreator === true  // kreator operations
 | `payment_intents` | checkout | Server-priced order record; authoritative line items the webhook reads |
 | `stripe_events` | checkout | Handled Stripe event IDs (webhook duplicate suppression) |
 | `webhook_failures` | checkout | Permanently un-processable webhook deliveries, for triage |
-| `mail` | checkout, email | Outbound mail queue (Firestore Send Email extension) |
+| `mail` | checkout, email | Outbound mail queue. Delivered by the `mailSender` Firestore trigger (`functions/triggers/mailSender.js`) over SMTP — NOT the Firestore Send Email extension, which is not installed. Do not install it alongside: mail would send twice. |
 | `paddlingSpots` | weather | Paddle spot definitions |
 | `public_paddle_ratings` | weather | Public ratings from rate.html (deduped by fingerprint+spot+day) |
 | `rate_limits` | weather | IP-based daily rate limits for public ratings |

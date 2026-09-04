@@ -5,15 +5,23 @@
  * failure alert, shipping confirmation) goes through here so that ONE set of
  * escaping and idempotency rules applies to all of them.
  *
- * DELIVERY: these helpers write to the Firestore `mail` collection, which is
- * only actually delivered if the `firestore-send-email` Firebase Extension is
- * installed on the project. See docs/STRIPE_EMAIL_SETUP_GUIDE.md — if the
- * extension is absent the documents pile up unread and NOTHING is sent.
+ * DELIVERY: these helpers write to the Firestore `mail` collection in the
+ * document shape the `firestore-send-email` extension defined
+ * ({ to, message: { subject, html, text? }, ... }). The extension is NOT
+ * installed; delivery is done in-repo by the `mailSender` Firestore trigger
+ * (functions/triggers/mailSender.js), which sends each new document over SMTP
+ * and writes `delivery.state` back. See docs/STRIPE_EMAIL_SETUP_GUIDE.md.
+ * Never install the extension alongside that trigger — mail would send twice.
+ *
+ * POLICY COPY: renderEmail() merges the constants from ./policy.js (ship time,
+ * returns link, support address) under every template's data, so the FTC
+ * ship-time statement is written once and cannot drift between emails.
  */
 
 const fs = require('fs');
 const path = require('path');
 const admin = require('firebase-admin');
+const { policyTemplateVars } = require('./policy');
 
 const TEMPLATE_DIR = path.join(__dirname, 'templates');
 const templateCache = new Map();
@@ -72,7 +80,12 @@ function loadTemplate(name) {
 }
 
 function renderEmail(templateName, data) {
-  return renderTemplate(loadTemplate(templateName), data);
+  // An `undefined` caller value must not blank a policy constant (the FTC
+  // ship-time line in particular); only a real value overrides one.
+  const defined = Object.fromEntries(
+    Object.entries(data || {}).filter(([, value]) => value !== undefined)
+  );
+  return renderTemplate(loadTemplate(templateName), { ...policyTemplateVars(), ...defined });
 }
 
 function formatMoney(cents, currency = 'usd') {

@@ -122,6 +122,9 @@ apiApp.post("/admin/updateOrderStatus", requireAuth, requireAdmin, require("./ap
 const { getOrder, listOrders } = require("./api/admin/getOrder");
 apiApp.get("/admin/getOrder", requireAuth, requireAdmin, getOrder);
 apiApp.get("/admin/listOrders", requireAuth, requireAdmin, listOrders);
+// FTC Mail Order Rule: a delay past the promised ship date must be notified,
+// with the choice to keep the order or cancel for a refund.
+apiApp.post("/admin/orders/delay-notice", requireAuth, requireAdmin, require("./api/admin/orderNotices").sendDelayNotice);
 
 // 🥗 KALEKUTZ - Voice-first nutrition tracker
 apiApp.use("/kutz", require("./api/kutz/kutzRouter"));
@@ -181,6 +184,17 @@ exports.aggregatePaddleFeedback = aggregatePaddleFeedback;
 
 // Monthly re-validation of static enrichment data (gauges, FCC vintage, tips age)
 exports.enrichmentFreshness = require('./scheduled/enrichmentFreshness').enrichmentFreshness;
+
+// Delivers anything written to the `mail` collection over SMTP. This replaces
+// the Firestore "Send Email" extension, which was never installed — every
+// order email the store had ever "sent" was a document nobody read. Do NOT
+// install that extension alongside this trigger: mail would go out twice.
+exports.mailSender = require('./triggers/mailSender').mailSender;
+
+// Monthly: strip customer contact details from orders past the retention
+// window and delete old mail/event records, so the privacy policy's promise
+// is a job rather than a sentence.
+exports.orderRetention = require('./scheduled/orderRetention').orderRetention;
 
 // KORTEX: Weekly analytics digest — every Monday 9am IST (3:30am UTC)
 const { onSchedule } = require("firebase-functions/v2/scheduler");

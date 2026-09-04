@@ -12,6 +12,11 @@
  * The `payment_intents/{paymentIntentId}` document written here is the source
  * of truth the Stripe webhook reads when it materialises orders; Stripe
  * metadata carries ids and counts only (metadata values cap at 500 chars).
+ *
+ * SALES TAX: the PaymentIntent is created for the SUBTOTAL because no shipping
+ * address exists yet. Once the storefront's Address Element is complete it
+ * calls POST /createPaymentIntent/tax (./tax.js), which raises the amount to
+ * subtotal + tax before the shopper confirms.
  */
 
 const crypto = require('crypto');
@@ -102,9 +107,12 @@ function resolveIdempotencyKey(req, cart) {
 
   // A retry of the same cart from the same client within the bucket window
   // reuses the same Stripe PaymentIntent instead of creating a duplicate.
+  // Only the SUBTOTAL takes part: sales tax is added to the PaymentIntent later
+  // (POST /createPaymentIntent/tax, once the address is known) and must never
+  // change which key a retry of the same cart derives.
   const fingerprint = JSON.stringify({
     c: clientKey,
-    t: cart.totalCents,
+    s: cart.subtotalCents,
     i: cart.items.map(i => [i.productId, i.size, i.gender, i.quantity]),
     w: Math.floor(Date.now() / IDEMPOTENCY_BUCKET_MS)
   });
@@ -202,10 +210,21 @@ async function createPaymentIntent(req, res) {
         gender: item.gender,
         quantity: item.quantity,
         unitPriceCents: item.unitPriceCents,
-        lineTotalCents: item.lineTotalCents
+        lineTotalCents: item.lineTotalCents,
+        // Only present when the product document carries an override; the
+        // tax route applies the apparel default otherwise (see ./tax.js).
+        ...(item.taxCode ? { taxCode: item.taxCode } : {})
       })),
       subtotalCents,
+      // Sales tax is unknown until the shipping address is complete. These
+      // fields ALWAYS exist so every reader sees the same shape; the tax route
+      // rewrites them and the PaymentIntent amount once the address arrives.
+      // `totalCents` is exactly the amount the PaymentIntent was created for
+      // (== subtotal: pricing.js has no shipping line and no tax line).
+      taxCents: 0,
       totalCents,
+      taxStatus: 'not_calculated',      // not_calculated → calculated → recorded (or disabled)
+      taxCalculationId: null,
       currency,
       itemCount: items.length,
       unitCount: totalQuantity,

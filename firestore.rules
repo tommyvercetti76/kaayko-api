@@ -61,6 +61,10 @@ service cloud.firestore {
     match /webhook_failures/{eventId} {
       allow read, write: if false;
     }
+    // Monthly data-retention job's audit trail — API-only.
+    match /retention_runs/{runId} {
+      allow read, write: if false;
+    }
 
     // Outbound mail queue (Firestore Send Email extension) — contains
     // customer addresses and rendered order contents. API-only.
