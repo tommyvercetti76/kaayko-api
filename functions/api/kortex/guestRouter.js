@@ -367,6 +367,20 @@ router.get('/workspace/analytics', guest.requireGuestSession, async (req, res) =
 /**
  * GET /kortex/guest/demo — a read-only session for the sample workspace.
  */
+/**
+ * GET /kortex/guest/demo/samples — three sample reports (light, medium, heavy) for the page footer. Public, cached.
+ */
+router.get('/demo/samples', rateLimiter('publicQr'), async (req, res) => {
+  try {
+    const value = await demo.sampleSummaries();
+    if (!value) return res.status(404).json({ success: false, error: 'The sample workspace is not ready yet.', code: 'DEMO_NOT_READY' });
+    res.set('Cache-Control', 'public, max-age=300');
+    return res.json({ success: true, ...value });
+  } catch (error) {
+    return guestError(res, error);
+  }
+});
+
 router.get('/demo', rateLimiter('guestSession'), async (req, res) => {
   try {
     const issued = await demo.issueDemoSession();

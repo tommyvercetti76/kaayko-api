@@ -327,6 +327,7 @@ async function seedDemo({ nowMs = Date.now() } = {}) {
     summary.links.push({ code: spec.code, title: spec.title, events: events.length, removed, lifetime });
     summary.events += events.length;
   }
+  samplesCache = { at: 0, value: null };
   recordAudit({ actor: { name: 'demo-seed' }, action: 'demo.seeded', tenantId: DEMO_TENANT_ID, extra: { events: summary.events, links: summary.links.length } });
   return { ...summary, tenant: { id: tenant.id, name: tenant.name } };
 }
@@ -349,4 +350,59 @@ async function issueDemoSession() {
   };
 }
 
-module.exports = { DEMO_TENANT_ID, DEMO_LINKS, seedDemo, issueDemoSession, getDemoTenant, generateEvents, hourWeights };
+/** One-line name for the variation a link shows, read off its own settings. */
+function variationName(link) {
+  const d = link.destinations || {};
+  if (link.safety && link.safety.review) return 'Safety review';
+  if (link.schedule && link.schedule.windows && link.schedule.windows.length) return 'Night and day routing';
+  if (d.ios || d.android) return 'Device routing';
+  if (link.limits && link.limits.maxClicks) return 'Scan cap with a fallback';
+  if (link.expiresAt) return 'End date with a fallback';
+  if (link.utm && Object.keys(link.utm).length) return 'Campaign tags';
+  return 'Plain dynamic link';
+}
+
+let samplesCache = { at: 0, value: null };
+const SAMPLES_TTL_MS = 5 * 60 * 1000;
+
+/**
+ * Three sample reports for the footer: the lightest, the median and the
+ * heaviest of the eight by seven-day scans. Public, no session, cached.
+ */
+async function sampleSummaries({ windowDays = 7, nowMs = Date.now() } = {}) {
+  if (samplesCache.value && nowMs - samplesCache.at < SAMPLES_TTL_MS) return samplesCache.value;
+  const tenant = await getDemoTenant();
+  if (!tenant) return null;
+  const { getLinkAnalytics } = require('./linkAnalytics');
+  const { links } = await LinkService.listLinks({ tenantId: DEMO_TENANT_ID, limit: 50 });
+  const rows = [];
+  for (const link of links) {
+    const a = await getLinkAnalytics(link.code, link, { windowDays });
+    const src = Object.fromEntries((a.breakdowns.source || []).map(r => [r.value, r.clicks]));
+    rows.push({
+      code: link.code,
+      title: link.title || link.code,
+      variation: variationName(link),
+      shortUrl: link.shortUrl,
+      qrUrl: `https://kaayko.com/qr/${link.code}.png`,
+      destination: (link.destinations && link.destinations.web) || null,
+      events: a.totals.events,
+      lifetime: link.clickCount || 0,
+      people: a.unique ? a.unique.distinctVisitors : 0,
+      qrShare: a.totals.events ? Math.round(((src.qr || 0) / a.totals.events) * 100) : 0,
+      timeline: a.timeline.slice(-windowDays).map(d => d.clicks)
+    });
+  }
+  rows.sort((x, y) => x.events - y.events);
+  if (!rows.length) return null;
+  const pick = [rows[0], rows[Math.floor(rows.length / 2)], rows[rows.length - 1]];
+  const value = { windowDays, samples: [
+    { tier: 'light', ...pick[0] }, { tier: 'medium', ...pick[1] }, { tier: 'heavy', ...pick[2] }
+  ] };
+  samplesCache = { at: nowMs, value };
+  return value;
+}
+
+function resetSamplesCache() { samplesCache = { at: 0, value: null }; }
+
+module.exports = { DEMO_TENANT_ID, DEMO_LINKS, seedDemo, issueDemoSession, getDemoTenant, generateEvents, hourWeights, sampleSummaries, resetSamplesCache, variationName };

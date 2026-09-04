@@ -131,6 +131,21 @@ describe('Read-only sessions', () => {
     expect(admin._mocks.docData['tenants/' + demo.DEMO_TENANT_ID].enabled).toBe(true);
   }, 60000);
 
+  test('the footer samples are the lightest, the median and the heaviest link, public and cached', async () => {
+    await request(app).post('/kortex/demo/seed').set(...UA).set(...key).send({});
+    demo.resetSamplesCache();
+    const res = await request(app).get('/kortex/guest/demo/samples').set(...UA);
+    expect(res.status).toBe(200);
+    expect(res.body.samples.map(s => s.tier)).toEqual(['light', 'medium', 'heavy']);
+    const [l, m, h] = res.body.samples;
+    expect(l.events).toBeLessThanOrEqual(m.events);
+    expect(m.events).toBeLessThanOrEqual(h.events);
+    expect(h.timeline).toHaveLength(7);
+    expect(h.qrUrl).toMatch(/^https:\/\/kaayko\.com\/qr\/kx-/);
+    expect(typeof h.variation).toBe('string');
+    expect(res.headers['cache-control']).toMatch(/max-age/);
+  }, 60000);
+
   test('without a seeded workspace the demo route says so', async () => {
     const res = await request(app).get('/kortex/guest/demo').set(...UA);
     expect(res.status).toBe(404);
