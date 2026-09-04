@@ -17,7 +17,7 @@
 const crypto = require('crypto');
 const admin = require('firebase-admin');
 const { resolveCart } = require('./pricing');
-const { resolveNotifyEmail } = require('./notifyAddress');
+const { resolveNotifyEmail } = require('../email/notifyAddress');
 
 // Lazy-load Stripe to avoid timeout during function initialization
 let stripe = null;

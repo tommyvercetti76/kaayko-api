@@ -19,7 +19,7 @@
 
 const admin = require('firebase-admin');
 const { renderTemplate, escapeHtml, renderEmail, formatMoney, queueMailOnce } = require('../email/render');
-const { resolveNotifyEmail } = require('./notifyAddress');
+const { resolveNotifyEmail } = require('../email/notifyAddress');
 
 // ─── Stripe client ─────────────────────────────────────────────
 // Firebase secrets are delivered with trailing newlines, so every read of a

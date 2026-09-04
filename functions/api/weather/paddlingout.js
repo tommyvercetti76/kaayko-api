@@ -8,6 +8,7 @@
 // This endpoint reads that collection in a single Firestore read — lightning quick.
 
 const express = require('express');
+const { resolveNotifyEmail } = require('../email/notifyAddress');
 const router  = express.Router();
 const admin   = require('firebase-admin');
 const crypto  = require('crypto');
@@ -615,7 +616,7 @@ async function submitEntryHandler(req, res) {
       const esc = (s) => String(s == null ? '' : s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
       const coords = hasLat ? `${lat}, ${lng}` : 'n/a';
       sendRawEmail({
-        to: 'rohan@kaayko.com',
+        to: resolveNotifyEmail(),
         subject: `New lake submission: ${lakeName}`,
         text:
           `A community paddling spot was submitted and is awaiting review.\n\n` +

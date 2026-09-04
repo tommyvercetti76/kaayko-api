@@ -142,7 +142,7 @@ afterAll(() => {
 // ────────────────────────────────────────────────────────────────
 describe('Owner notification address', () => {
   const { resolveNotifyEmail, DEFAULT_ORDER_NOTIFY_EMAIL } =
-    require('../api/checkout/notifyAddress');
+    require('../api/email/notifyAddress');
 
   test('defaults to the owner address when nothing is configured', () => {
     expect(DEFAULT_ORDER_NOTIFY_EMAIL).toBe('rohanramekar17@gmail.com');
