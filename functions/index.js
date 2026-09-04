@@ -29,7 +29,11 @@ const ADMIN_ORIGIN_ALLOWLIST = new Set([
   "https://kaaykostore.web.app",
   "https://kaaykostore.firebaseapp.com",
 ]);
-const PRIVILEGED_PREFIXES = ["/admin", "/kreators/admin", "/billing", "/campaigns"];
+// /createPaymentIntent is included because it creates real Stripe charges from
+// an unauthenticated request; only the Kaayko storefront has any business
+// calling it from a browser. Stripe's webhook (/createPaymentIntent/webhook)
+// sends no Origin header, so it passes through untouched.
+const PRIVILEGED_PREFIXES = ["/admin", "/kreators/admin", "/billing", "/campaigns", "/createPaymentIntent"];
 
 apiApp.use((req, res, next) => {
   const path = req.url.split("?")[0];
@@ -144,11 +148,20 @@ apiApp.use("/", require("./api/campaigns/campaignPublicResolver"));
 apiApp.use("/", require("./api/kortex/deeplinkRoutes"));
 
 // Export main API function
+// `secrets` is what binds Secret Manager values into the running function's
+// process.env. Without it STRIPE_SECRET_KEY/STRIPE_WEBHOOK_SECRET are simply
+// absent in production and every checkout call fails with
+// "STRIPE_SECRET_KEY not configured" — which is exactly what happened.
+// Set the values once with:
+//   firebase functions:secrets:set STRIPE_SECRET_KEY
+//   firebase functions:secrets:set STRIPE_WEBHOOK_SECRET
+// (Firebase-managed secrets arrive with a trailing newline; consumers .trim().)
 exports.api = onRequest({
   cors: true,
   invoker: "public",
   timeoutSeconds: 300,
-  memory: "512MiB"
+  memory: "512MiB",
+  secrets: ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET"]
 }, apiApp);
 
 // ===========================

@@ -51,6 +51,23 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Stripe webhook bookkeeping — API-only access.
+    // Covered by the catch-all deny at the foot of this file too; stated
+    // explicitly so the payment collections read as one group and a future
+    // change to that catch-all cannot quietly expose them.
+    match /stripe_events/{eventId} {
+      allow read, write: if false;
+    }
+    match /webhook_failures/{eventId} {
+      allow read, write: if false;
+    }
+
+    // Outbound mail queue (Firestore Send Email extension) — contains
+    // customer addresses and rendered order contents. API-only.
+    match /mail/{mailId} {
+      allow read, write: if false;
+    }
+
     // ========================================
     // KREATOR COLLECTIONS
     // ========================================

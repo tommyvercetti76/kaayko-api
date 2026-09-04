@@ -81,6 +81,40 @@
       font-size: 22px;
       color: #ffd700;
     }
+    .line-item {
+      padding: 12px 0;
+      border-bottom: 1px solid #e0e0e0;
+    }
+    .line-item:last-of-type {
+      border-bottom: none;
+    }
+    .line-item-main {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+    }
+    .line-item-title {
+      color: #333;
+      font-weight: 600;
+      font-size: 15px;
+      padding-right: 12px;
+    }
+    .line-item-total {
+      color: #333;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .line-item-meta {
+      color: #777;
+      font-size: 13px;
+      margin-top: 4px;
+    }
+    .total-row {
+      border-top: 2px solid #ffd700;
+      border-bottom: none;
+      margin-top: 10px;
+      padding-top: 15px;
+    }
     .status-success {
       color: #22c55e;
       font-weight: bold;
@@ -148,16 +182,12 @@
         <span class="detail-value">{{customerEmail}}</span>
       </div>
       <div class="detail-row">
-        <span class="detail-label">Product</span>
-        <span class="detail-value">{{productName}}</span>
+        <span class="detail-label">Items</span>
+        <span class="detail-value">{{itemCount}}</span>
       </div>
       <div class="detail-row">
-        <span class="detail-label">Size</span>
-        <span class="detail-value">{{size}}</span>
-      </div>
-      <div class="detail-row">
-        <span class="detail-label">Amount</span>
-        <span class="detail-value amount">${{amount}}</span>
+        <span class="detail-label">Order Total</span>
+        <span class="detail-value amount">{{orderTotal}}</span>
       </div>
       <div class="detail-row">
         <span class="detail-label">Payment Status</span>
@@ -166,6 +196,25 @@
       <div class="detail-row">
         <span class="detail-label">Payment Intent</span>
         <span class="detail-value" style="font-size: 12px; font-family: monospace;">{{paymentIntentId}}</span>
+      </div>
+    </div>
+    
+    <div class="details">
+      <h3>Items to Fulfill</h3>
+      {{#each items}}
+      <div class="line-item">
+        <div class="line-item-main">
+          <span class="line-item-title">{{number}}. {{productTitle}}</span>
+          <span class="line-item-total">{{lineTotal}}</span>
+        </div>
+        <div class="line-item-meta">
+          Gender: {{gender}} &middot; Size: {{size}} &middot; Qty: {{quantity}} &times; {{unitPrice}}
+        </div>
+      </div>
+      {{/each}}
+      <div class="detail-row total-row">
+        <span class="detail-label">Order Total</span>
+        <span class="detail-value amount">{{orderTotal}}</span>
       </div>
     </div>
     

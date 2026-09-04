@@ -51,7 +51,11 @@ decoded.kreator === true  // kreator operations
 | Collection | Module | Description |
 |------------|--------|-------------|
 | `kaaykoproducts` | products | Product catalog |
-| `orders` | checkout, admin | Customer orders |
+| `orders` | checkout, admin | Customer orders — one doc per line item, keyed `{paymentIntentId}_item{n}`; per-item money only (`lineTotalCents`), order total lives on `payment_intents` |
+| `payment_intents` | checkout | Server-priced order record; authoritative line items the webhook reads |
+| `stripe_events` | checkout | Handled Stripe event IDs (webhook duplicate suppression) |
+| `webhook_failures` | checkout | Permanently un-processable webhook deliveries, for triage |
+| `mail` | checkout, email | Outbound mail queue (Firestore Send Email extension) |
 | `paddlingSpots` | weather | Paddle spot definitions |
 | `public_paddle_ratings` | weather | Public ratings from rate.html (deduped by fingerprint+spot+day) |
 | `rate_limits` | weather | IP-based daily rate limits for public ratings |
