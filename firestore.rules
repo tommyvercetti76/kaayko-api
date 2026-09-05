@@ -25,9 +25,13 @@ service cloud.firestore {
       allow read, write: if false;
     }
     
-    // Forecast cache - Public reads, API-only writes
+    // Forecast cache — API-only both ways.
+    // Public read was open so a client could read the cache directly, but no page
+    // in kaayko/src ever did (verified Sept 2026) — forecasts come from the API.
+    // Leaving it open let anyone enumerate the coordinate cache, which maps the
+    // spots we track and how often they are queried.
     match /forecast_cache/{cacheId} {
-      allow read: if true;
+      allow read: if false;
       allow write: if false;
     }
     

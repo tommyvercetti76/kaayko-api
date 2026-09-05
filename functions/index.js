@@ -117,20 +117,20 @@ apiApp.use("/createPaymentIntent", require("./api/checkout/router")); // Stripe 
 apiApp.use("/billing", require("./api/billing/router")); // Subscription management for Kortex
 
 // �👔 ADMIN ORDER MANAGEMENT - PROTECTED WITH AUTH
-const { requireAuth, requireAdmin } = require("./middleware/authMiddleware");
-apiApp.post("/admin/updateOrderStatus", requireAuth, requireAdmin, require("./api/admin/updateOrderStatus"));
+const { requireAuth, requireAdmin, requirePlatformAdmin } = require("./middleware/authMiddleware");
+apiApp.post("/admin/updateOrderStatus", requireAuth, requirePlatformAdmin, require("./api/admin/updateOrderStatus"));
 const { getOrder, listOrders } = require("./api/admin/getOrder");
-apiApp.get("/admin/getOrder", requireAuth, requireAdmin, getOrder);
-apiApp.get("/admin/listOrders", requireAuth, requireAdmin, listOrders);
+apiApp.get("/admin/getOrder", requireAuth, requirePlatformAdmin, getOrder);
+apiApp.get("/admin/listOrders", requireAuth, requirePlatformAdmin, listOrders);
 // FTC Mail Order Rule: a delay past the promised ship date must be notified,
 // with the choice to keep the order or cancel for a refund.
-apiApp.post("/admin/orders/delay-notice", requireAuth, requireAdmin, require("./api/admin/orderNotices").sendDelayNotice);
+apiApp.post("/admin/orders/delay-notice", requireAuth, requirePlatformAdmin, require("./api/admin/orderNotices").sendDelayNotice);
 
 // Store catalogue management. The only authenticated product write path — the
 // kreator router next door can only see documents carrying a kreatorId.
 const { listProducts, updateProduct } = require("./api/admin/products");
-apiApp.get("/admin/products", requireAuth, requireAdmin, listProducts);
-apiApp.patch("/admin/products/:id", requireAuth, requireAdmin, updateProduct);
+apiApp.get("/admin/products", requireAuth, requirePlatformAdmin, listProducts);
+apiApp.patch("/admin/products/:id", requireAuth, requirePlatformAdmin, updateProduct);
 
 // 🥗 KALEKUTZ - Voice-first nutrition tracker
 apiApp.use("/kutz", require("./api/kutz/kutzRouter"));

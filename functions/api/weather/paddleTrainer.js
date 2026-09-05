@@ -1,4 +1,5 @@
 const express = require('express');
+const { rateLimiter } = require('../../middleware/securityMiddleware');
 const router = express.Router();
 const admin = require('firebase-admin');
 const axios = require('axios');
@@ -127,20 +128,40 @@ router.get('/tourist-weather', async (req, res) => {
 });
 
 // POST /paddle-trainer/ratings
-router.post('/ratings', async (req, res) => {
-  const body = req.body;
-  if (!body || !body.rating) return res.status(400).json({ error: 'rating required' });
+//
+// Unauthenticated by design — this is public training feedback. It was, however,
+// `{...req.body}` spread straight into a document at an ATTACKER-CHOSEN id, with
+// no rate limit and no field validation: anyone could overwrite any existing
+// rating, write documents of arbitrary shape and size, and do it in a loop. Now:
+// server-generated id, whitelisted fields, and the standard limiter.
+const RATING_MODES = new Set(['tourist', 'local', 'expert']);
+
+router.post('/ratings', rateLimiter(), async (req, res) => {
+  const body = req.body && typeof req.body === 'object' ? req.body : {};
+
+  const rating = Number(body.rating);
+  if (!Number.isFinite(rating) || rating < 1 || rating > 5) {
+    return res.status(400).json({ error: 'rating must be a number from 1 to 5' });
+  }
+
+  const str = (v, max) => (typeof v === 'string' ? v.trim().slice(0, max) : null);
 
   const record = {
-    ...body,
-    id: body.id || require('crypto').randomUUID(),
-    createdAt: body.createdAt || new Date().toISOString(),
-    source: body.ratingMode || 'tourist',
+    // The id is ours. A client-supplied one let any existing document be
+    // overwritten, since .set() replaces.
+    id: require('crypto').randomUUID(),
+    rating,
+    spotId: str(body.spotId, 120),
+    notes: str(body.notes, 500),
+    conditions: str(body.conditions, 200),
+    source: RATING_MODES.has(body.ratingMode) ? body.ratingMode : 'tourist',
+    // createdAt is the server's, not the caller's.
+    createdAt: new Date().toISOString(),
     savedAt: admin.firestore.FieldValue.serverTimestamp(),
   };
 
   try {
-    await db.collection('paddle_trainer_ratings').doc(record.id).set(record);
+    await db.collection('paddle_trainer_ratings').doc(record.id).create(record);
     return res.json({ record });
   } catch (err) {
     console.error('paddle-trainer ratings POST error:', err.message);

@@ -564,16 +564,12 @@ async function handleRedirect(req, res, code, options = {}) {
             const rk = rkSnap.docs[0].data().key;
             return res.redirect(302, `https://kaayko.com/alumni-report?rk=${encodeURIComponent(rk)}`);
           }
-          // No report key yet — generate one on the fly
-          const { generateReportKey } = require('../alumni/reportKeyService');
-          const { key } = await generateReportKey({
-            linkCode:    code,
-            sourceGroup: linkData.metadata.sourceGroup || null,
-            sourceBatch: String(linkData.metadata.sourceBatch || ''),
-            label:       linkData.title || 'Alumni Campaign',
-            expiresAt:   null,
-          });
-          return res.redirect(302, `https://kaayko.com/alumni-report?rk=${encodeURIComponent(key)}`);
+          // No report key yet. This request is UNAUTHENTICATED — it is a plain
+          // /l/<code> hit — so it must not mint one. Minting here handed a
+          // permanent, non-expiring key to the lead database to anyone who knew
+          // an admin link code. Send them to the console, which mints through
+          // POST /alumni/admin/report-key behind requireAuth + requirePlatformAdmin.
+          return res.redirect(302, 'https://kaayko.com/admin/kortex#/links');
         } catch (adminErr) {
           console.error('[Alumni] Admin redirect failed:', adminErr);
           return res.redirect(302, 'https://kaayko.com/admin/alumni');

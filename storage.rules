@@ -1,0 +1,40 @@
+rules_version = '2';
+
+// Firebase Storage rules for kaaykostore.
+//
+// These rules were previously NOT in version control — the only copy lived in
+// the Firebase console, so nothing reviewed them and nothing could restore them.
+// They are now deployed from this file (see the "storage" block in firebase.json).
+//
+// IMPORTANT: every server-side write goes through the Admin SDK, which bypasses
+// these rules entirely. So "allow write: if false" everywhere is correct and
+// costs the application nothing — the API keeps working. Rules here only govern
+// clients talking straight to Storage, and no Kaayko client does that today.
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // Public product and spot photography. Read-only to the world; written by
+    // Cloud Functions and the store uploader through the Admin SDK.
+    //
+    // NOTE: /images/paddling_out_community/ used to allow UNAUTHENTICATED
+    // create here (any object under 10MB whose client-declared content type
+    // started with "image/"). Nothing ever wrote to that prefix — community
+    // submissions are uploaded by the API to /images/paddling_out/ — so it was
+    // an open, world-writable, world-readable path on this bucket: free hosting
+    // for anyone who found it, billed to us. Removed.
+    match /images/{allPaths=**} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    match /kaaykoStoreTShirtImages/{allPaths=**} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Everything else, including anything added later, is closed by default.
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

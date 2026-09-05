@@ -122,6 +122,23 @@ async function loadProduct(db, id) {
   return { id: query.docs[0].id, data: query.docs[0].data() || {}, viaLegacyField: true };
 }
 
+/**
+ * The legacy `price` tier symbol for a dollar amount — the highest tier at or
+ * below it. Exported so every writer derives it the same way: the Python
+ * uploader, the kreator router and the admin API previously used three
+ * different threshold sets (>=50/35/20 vs the tier table), so the same $25
+ * product got "$$" or "$" depending on who wrote it.
+ * @param {number} dollars
+ * @returns {string} "$" … "$$$$"
+ */
+function priceSymbolFor(dollars) {
+  const cents = Math.round(Number(dollars) * 100);
+  const tiers = Object.entries(PRICE_SYMBOL_CENTS).sort((a, b) => a[1] - b[1]);
+  let symbol = tiers[0][0];
+  for (const [sym, tierCents] of tiers) if (cents >= tierCents) symbol = sym;
+  return symbol;
+}
+
 /** Stripe Tax product tax codes look like "txcd_30011000". */
 const TAX_CODE_RE = /^txcd_\d{6,12}$/;
 
@@ -133,9 +150,41 @@ const TAX_CODE_RE = /^txcd_\d{6,12}$/;
  * @param {object} data Raw Firestore product data.
  * @returns {string|null}
  */
+/**
+ * Stripe Tax codes by product type, used when a document carries no explicit
+ * `taxCode`. No product ever has: nothing in the codebase writes that field, so
+ * every line fell through to tax.js's DEFAULT_TAX_CODE — txcd_30011000,
+ * "Clothing & Footwear". Mugs, magnets, stickers, prints and posters were all
+ * being filed as apparel, which is wrong in the states that exempt clothing but
+ * not general goods (PA, MN, NJ, MA).
+ *
+ * txcd_99999999 is Stripe's "general — tangible goods" code.
+ */
+const TAX_CODE_BY_TYPE = Object.freeze({
+  tshirt:  'txcd_30011000',   // Clothing & Footwear
+  cap:     'txcd_30011000',
+  tote:    'txcd_99999999',   // general tangible goods
+  magnet:  'txcd_99999999',
+  sticker: 'txcd_99999999',
+  mug:     'txcd_99999999',
+  print:   'txcd_99999999',
+  poster:  'txcd_99999999'
+});
+
 function resolveTaxCode(data) {
   const raw = typeof data?.taxCode === 'string' ? data.taxCode.trim() : '';
-  return TAX_CODE_RE.test(raw) ? raw : null;
+  if (TAX_CODE_RE.test(raw)) return raw;
+
+  // Fall back to the product's own type, then its category. Only if neither is
+  // recognised do we let tax.js apply its default.
+  const type = String(data?.productType || '').trim().toLowerCase();
+  if (TAX_CODE_BY_TYPE[type]) return TAX_CODE_BY_TYPE[type];
+
+  const category = String(data?.category || '').trim().toLowerCase();
+  if (category === 'apparel') return 'txcd_30011000';
+  if (category === 'accessories' || category === 'art') return 'txcd_99999999';
+
+  return null;
 }
 
 /** A product is purchasable unless it is explicitly switched off. */
@@ -337,7 +386,9 @@ module.exports = {
   resolveUnitPriceCents,
   resolveTaxCode,
   TAX_CODE_RE,
+  TAX_CODE_BY_TYPE,
   PRICE_SYMBOL_CENTS,
+  priceSymbolFor,
   ALLOWED_GENDERS,
   LIMITS,
   CURRENCY,

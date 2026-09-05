@@ -45,11 +45,47 @@ function generateStoreSlug(businessName) {
 /**
  * Convert price to price symbol for display
  */
+/**
+ * Parse a JSON string array from a multipart field, safely.
+ *
+ * The old code called JSON.parse() straight on the body: a malformed value threw
+ * into the 500 handler, and a well-formed one was written to the shared
+ * catalogue with no type, length or content check at all. Tags land on the
+ * public storefront, so an unvalidated element was a stored-XSS path.
+ *
+ * @returns {{ok: true, value: string[]}|{ok: false, message: string}}
+ */
+function parseStringArray(raw, field, { maxItems = 12, maxLen = 40 } = {}) {
+  if (raw === undefined || raw === null || raw === '') return { ok: true, value: [] };
+  let parsed;
+  if (Array.isArray(raw)) parsed = raw;
+  else {
+    try { parsed = JSON.parse(raw); }
+    catch (_) { return { ok: false, message: `${field} must be a JSON array` }; }
+  }
+  if (!Array.isArray(parsed)) return { ok: false, message: `${field} must be a JSON array` };
+  const value = parsed
+    .map(x => (typeof x === 'string' ? x.trim() : ''))
+    .filter(Boolean);
+  if (value.length > maxItems) return { ok: false, message: `${field}: at most ${maxItems} entries` };
+  if (value.some(x => x.length > maxLen)) return { ok: false, message: `${field}: each entry must be ${maxLen} characters or fewer` };
+  // Belt and braces alongside the escaping fix in kaayko_ui.js: nothing that
+  // could open a tag reaches the catalogue in the first place.
+  if (value.some(x => /[<>]/.test(x))) return { ok: false, message: `${field} cannot contain < or >` };
+  return { ok: true, value };
+}
+
+/** Closed set, matching api/admin/products.js. A free string here silently broke
+ *  the storefront's fit picker, which tests category === 'apparel'. */
+const CATEGORIES = Object.freeze(['apparel', 'accessories', 'art', 'other']);
+const PRODUCT_TYPES = Object.freeze(['tshirt', 'tote', 'magnet', 'print', 'sticker', 'mug', 'cap', 'poster']);
+
+const { priceSymbolFor } = require('../checkout/pricing');
+
+/** Delegates to the one tier rule in pricing.js — this used to be a third,
+ *  divergent threshold set (>=50/35/20). */
 function priceToSymbol(price) {
-  if (price >= 50) return '$$$$';
-  if (price >= 35) return '$$$';
-  if (price >= 20) return '$$';
-  return '$';
+  return priceSymbolFor(price);
 }
 
 /**
@@ -151,12 +187,35 @@ router.post('/', requireKreatorAuth, requireActiveKreator, upload.array('images'
     }
     
     const parsedPrice = parseFloat(price);
-    if (isNaN(parsedPrice) || parsedPrice < 0.99) {
+    if (isNaN(parsedPrice) || parsedPrice < 0.99 || parsedPrice > 500) {
       return res.status(400).json({
         success: false,
         error: 'Bad Request',
-        message: 'Price must be at least $0.99'
+        message: 'Price must be between $0.99 and $500'
       });
+    }
+
+    const normalisedCategory = String(category || '').trim().toLowerCase();
+    if (!CATEGORIES.includes(normalisedCategory)) {
+      return res.status(400).json({
+        success: false, error: 'Bad Request',
+        message: `category must be one of: ${CATEGORIES.join(', ')}`
+      });
+    }
+
+    const requestedType = String(req.body.productType || '').trim().toLowerCase();
+    if (requestedType && !PRODUCT_TYPES.includes(requestedType)) {
+      return res.status(400).json({
+        success: false, error: 'Bad Request',
+        message: `productType must be one of: ${PRODUCT_TYPES.join(', ')}`
+      });
+    }
+
+    const parsedTags   = parseStringArray(tags, 'tags', { maxItems: 10, maxLen: 30 });
+    const parsedSizes  = parseStringArray(availableSizes, 'availableSizes');
+    const parsedColors = parseStringArray(availableColors, 'availableColors');
+    for (const r of [parsedTags, parsedSizes, parsedColors]) {
+      if (!r.ok) return res.status(400).json({ success: false, error: 'Bad Request', message: r.message });
     }
     
     // Generate unique product ID
@@ -171,8 +230,12 @@ router.post('/', requireKreatorAuth, requireActiveKreator, upload.array('images'
       }
     }
     
-    // Generate store slug
-    const storeSlug = generateStoreSlug(req.kreator.businessName || req.kreator.displayName);
+    // Store slug. The kreator uid is folded in because the slug was previously
+    // derived from the business name alone with no uniqueness check — two
+    // kreators trading as "Wild Prints" would have collided into one storefront,
+    // each able to see the other's products under ?store=. Zero kreator products
+    // existed when this changed, so no migration was needed.
+    const storeSlug = `${generateStoreSlug(req.kreator.businessName || req.kreator.displayName)}-${req.kreator.uid.substring(0, 6).toLowerCase()}`;
     
     // Create product document
     const productData = {
@@ -183,15 +246,18 @@ router.post('/', requireKreatorAuth, requireActiveKreator, upload.array('images'
       actualPrice: parsedPrice, // Actual dollar amount
       votes: 0,
       productID,
-      tags: JSON.parse(tags || '[]'),
-      availableColors: JSON.parse(availableColors || '[]'),
-      availableSizes: JSON.parse(availableSizes || '[]'),
+      tags: parsedTags.value,
+      availableColors: parsedColors.value,
+      availableSizes: parsedSizes.value,
+      // Without a productType every kreator product fell into the storefront's
+      // "Other" bucket. Default from the category so it lands somewhere real.
+      productType: requestedType || (normalisedCategory === 'apparel' ? 'tshirt' : 'other'),
       maxQuantity: parseInt(quantity) || 1,
       imgSrc,
       isAvailable: true,
       
       // Category
-      category: category,
+      category: normalisedCategory,
       
       // Seller attribution
       kreatorId: req.kreator.uid,
@@ -329,10 +395,23 @@ router.put('/:id', requireKreatorAuth, requireActiveKreator, upload.array('image
       updates.stockQuantity = parseInt(quantity);
       updates.maxQuantity = parseInt(quantity);
     }
-    if (category) updates.category = category;
-    if (tags) updates.tags = JSON.parse(tags);
-    if (availableSizes) updates.availableSizes = JSON.parse(availableSizes);
-    if (availableColors) updates.availableColors = JSON.parse(availableColors);
+    if (category) {
+      const c = String(category).trim().toLowerCase();
+      if (!CATEGORIES.includes(c)) {
+        return res.status(400).json({ success: false, error: 'Bad Request', message: `category must be one of: ${CATEGORIES.join(', ')}` });
+      }
+      updates.category = c;
+    }
+    for (const [field, raw, opts] of [
+      ['tags', tags, { maxItems: 10, maxLen: 30 }],
+      ['availableSizes', availableSizes, {}],
+      ['availableColors', availableColors, {}]
+    ]) {
+      if (raw === undefined) continue;
+      const r = parseStringArray(raw, field, opts);
+      if (!r.ok) return res.status(400).json({ success: false, error: 'Bad Request', message: r.message });
+      updates[field] = r.value;
+    }
     if (isAvailable !== undefined) updates.isAvailable = isAvailable === 'true' || isAvailable === true;
     
     // Handle new images

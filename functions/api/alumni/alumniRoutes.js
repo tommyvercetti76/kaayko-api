@@ -36,7 +36,7 @@ const {
   adminStats,
 } = require('./alumniService');
 
-const { requireAuth, requireAdmin } = require('../../middleware/authMiddleware');
+const { requireAuth, requirePlatformAdmin } = require('../../middleware/authMiddleware');
 const { secureHeaders, rateLimiter } = require('../../middleware/securityMiddleware');
 const { generateReportKey, validateReportKey } = require('./reportKeyService');
 
@@ -364,6 +364,10 @@ router.get('/report', rateLimiter(), async (req, res) => {
     const allDocs = leadsSnap.docs
       .map(d => ({ id: d.id, ...d.data() }))
       .filter(doc => {
+        // A key is scoped to the campaign it was minted for. sourceGroup and
+        // sourceBatch are frequently null on both sides, so without this line
+        // every key was effectively workspace-wide.
+        if (!isAdminView && keyData.linkCode && doc.linkCode !== keyData.linkCode) return false;
         if (sourceGroup && doc.sourceGroup !== sourceGroup) return false;
         if (sourceBatch && doc.sourceBatch !== String(sourceBatch)) return false;
         if (!doc.linkCode || !enabledAlumniLinkCodes.has(doc.linkCode)) return false;
@@ -485,68 +489,24 @@ router.get('/report', rateLimiter(), async (req, res) => {
 });
 
 // ── POST /alumni/report-key  (link-scoped, no login) ───────────────────────────
-// Creates a report key scoped to the given alumni campaign link.
-// Requires only the linkCode — the person who just created the link has it.
-// This is a capability-token pattern: possessing the linkCode proves creation.
-// Report keys are read-only; no write access is granted.
-
-router.post('/report-key', rateLimiter(), async (req, res) => {
-  try {
-    const linkCode = sanitize(req.body.linkCode || '');
-    if (!linkCode || !/^[a-zA-Z0-9_-]{3,20}$/.test(linkCode)) {
-      return res.status(400).json({ success: false, error: 'linkCode required' });
-    }
-
-    // Verify the link exists and is an alumni campaign
-    const linkDoc = await db.collection('short_links').doc(linkCode).get();
-    if (!linkDoc.exists) {
-      return res.status(404).json({ success: false, error: 'link_not_found' });
-    }
-    const linkData = linkDoc.data();
-    if (linkData.metadata?.campaign !== 'alumni' || (linkData.tenantId || 'kaayko-default') !== 'kaayko-default') {
-      return res.status(403).json({ success: false, error: 'not_alumni_link' });
-    }
-
-    // Idempotent: if a report key already exists for this link, return it
-    const existing = await db.collection('alumni_report_keys')
-      .where('linkCode', '==', linkCode)
-      .limit(1)
-      .get();
-    if (!existing.empty) {
-      const existingData = existing.docs[0].data();
-      const reportUrl = `https://kaayko.com/alumni-report?rk=${encodeURIComponent(existingData.key)}`;
-      return res.json({ success: true, key: existingData.key, reportUrl, existing: true });
-    }
-
-    const sourceGroup = sanitize(linkData.metadata?.sourceGroup || '');
-    const sourceBatch = sanitize(String(linkData.metadata?.sourceBatch || ''));
-    const label       = sanitize(req.body.label || linkData.title || `Alumni Campaign`);
-    const expiresAt   = linkData.expiresAt
-      ? (linkData.expiresAt.toDate ? linkData.expiresAt.toDate() : new Date(linkData.expiresAt))
-      : null;
-
-    const { key } = await generateReportKey({
-      linkCode:    linkCode,
-      sourceGroup: sourceGroup || null,
-      sourceBatch: sourceBatch || null,
-      label:       label.slice(0, 120),
-      expiresAt,
-    });
-
-    const reportUrl = `https://kaayko.com/alumni-report?rk=${encodeURIComponent(key)}`;
-    return res.status(201).json({ success: true, key, reportUrl });
-
-  } catch (err) {
-    console.error('[Alumni] POST /report-key error:', err);
-    return res.status(500).json({ success: false, error: 'server_error' });
-  }
-});
+// REMOVED 5 Sep 2026 — POST /alumni/report-key (unauthenticated).
+//
+// It minted a report key from a linkCode alone, on the reasoning that "possessing
+// the linkCode proves creation". It does not: linkCode is the public short code
+// printed on every poster, QR and forward of the campaign. Anyone holding a
+// campaign link could mint a key — with expiresAt:null whenever the link had no
+// expiry, so it never died and had no revocation path — and read name, email,
+// phone, city and comments for up to 500 leads.
+//
+// The authenticated equivalent below (POST /alumni/admin/report-key) is the only
+// way to mint one now. The single caller, the KORTEX create-link view, already
+// sends a Bearer token through apiFetch.
 
 // ── Admin: POST /alumni/admin/report-key ─────────────────────────────────────
 // Creates a scoped read-only report key. Typically called right after creating
 // an alumni campaign link in the KORTEX UI.
 
-router.post('/admin/report-key', requireAuth, requireAdmin, async (req, res) => {
+router.post('/admin/report-key', requireAuth, requirePlatformAdmin, async (req, res) => {
   try {
     const sourceGroup  = sanitize(req.body.sourceGroup || '');
     const sourceBatch  = sanitize(String(req.body.sourceBatch || ''));
@@ -576,7 +536,7 @@ router.post('/admin/report-key', requireAuth, requireAdmin, async (req, res) => 
 
 // ── Admin: GET /alumni/admin/leads ───────────────────────────────────────────
 
-router.get('/admin/leads', requireAuth, requireAdmin, async (req, res) => {
+router.get('/admin/leads', requireAuth, requirePlatformAdmin, async (req, res) => {
   try {
     const { bucket, limit, startAfter } = req.query;
     const result = await adminListLeads({
@@ -593,7 +553,7 @@ router.get('/admin/leads', requireAuth, requireAdmin, async (req, res) => {
 
 // ── Admin: GET /alumni/admin/stats ───────────────────────────────────────────
 
-router.get('/admin/stats', requireAuth, requireAdmin, async (req, res) => {
+router.get('/admin/stats', requireAuth, requirePlatformAdmin, async (req, res) => {
   try {
     const stats = await adminStats();
     return res.json({ success: true, stats });

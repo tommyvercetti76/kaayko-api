@@ -23,7 +23,7 @@
  */
 
 const admin = require('firebase-admin');
-const { PRICE_SYMBOL_CENTS } = require('../checkout/pricing');
+const { priceSymbolFor } = require('../checkout/pricing');
 
 const COLLECTION = 'kaaykoproducts';
 const AUDIT_COLLECTION = 'product_audit';
@@ -48,23 +48,6 @@ const LIMITS = Object.freeze({
   PRICE_MIN: 1,
   PRICE_MAX: 500
 });
-
-/**
- * The `price` tier symbol is a legacy fallback that checkout uses only when
- * `actualPrice` is missing. We re-derive it from the same table checkout reads
- * so the two can never disagree about which tier a product sits in.
- * @param {number} dollars
- * @returns {string} one of "$" … "$$$$"
- */
-function priceSymbolFor(dollars) {
-  const cents = Math.round(dollars * 100);
-  const tiers = Object.entries(PRICE_SYMBOL_CENTS).sort((a, b) => a[1] - b[1]);
-  let symbol = tiers[0][0];
-  for (const [sym, tierCents] of tiers) {
-    if (cents >= tierCents) symbol = sym;
-  }
-  return symbol;
-}
 
 /* ── Field validators ──────────────────────────────────────────
    Each returns { ok: true, value } or { ok: false, message }. A validator

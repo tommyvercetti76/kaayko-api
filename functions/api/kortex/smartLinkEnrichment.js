@@ -93,7 +93,9 @@ function formatProductMetadata(data, linkId) {
     title: `${data.title || linkId} - $${data.price || '??'}`,
     description: data.description || 'Unique Kaayko apparel - Vote now, pay later',
     imageUrl: (data.imgSrc && data.imgSrc[0]) || null,
-    price: data.price ? `$${data.price}` : null,
+    // `price` is a tier symbol ("$".."$$$$"), NOT a number — `$${data.price}`
+    // rendered "$$$$". actualPrice is the real dollar amount when present.
+    price: typeof data.actualPrice === 'number' ? `$${data.actualPrice.toFixed(2)}` : (data.price || null),
     votes: data.votes || 0,
     type: 'store_product',
     enriched: true
@@ -113,7 +115,11 @@ async function enrichCategoryMetadata(linkId) {
   
   const products = snapshot.docs.map(d => d.data());
   const productCount = products.length;
-  const prices = products.map(p => parseFloat(p.price || 0)).filter(p => p > 0);
+  // Same trap: parseFloat("$$$") is NaN, so this list was always empty and the
+  // "starting at" line never rendered. Only actualPrice is a number.
+  const prices = products
+    .map(p => (typeof p.actualPrice === 'number' ? p.actualPrice : NaN))
+    .filter(n => Number.isFinite(n) && n > 0);
   const minPrice = prices.length > 0 ? Math.min(...prices) : null;
   
   return {

@@ -180,10 +180,16 @@ function parseCoordinate(value) {
   return Number.isFinite(parsed) ? parsed : NaN;
 }
 
+// X-Forwarded-For is `<client>, <proxy>, <gfe>` and ANY client can prepend an
+// arbitrary first entry, so keying a rate limit on `split(',')[0]` let one caller
+// mint unlimited buckets. api/kortex/clientIp.js already resolves the chain
+// right-to-left and skips private ranges; use it rather than a second opinion.
+const { getClientIp: resolveClientIp } = require('../kortex/clientIp');
+
 function getClientIp(req) {
-  return (req.headers['x-forwarded-for'] || '')
-    .split(',')[0]
-    .trim() || req.ip || 'unknown';
+  // A shared 'unknown' bucket is deliberate here: when no public IP can be
+  // established, one restrictive bucket is the safe failure mode for a limiter.
+  return resolveClientIp(req) || 'unknown';
 }
 
 function slugify(value) {
@@ -900,7 +906,7 @@ router.get('/geocode', async (req, res) => {
   const limit = Math.max(1, Math.min(8, parseInt(req.query.limit, 10) || 1));
   if (q.length < 2) return res.json([]);
 
-  const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip;
+  const ip = getClientIp(req);   // resolved chain, not the client-controlled first hop
   if (geocodeRateLimited(ip)) {
     return res.status(429).json([]);
   }

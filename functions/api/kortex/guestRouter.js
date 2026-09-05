@@ -612,6 +612,8 @@ router.post('/claim', rateLimiter('guestClaim'), requireAuth, async (req, res) =
       email: req.user.email || null,
       displayName: req.user.email ? req.user.email.split('@')[0] : req.user.uid,
       role: 'admin',
+
+      scope: 'tenant',   // self-serve upgrade — never a platform admin
       tenantId,
       tenantIds: [tenantId],
       tenantName: name,

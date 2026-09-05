@@ -7,7 +7,7 @@ Frontend context + module map: `/Users/Rohan/Kaayko_v6/kaayko/MODULE-MAP.md`
 - **Runtime:** Node.js Cloud Functions (Firebase)
 - **Framework:** Express.js
 - **Database:** Firestore (Firebase Admin SDK)
-- **Auth:** Firebase Admin SDK — verifies ID tokens, reads custom claims (`admin`, `kreator`)
+- **Auth:** Two separate systems — see "Auth pattern" below. Admin = Firebase ID token + a Firestore role lookup. Kreator = a custom HMAC session token. There are no `admin`/`kreator` boolean custom claims.
 - **Entry point:** `functions/api/index.js` — Express app root
 - **Routing:** All `/api/**` → this function (defined in `kaayko/firebase.json`)
 
@@ -37,14 +37,33 @@ functions/api/
 ```
 
 ## Auth pattern
-```js
-// Verify Firebase token (middleware used across protected routes)
-const token = req.headers.authorization?.split('Bearer ')[1]
-const decoded = await admin.auth().verifyIdToken(token)
 
-// Check custom claims
-decoded.admin === true    // admin operations
-decoded.kreator === true  // kreator operations
+There are **two independent auth systems**. They do not interoperate, and neither
+uses a boolean custom claim. (An earlier version of this file said they did —
+`decoded.admin === true` / `decoded.kreator === true`. No such claims are set or
+read anywhere in the codebase. Do not write code against them.)
+
+**Admin / Kortex** — `functions/middleware/authMiddleware.js`. Never hand-roll it;
+use the exported middleware.
+```js
+// requireAuth: verifies the Firebase ID token, THEN reads the role from
+// Firestore admin_users/{uid}. The role is not in the token.
+apiApp.get("/admin/thing", requireAuth, requireAdmin, handler);
+// req.user = { uid, email, role, permissions }   role ∈ super-admin|admin|editor|viewer
+// requireAdmin passes for super-admin|admin, and also honours an X-Admin-Key
+// header matched against ADMIN_PASSPHRASE / KORTEX_SYNC_KEY.
+```
+The only custom claim ever written is a string `role`, set in
+`api/kortex/provisioning.js` and `api/kortex/guestRouter.js`. It is read by the
+*client* (`kortex.html`) to gate the login redirect — it is not a server-side
+authorization check and must never be treated as one.
+
+**Kreator** — `functions/middleware/kreatorAuthMiddleware.js`. A custom
+HMAC-SHA256 session token verified by `api/kreators/services/kreatorService.js`,
+plus a `kreators/{uid}` document. Not a Firebase ID token.
+```js
+router.put("/products/:id", requireKreatorAuth, requireActiveKreator, handler);
+// req.kreator = { uid, email, businessName, ... }
 ```
 
 ## Firestore collections
@@ -65,9 +84,10 @@ decoded.kreator === true  // kreator operations
 | `tenants` | kortex | Tenant configuration (slug, name, enabled, domains) |
 | `security_alerts` | kortex | Bot/abuse/canary security events |
 | `subscriptions` | billing | Kortex subscriptions |
-| `kreatorApplications` | kreators | Pending applications |
+| `kreator_applications` | kreators | Pending applications (underscored — an earlier version of this table said `kreatorApplications`, which does not exist) |
 | `kreators` | kreators | Active creator accounts |
-| `kreatorProducts` | kreators | Creator-submitted products |
+| `admin_users` | admin, auth | `{uid}` → `role` + `permissions`. This, not a custom claim, is what `requireAuth` reads to authorize an admin |
+| `product_audit` | admin | Append-only log of every catalogue edit: who, when, field, from → to |
 | `users/{uid}/kutz*` | kutz | All nutrition tracking data |
 | `cameras` | cameras | Camera reference data |
 | `lenses` | cameras | Lens reference data |

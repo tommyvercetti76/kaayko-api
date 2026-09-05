@@ -141,6 +141,10 @@ async function provisionSelfServeTenant(params) {
     email: emailLower,
     displayName: name || emailLower.split('@')[0],
     role: 'admin',
+    // Tenant-scoped, NOT platform. This profile is created by an unauthenticated
+    // self-serve signup; requirePlatformAdmin refuses it, which is what keeps
+    // store orders, customer PII and catalogue prices out of reach.
+    scope: 'tenant',
     tenantId,
     tenantIds: [tenantId],
     tenantName: org,

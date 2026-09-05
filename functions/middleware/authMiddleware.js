@@ -73,6 +73,9 @@ async function requireAuth(req, res, next) {
     if (userDoc.exists) {
       req.user.profile = userDoc.data();
       req.user.role = userDoc.data().role || 'viewer';
+      // Platform vs tenant. Self-provisioned Kortex profiles are written with
+      // scope:'tenant' and can never satisfy requirePlatformAdmin.
+      req.user.scope = userDoc.data().scope || null;
       req.user.permissions = userDoc.data().permissions || [];
     } else {
       // User authenticated but not in admin_users collection
@@ -126,7 +129,10 @@ function requireAdmin(req, res, next) {
   const isEmulator = process.env.FUNCTIONS_EMULATOR === 'true';
   const ADMIN_PASSPHRASE = isEmulator
     ? (process.env.ADMIN_PASSPHRASE || 'dev-admin-local-only')
-    : (process.env.ADMIN_PASSPHRASE || process.env.KORTEX_SYNC_KEY);
+    // KORTEX_SYNC_KEY used to be the fallback here, which quietly promoted a
+    // shared sync/HMAC secret into a master admin credential. Admin access now
+    // requires its own secret.
+    : process.env.ADMIN_PASSPHRASE;
   
   if (!ADMIN_PASSPHRASE && !isEmulator) {
     console.error('[SECURITY] ADMIN_PASSPHRASE not configured - admin access disabled');
@@ -288,6 +294,41 @@ function requireVerifiedEmail(req, res, next) {
  * Require the global super-admin role.
  * @middleware - Must be used after requireAuth
  */
+/**
+ * Platform-wide admin. Use this — NOT requireAdmin — for anything that reaches
+ * store orders, customer PII, catalogue prices, or alumni leads.
+ *
+ * WHY THIS EXISTS: `role: 'admin'` is self-serve. POST /kortex/tenants/provision
+ * and the guest-upgrade path both write `role: 'admin'` into admin_users/{uid}
+ * for whoever called them, and sign-up is open Google auth. Kortex means that
+ * role tenant-scoped and filters every query by tenantId, but requireAdmin has
+ * no such notion, so the same role also opened /admin/listOrders (every
+ * customer's email, phone and address) and /admin/products (reprice anything,
+ * then buy it).
+ *
+ * Fails CLOSED: a plain `admin` is refused unless its profile is explicitly
+ * marked `scope: 'platform'`. Self-provisioned profiles are written with
+ * `scope: 'tenant'` and can never satisfy this.
+ */
+function requirePlatformAdmin(req, res, next) {
+  if (!req.user) {
+    return res.status(401).json({ success: false, error: 'Unauthorized', message: 'Authentication required.', code: 'AUTH_REQUIRED' });
+  }
+  // The X-Admin-Key path is a deliberate operator backdoor for internal tooling
+  // and is already a platform-level secret.
+  if (req.user.authMethod === 'admin-key') return next();
+
+  if (req.user.role === 'super-admin') return next();
+  if (req.user.role === 'admin' && req.user.scope === 'platform') return next();
+
+  return res.status(403).json({
+    success: false,
+    error: 'Forbidden',
+    message: 'This endpoint requires a platform administrator.',
+    code: 'PLATFORM_ADMIN_REQUIRED'
+  });
+}
+
 function requireSuperAdmin(req, res, next) {
   if (!req.user) {
     return res.status(401).json({ success: false, error: 'Unauthorized', code: 'AUTH_REQUIRED' });
@@ -360,6 +401,7 @@ function optionalAuthForAdmin(req, res, next) {
 }
 
 module.exports = {
+  requirePlatformAdmin,
   requireAuth,
   requireAdmin,
   requireRole,
