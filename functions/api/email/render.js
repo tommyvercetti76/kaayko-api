@@ -10,7 +10,8 @@
  * ({ to, message: { subject, html, text? }, ... }). The extension is NOT
  * installed; delivery is done in-repo by the `mailSender` Firestore trigger
  * (functions/triggers/mailSender.js), which sends each new document over SMTP
- * and writes `delivery.state` back. See docs/STRIPE_EMAIL_SETUP_GUIDE.md.
+ * and writes `delivery.state` back. See docs/products/STORE.md and
+ * functions/api/checkout/README.md.
  * Never install the extension alongside that trigger — mail would send twice.
  *
  * POLICY COPY: renderEmail() merges the constants from ./policy.js (ship time,

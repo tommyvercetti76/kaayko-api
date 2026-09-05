@@ -130,6 +130,9 @@ apiApp.post("/admin/orders/delay-notice", requireAuth, requirePlatformAdmin, req
 // kreator router next door can only see documents carrying a kreatorId.
 const { listProducts, updateProduct } = require("./api/admin/products");
 apiApp.get("/admin/products", requireAuth, requirePlatformAdmin, listProducts);
+
+// Mail queue health. Counts and ids only — mail documents hold buyer PII.
+apiApp.get("/admin/mailHealth", requireAuth, requirePlatformAdmin, require("./api/admin/mailHealth").mailHealth);
 apiApp.patch("/admin/products/:id", requireAuth, requirePlatformAdmin, updateProduct);
 
 // 🥗 KALEKUTZ - Voice-first nutrition tracker

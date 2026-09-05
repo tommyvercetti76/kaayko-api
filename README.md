@@ -20,7 +20,7 @@ Production backend for the Kaayko product portfolio. The `main` branch in this r
 - Payments: Stripe checkout/payment intent and webhook flows.
 - Weather intelligence: cached forecasts plus an auxiliary Cloud Run ML service under [`ml-service`](./ml-service).
 - Camera intelligence: catalog maintenance, audit, validation packet, and session-advice engine in [`functions/api/cameras`](./functions/api/cameras).
-- Scheduled jobs: forecast warming and health jobs exported from [`functions/scheduled/forecastScheduler.js`](./functions/scheduled/forecastScheduler.js).
+- Scheduled/background jobs: paddle score warming and feedback aggregation from [`functions/scheduled/paddleScoreWarmer.js`](./functions/scheduled/paddleScoreWarmer.js), enrichment freshness checks from [`functions/scheduled/enrichmentFreshness.js`](./functions/scheduled/enrichmentFreshness.js), store retention from [`functions/scheduled/orderRetention.js`](./functions/scheduled/orderRetention.js), mail delivery from [`functions/triggers/mailSender.js`](./functions/triggers/mailSender.js), plus KORTEX scheduled jobs defined in [`functions/index.js`](./functions/index.js).
 
 The live API function is mounted in [`functions/index.js`](./functions/index.js). Treat that file as the source of truth for what is actually shipped from `main`. KORTEX is canonical under `/kortex`; `/smartlinks` remains mounted as compatibility for older clients.
 
@@ -31,7 +31,8 @@ kaayko-api/
 ├── functions/
 │   ├── api/                  # Product route modules
 │   ├── middleware/           # Auth, security, kreator guards
-│   ├── scheduled/            # Scheduled forecast jobs
+│   ├── scheduled/            # Scheduled warming, enrichment, retention jobs
+│   ├── triggers/             # Firestore triggers such as store mail delivery
 │   ├── services/             # Shared domain services
 │   ├── scripts/              # Camera catalog, audit, predeploy checks
 │   └── __tests__/            # Current checked-in automated suite
@@ -63,7 +64,7 @@ Useful commands:
 npm run test:smoke
 npm run predeploy:check
 npm run deploy:api
-npm run deploy:scheduled
+npm run deploy:store
 npm run deploy
 ```
 
@@ -75,8 +76,9 @@ Primary enforced gate:
 
 Current reality on `main`:
 
-- The only checked-in automated test target wired in `functions/package.json` is the camera API smoke suite in [`functions/__tests__/camera-api.test.js`](./functions/__tests__/camera-api.test.js).
-- Commerce, weather, KORTEX, and Kreator do not yet have first-class regression suites in this repository.
+- `functions/package.json` has focused scripts for camera smoke, Paddling Out submissions, KORTEX, Kreator, Store catalog, and Kutz.
+- The critical store checkout/fulfillment path uses focused Jest files documented in [`docs/products/STORE.md`](./docs/products/STORE.md).
+- Weather/Paddle Score coverage exists in `weather-paddle-score.test.js`.
 - Existing module README files under [`functions/api`](./functions/api) are helpful, but they do not replace product-level docs or route verification against [`functions/index.js`](./functions/index.js).
 
 ## Deployment
@@ -84,15 +86,16 @@ Current reality on `main`:
 This repo is configured for the Firebase project `kaaykostore`.
 
 - API only: `npm run deploy:api`
-- Scheduled functions only: `npm run deploy:scheduled`
-- API plus scheduled functions: `npm run deploy`
+- Store API plus store background functions/rules/indexes: `npm run deploy:store`
+- API plus mail and retention functions: `npm run deploy`
+- Legacy note: verify `deploy:scheduled` before use; it still names deleted forecast scheduler exports in this checkout.
 
 The deploy surface is defined in [`functions/package.json`](./functions/package.json) and runtime settings live in [`firebase.json`](./firebase.json).
 
 ## Security model
 
 - `cors()` is enabled at the API app level in [`functions/index.js`](./functions/index.js).
-- Admin order routes use `requireAuth` and `requireAdmin` from [`functions/middleware/authMiddleware.js`](./functions/middleware/authMiddleware.js).
+- Store admin routes use `requireAuth` and `requirePlatformAdmin` from [`functions/middleware/authMiddleware.js`](./functions/middleware/authMiddleware.js).
 - KORTEX routes mix public analytics/redirect endpoints with authenticated admin CRUD and tenant access.
 - Kreator routes use dedicated middleware from [`functions/middleware/kreatorAuthMiddleware.js`](./functions/middleware/kreatorAuthMiddleware.js).
 - Stripe webhook handling requires raw-body processing and is mounted before JSON middleware.

@@ -74,7 +74,14 @@ router.get('/', async (req, res) => {
   try {
     const lat    = parseFloat(req.query.lat || req.query.latitude);
     const lng    = parseFloat(req.query.lng || req.query.longitude);
-    const radius = Math.min(parseInt(req.query.radius || 30), 60); // cap 60km
+    // Lower-bound as well as capped. parseInt('abc') is NaN and parseInt('-5')
+    // is negative; both slipped through Math.min and produced a NaN or negative
+    // radiusMiles, so every distance comparison downstream was false. A public
+    // API must not rely on the frontend's clamp.
+    const requestedRadius = parseInt(req.query.radius, 10);
+    const radius = Number.isFinite(requestedRadius)
+      ? Math.min(Math.max(requestedRadius, 1), 60)
+      : 30;
     const radiusMiles = radius * 0.621;
 
     if (isNaN(lat) || lat < -90 || lat > 90 || isNaN(lng) || lng < -180 || lng > 180) {

@@ -6,6 +6,40 @@
 // GET  /paddleScore/metrics      — admin: model accuracy stats (requires x-admin-key)
 
 const express = require('express');
+const { getClientIp, hashClientIp } = require('../kortex/clientIp');
+
+/**
+ * Stable, non-identifying caller key for rate limiting and abuse controls.
+ *
+ * Every call site here previously did `x-forwarded-for.split(',')[0]`, which is
+ * the CLIENT-SUPPLIED first hop — anyone could mint unlimited buckets by
+ * prepending a random address, and the raw IP was then written into
+ * public_paddle_ratings. api/kortex/clientIp.js resolves the chain
+ * right-to-left, skipping private ranges, and hashes under a server-side salt.
+ *
+ * Returns a hash, never an IP. When no public IP can be established the caller
+ * falls into one shared bucket, which is the safe failure mode for a limiter.
+ */
+/**
+ * The model's predicted score as sent by the client, coerced and bounded.
+ * `typeof x === 'number'` silently discarded the string values the rate page
+ * actually sends, so this label was usually null in the training set.
+ * @returns {number|null} 0-5 with 2 decimals, or null when unusable
+ */
+function coerceScore(value) {
+  // Number(null) is 0 and Number('') is 0, both of which are in range — without
+  // this guard an absent score would be recorded as a genuine rating of zero.
+  if (value === null || value === undefined || value === '') return null;
+  const n = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(n) || n < 0 || n > 5) return null;
+  return Math.round(n * 100) / 100;
+}
+
+function callerKey(req) {
+  const ip = getClientIp(req);
+  return (ip && hashClientIp(ip)) || 'unknown';
+}
+
 const crypto = require('crypto');
 const router = express.Router();
 const admin = require('firebase-admin');
@@ -236,10 +270,10 @@ router.post('/feedback', async (req, res) => {
     }
 
     const today = new Date().toISOString().split('T')[0];
-    const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip;
+    const ipHash = callerKey(req);   // hashed, resolved chain — never a raw IP
 
     // IP rate limit: max 5 feedback submissions per IP per day (mirrors /publicRating)
-    const ipKey = `fbLimit_${ip}_${today}`;
+    const ipKey = `fbLimit_${ipHash}_${today}`;
     const ipDoc = await db.collection('rate_limits').doc(ipKey).get();
     if (ipDoc.exists && (ipDoc.data().count || 0) >= 5) {
       return res.status(429).json({ success: false, error: 'Daily feedback limit reached' });
@@ -249,7 +283,7 @@ router.post('/feedback', async (req, res) => {
     // retries idempotent and flooding a no-op. Client fingerprint preferred, IP hash fallback.
     const clientKey = (typeof fingerprint === 'string' && fingerprint.length > 0 && fingerprint.length <= 40)
       ? fingerprint
-      : crypto.createHash('sha256').update(String(ip)).digest('hex').slice(0, 16);
+      : ipHash;   // already an HMAC of the resolved client IP — no raw IP to re-hash
     const docId = `fb_${clientKey}_${spotId}_${today}`;
 
     // The prediction being scored against is server-authoritative: read it from
@@ -331,6 +365,16 @@ router.post('/publicRating', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Invalid fingerprint' });
     }
 
+    // The spot must exist AND be publicly visible before we accept a rating for
+    // it. This used to be checked only when GPS was supplied, so ratings could
+    // be written against typo'd, unpublished or invented spot ids — poisoning
+    // the training set and creating documents nobody could ever reconcile.
+    const ratedSpotDoc = await db.collection('paddlingSpots').doc(spotId).get();
+    if (!ratedSpotDoc.exists || !isPublicPaddlingSpot(ratedSpotDoc.data())) {
+      return res.status(404).json({ success: false, error: 'Unknown spot' });
+    }
+    const ratedSpot = ratedSpotDoc.data() || {};
+
     const today = new Date().toISOString().split('T')[0];
 
     // Dedup: one rating per fingerprint per spot per day
@@ -361,8 +405,8 @@ router.post('/publicRating', async (req, res) => {
     }
 
     // IP rate limit: max 5 spots per IP per day
-    const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip;
-    const ipKey = `rateLimit_${ip}_${today}`;
+    const ipHash = callerKey(req);   // hashed, resolved chain — never a raw IP
+    const ipKey = `rateLimit_${ipHash}_${today}`;
     const ipDoc = await db.collection('rate_limits').doc(ipKey).get();
     if (ipDoc.exists && (ipDoc.data().count || 0) >= 5) {
       return res.status(429).json({ success: false, error: 'Daily rating limit reached' });
@@ -371,16 +415,10 @@ router.post('/publicRating', async (req, res) => {
     // GPS quality signal
     let gpsVerified = false;
     if (gps && typeof gps.lat === 'number' && typeof gps.lng === 'number') {
-      const spotDoc = await db.collection('paddlingSpots').doc(spotId).get();
-      if (spotDoc.exists) {
-        const spot = spotDoc.data() || {};
-        const spotLat = spot.location?.latitude ?? spot.lat;
-        const spotLng = spot.location?.longitude ?? spot.lng;
-
-        if (typeof spotLat === 'number' && typeof spotLng === 'number') {
-          const dist = haversineKm(gps.lat, gps.lng, spotLat, spotLng);
-          gpsVerified = dist < 5;
-        }
+      const spotLat = ratedSpot.location?.latitude ?? ratedSpot.lat;
+      const spotLng = ratedSpot.location?.longitude ?? ratedSpot.lng;
+      if (typeof spotLat === 'number' && typeof spotLng === 'number') {
+        gpsVerified = haversineKm(gps.lat, gps.lng, spotLat, spotLng) < 5;
       }
     }
 
@@ -395,9 +433,11 @@ router.post('/publicRating', async (req, res) => {
       fingerprint,
       gpsVerified,
       gpsCoords: gps && typeof gps.lat === 'number' ? { lat: gps.lat, lng: gps.lng } : null,
-      predictedScore: typeof predictedScore === 'number' ? predictedScore : null,
+      predictedScore: coerceScore(predictedScore),
       weather: sanitizeWeather(weather),
-      ip,
+      // Raw IP is never stored. This is an HMAC under a server-side salt,
+      // enough to spot abuse, useless for identifying a person.
+      ipHash,
       sessionDate: today,
       source: 'public_rate',
       createdAt: FieldValue.serverTimestamp(),
@@ -580,8 +620,8 @@ router.post('/batch', async (req, res) => {
     // IP rate limit: batch fans out to external weather/ML calls, so an anonymous
     // loop must hit a ceiling. 100/day covers heavy legitimate search use.
     const today = new Date().toISOString().split('T')[0];
-    const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip;
-    const ipKey = `batchLimit_${ip}_${today}`;
+    const ipHash = callerKey(req);   // hashed, resolved chain — never a raw IP
+    const ipKey = `batchLimit_${ipHash}_${today}`;
     const ipDoc = await db.collection('rate_limits').doc(ipKey).get();
     if (ipDoc.exists && (ipDoc.data().count || 0) >= 100) {
       return res.status(429).json({ success: false, error: 'Daily batch limit reached' });

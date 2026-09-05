@@ -1,179 +1,131 @@
-# Order Data Structure - Kaayko E-commerce
+# Store Order Data Structure
 
-## Overview
-This document defines the EXACT data structure for storing orders in Firestore. This is critical for legal compliance and inventory tracking.
+Last reviewed: 2026-09-05
 
----
+This document describes the current Firestore structure for kaay.store payment, order, mail, and event records.
 
-## 1. Payment Intents Collection (`payment_intents`)
+## Collections
 
-**Purpose**: Track payment creation and status  
-**Document ID**: Stripe Payment Intent ID (e.g., `pi_3SbUZSGhBi2rBXlY0TNsQS1n`)
+### `payment_intents/{paymentIntentId}`
 
-### Structure:
-```json
-{
-  "paymentIntentId": "pi_3SbUZSGhBi2rBXlY0TNsQS1n",
-  "totalAmount": 13998,
-  "totalAmountFormatted": "$139.98",
-  "currency": "usd",
-  "itemCount": 2,
-  "status": "created",  // or "succeeded"
-  "createdAt": "2025-12-06T23:07:22.207Z",
-  "completedAt": "2025-12-06T23:08:45.123Z",  // Added when payment succeeds
-  
-  "items": [
-    {
-      "productId": "3ulpQlJEnvR1sDqaBLj5LY46yu4JYwulIRmSAEg3",
-      "productTitle": "Straight Outta Sabarmati (Male S)",
-      "size": "S",
-      "gender": "Male",
-      "price": "$69.98",
-      "priceInCents": 6998
-    },
-    {
-      "productId": "8NMICFJl5pOJeHDfzqA",
-      "productTitle": "HTMLK (Female M)",
-      "size": "M",
-      "gender": "Female",
-      "price": "$69.98",
-      "priceInCents": 6998
-    }
-  ],
-  
-  "dataRetentionConsent": true
-}
-```
+Order-level Stripe PaymentIntent record.
 
----
+Important fields:
 
-## 2. Orders Collection (`orders`)
+- `paymentIntentId`
+- `status`: `created`, `succeeded`, `failed`, `refunded`, `partially_refunded`, `disputed`, `dispute_lost`
+- `paymentStatus`: `pending`, `paid`, `failed`, `refunded`, `partially_refunded`, `disputed`, `dispute_lost`
+- `fulfillmentStatus`: `awaiting_payment`, `processing`, `ready_to_ship`, `shipped`, `delivered`, `cancelled`
+- `currency`
+- `subtotalCents`
+- `taxCents`
+- `totalCents`
+- `refundedCents`
+- `items[]`: server-priced line items
+- `customerEmail`
+- `customerPhone`
+- `customerName`
+- `shippingAddress`
+- `shippingAddressMissing`
+- `stripeCustomerId`
+- `paymentMethod`
+- `chargeId`
+- `taxCalculationId`
+- `taxTransactionId`
+- `statusHistory[]`
+- `delayNotices[]`
+- `piiRedacted`
+- `createdAt`, `updatedAt`, `paidAt`, `fulfilledAt`, `cancelledAt`
 
-**Purpose**: Individual order records for fulfillment (ONE per item)  
-**Document ID**: `{paymentIntentId}_item{number}` (e.g., `pi_3SbUZSGhBi2rBXlY0TNsQS1n_item1`)
+### `orders/{paymentIntentId}_itemN`
 
-### Structure (Per Item):
-```json
-{
-  // Order identification
-  "orderId": "pi_3SbUZSGhBi2rBXlY0TNsQS1n_item1",
-  "parentOrderId": "pi_3SbUZSGhBi2rBXlY0TNsQS1n",
-  "itemIndex": 1,
-  "totalItems": 2,
-  
-  // Product details (THIS ITEM ONLY)
-  "productId": "3ulpQlJEnvR1sDqaBLj5LY46yu4JYwulIRmSAEg3",
-  "productTitle": "Straight Outta Sabarmati (Male S)",
-  "size": "S",
-  "gender": "Male",
-  "price": "$69.98",
-  
-  // Payment details (TOTAL ORDER)
-  "totalAmount": 13998,
-  "currency": "usd",
-  "paymentMethod": "card",
-  
-  // Timestamps
-  "status": "completed",
-  "createdAt": "2025-12-06T23:07:22.207Z",
-  "completedAt": "2025-12-06T23:08:45.123Z",
-  
-  // Customer contact (if consent given)
-  "customerEmail": "rohanramekar17@gmail.com",
-  "customerPhone": "+1 (555) 123-4567",
-  
-  // Shipping address (ALWAYS stored - needed for fulfillment)
-  "shippingAddress": {
-    "name": "Rohan Ramekar",
-    "line1": "5205 Tuskegee Trail",
-    "line2": null,
-    "city": "McKinney",
-    "state": "TX",
-    "postal_code": "75070",
-    "country": "US"
-  },
-  
-  // Privacy
-  "dataRetentionConsent": true
-}
-```
+One fulfillment record per line item. These are written by the Stripe webhook after payment succeeds.
 
----
+Important fields:
 
-## 3. Example: 2-Item Order
+- `orderId`
+- `parentOrderId`
+- `itemIndex`
+- `totalItems`
+- `productId`
+- `productTitle`
+- `size`
+- `gender`
+- `quantity`
+- `unitPriceCents`
+- `lineTotalCents`
+- `currency`
+- `orderStatus`: `pending`, `processing`, `shipped`, `delivered`, `returned`, `cancelled`
+- `fulfillmentStatus`
+- `paymentStatus`
+- `refundedCents`
+- `shippingAddress`
+- `shippingAddressMissing`
+- `customerEmail`
+- `customerPhone`
+- `customerName`
+- `trackingNumber`
+- `carrier`
+- `trackingUrl`
+- `estimatedDelivery`
+- `statusHistory[]`
+- `piiRedacted`
+- `createdAt`, `updatedAt`, `paidAt`, `processedAt`, `shippedAt`, `deliveredAt`, `returnedAt`
 
-### Payment Intent Document:
-```
-payment_intents/pi_3SbUZSGhBi2rBXlY0TNsQS1n
-```
-- Contains: Array of 2 items
-- Total: $139.98 (13998 cents)
+### `mail/{mailId}`
 
-### Order Documents (2 separate):
-```
-orders/pi_3SbUZSGhBi2rBXlY0TNsQS1n_item1
-orders/pi_3SbUZSGhBi2rBXlY0TNsQS1n_item2
-```
-- Each contains: Single item details + shared customer/shipping info
+Outbound email queue documents for buyer receipts, admin receipts, shipping notices, delay notices, refunds, disputes, and owner alerts.
 
----
+Important fields:
 
-## 4. Data Flow
+- `to`
+- `subject`
+- `html`
+- `text`
+- `delivery.state`: `PENDING`, `PROCESSING`, `SUCCESS`, `RETRY`, `ERROR`
+- `delivery.attempts`
+- `delivery.lastError`
+- `paymentIntentId`
+- `orderId`
+- `createdAt`, `updatedAt`, `sentAt`
 
-1. **User adds items to cart** → Frontend stores in localStorage
-2. **User clicks checkout** → Frontend sends items array to `/api/createPaymentIntent`
-3. **API validates items** → Creates Stripe Payment Intent → Stores in `payment_intents` collection
-4. **User completes payment** → Stripe sends webhook to `/api/stripeWebhook`
-5. **Webhook receives success** → Creates SEPARATE order documents in `orders` collection (one per item)
+Mail docs may contain buyer PII and must not be exposed to the client.
 
----
+### `stripe_events/{eventId}`
 
-## 5. Inventory Queries
+Webhook duplicate-suppression and processing audit records.
 
-### Get all orders for a product:
-```javascript
-db.collection('orders')
-  .where('productId', '==', '3ulpQlJEnvR1sDqaBLj5LY46yu4JYwulIRmSAEg3')
-  .get()
-```
+### `webhook_failures/{eventId}`
 
-### Get all items from a single payment:
-```javascript
-db.collection('orders')
-  .where('parentOrderId', '==', 'pi_3SbUZSGhBi2rBXlY0TNsQS1n')
-  .get()
-```
+Permanent webhook failure triage records. These should be owner/admin visible operationally, not public.
 
-### Count total sales by size:
-```javascript
-db.collection('orders')
-  .where('size', '==', 'M')
-  .where('status', '==', 'completed')
-  .count()
-```
+### `retention_runs/{yyyy-mm-dd}`
 
----
+Monthly retention job summaries.
 
-## 6. Legal Compliance
+## Write Ownership
 
-- ✅ **Each item stored separately** - No data loss
-- ✅ **Customer consent tracked** - `dataRetentionConsent` field
-- ✅ **Shipping address always stored** - Required for fulfillment
-- ✅ **Email/phone conditional** - Only if consent given
-- ✅ **Timestamps accurate** - Firestore server timestamps
-- ✅ **Audit trail complete** - Payment intent → Orders linkage
+- `payment_intents`: checkout create/tax/contact update and Stripe webhook.
+- `orders`: Stripe webhook and admin fulfillment endpoints.
+- `mail`: email queue helpers, webhook handlers, admin status/delay handlers.
+- `stripe_events`: Stripe webhook.
+- `webhook_failures`: Stripe webhook permanent failure handler.
+- `retention_runs`: scheduled retention job.
 
----
+Direct browser writes are not allowed.
 
-## 7. Critical Rules
+## Query Patterns
 
-1. **NEVER join multiple items into comma-separated strings**
-2. **ALWAYS store items as array in payment_intents**
-3. **ALWAYS create separate order documents (one per item)**
-4. **ALWAYS link orders via parentOrderId**
-5. **NEVER lose data** - Each item must be traceable
+- Admin order list: `orders` ordered by `createdAt`, optionally grouped by `parentOrderId`.
+- Whole-order fulfillment: update all `orders` with matching `parentOrderId`.
+- Order detail: `orders.where(parentOrderId == pi)` plus `payment_intents/{pi}`.
+- Retention: age-based scans by `createdAt` or `processedAt`.
 
----
+## Rules That Must Not Change Casually
 
-**Last Updated**: December 6, 2025  
-**Version**: 2.0 (Multi-item support)
+- Do not create shippable order docs before Stripe confirms payment.
+- Do not trust client prices.
+- Do not store multiple purchased line items as a comma-separated string.
+- Do not delete order/payment financial records during retention; redact PII instead.
+- Do not expose `orders`, `payment_intents`, `mail`, `stripe_events`, or `webhook_failures` to client reads.
+

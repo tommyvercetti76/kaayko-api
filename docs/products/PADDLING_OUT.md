@@ -1,79 +1,103 @@
-# Paddling Out Backend
+# Paddling Out Backend Product Map
 
-## Scope
+Last reviewed: 2026-09-05
 
-Paddling Out is the weather and location intelligence product in Kaayko. It combines spot discovery, forecast generation, cached fast responses, paddle scoring, nearby water search, and AI-facing wrappers.
+Paddling Out backend routes power the public lake directory, forecasts, search, Add Lake submissions, ratings, and the partial trainer/tourist experience.
 
-## Mounted routes on `main`
+## Runtime Mounts
 
-Core public and premium routes:
+Mounted in `functions/index.js`:
 
 - `GET /paddlingOut`
 - `GET /paddlingOut/:id`
+- `GET /paddlingOut/geocode`
+- `POST /paddlingOut/submitEntry`
+- `POST /paddlingOut/lakeRequests`
+- `GET /paddlingOut/admin/submissions`
+- `POST /paddlingOut/admin/submissions/:id/validate`
+- `POST /paddlingOut/admin/submissions/:id/reject`
 - `GET /nearbyWater`
 - `GET /paddleScore`
+- `POST /paddleScore/feedback`
+- `POST /paddleScore/publicRating`
+- `POST /paddleScore/batch`
+- `GET /paddleScore/metrics`
 - `GET /fastForecast`
 - `GET /fastForecast/cache/stats`
 - `GET /forecast`
 - `POST /forecast/batch`
+- `GET /paddle-trainer/tourist-lakes`
+- `GET /paddle-trainer/tourist-weather`
+- `POST /paddle-trainer/ratings`
 
-AI wrapper routes:
+## Primary Files
 
-- `GET /gptActions/health`
-- `GET /gptActions/paddleScore`
-- `GET /gptActions/forecast`
-- `GET /gptActions/locations`
-- `POST /gptActions/findNearby`
+- `functions/api/weather/paddlingout.js`
+- `functions/api/weather/communitySpotVisibility.js`
+- `functions/api/weather/nearbyWater.js`
+- `functions/api/weather/paddleScore.js`
+- `functions/api/weather/fastForecast.js`
+- `functions/api/weather/forecast.js`
+- `functions/api/weather/paddleTrainer.js`
+- `functions/api/weather/paddleScoreCompute.js`
+- `functions/api/weather/paddleLlmClient.js`
 
-Primary route files:
+## Add Lake Submission Model
 
-- [`functions/api/weather/paddlingout.js`](../../functions/api/weather/paddlingout.js)
-- [`functions/api/weather/nearbyWater.js`](../../functions/api/weather/nearbyWater.js)
-- [`functions/api/weather/paddleScore.js`](../../functions/api/weather/paddleScore.js)
-- [`functions/api/weather/fastForecast.js`](../../functions/api/weather/fastForecast.js)
-- [`functions/api/weather/forecast.js`](../../functions/api/weather/forecast.js)
-- [`functions/api/ai/gptActions.js`](../../functions/api/ai/gptActions.js)
+Current model: admin-review-before-publication.
 
-## Scheduled jobs
+Important behavior:
 
-Forecast warming and health jobs are exported from [`functions/scheduled/forecastScheduler.js`](../../functions/scheduled/forecastScheduler.js):
+- Public submission accepts text fields plus 1-3 images.
+- Images are limited by count, MIME type, magic bytes, per-image size, and total payload size.
+- Rate limiting and dedupe are applied by client/IP hash and normalized lake/location fields.
+- Backend writes a hidden public-shaped `paddlingSpots/{spotId}` doc plus `paddling_lake_submissions/{spotId}` for admin review.
+- New submissions use `submissionStatus: pending` and `goLiveAt: null`.
+- `isPublicPaddlingSpot()` hides pending community submissions.
+- Admin validation sets `submissionStatus: validated`, making the spot public.
+- Admin rejection marks rejected and clears/deletes public image fields by default.
+- Submitter contact email is stored only on the admin submission doc and must not be returned publicly.
 
-- `earlyMorningForecast`
-- `morningForecastUpdate`
-- `afternoonForecastUpdate`
-- `eveningForecastUpdate`
-- `emergencyForecastRefresh`
-- `forecastSchedulerHealth`
+Frontend copy must not promise automatic 2-day publication unless backend `goLiveAt` behavior is intentionally restored.
 
-These jobs prefill cache surfaces used by `fastForecast`.
+## Forecast And Search
 
-## Frontend consumers
+Search and forecast public APIs are live:
 
-Primary frontend files:
+- Search geocoding should use `GET /paddlingOut/geocode`, not browser-direct Nominatim calls.
+- Nearby water search uses `GET /nearbyWater`.
+- Batch scoring uses `POST /paddleScore/batch`, capped by input limits and anonymous request controls.
+- Fast Forecast is the preferred public forecast path for the frontend.
+- Heavy `forecast` remains available and rate-limited.
 
-- `src/paddlingout.html`
-- `src/js/services/apiClient.js`
-- `src/js/paddlingout.js`
-- `src/js/advancedModal.js`
-- `src/js/customLocation.js`
-- `src/js/components/*`
-- `src/js/about-dynamic.js`
+## Rate And Trainer
 
-## External systems
+Public rating:
 
-- Weather provider integrations via the unified weather services
-- Cloud Run ML service in [`ml-service`](../../ml-service)
-- OpenStreetMap / Overpass for nearby water discovery
-- Firestore-backed cache layers
+- `POST /paddleScore/publicRating` is intended for the no-auth public Rate page.
+- It must validate public spot IDs, avoid raw IP storage for new ratings, and use hardened client identity.
 
-## Security and access
+Trainer:
 
-- Public forecast and location routes are rate-limited or input-normalized inside module implementations.
-- `forecast` is the heavier internal or premium generation path; `fastForecast` is the cached public path.
-- AI wrapper endpoints should be treated as public contract surfaces because they simplify access for external agents.
+- Current backend implements only tourist lakes, tourist weather, and rating POST.
+- The deployed trainer frontend calls additional endpoints not implemented by this router.
+- Do not treat trainer as a complete public feature until those endpoints exist or the UI hides those branches.
 
-## Quality and maintenance notes
+## Tests
 
-- The current automated suite on `main` does not include weather regression coverage.
-- The frontend carries both production and emulator toggles; verify current endpoint usage before changing routing.
-- A proper maintenance automation should run spot list fetches, cached forecast fetches, premium forecast generation, nearby water lookup, and cache-stat sanity checks.
+Run from `functions/`:
+
+```bash
+npm run test:paddlingout
+node ./node_modules/jest/bin/jest.js --runInBand __tests__/weather-paddle-score.test.js --forceExit --detectOpenHandles
+```
+
+The September audit run passed both suites.
+
+## Current P0/P1 Backlog
+
+- Align Add Lake frontend copy with admin-review behavior.
+- Fix public Rate routing/UX or implement missing trainer APIs.
+- Harden public rating IP handling and public spot validation.
+- Lower-bound/validate `nearbyWater` radius.
+

@@ -419,7 +419,9 @@ async function notifySubmissionValidated(submission, spotId) {
   }
 
   const lakeName = escapeForEmail(submission.lakeName || 'your lake');
-  const lakeUrl = `https://kaayko.com/paddlingout/?id=${encodeURIComponent(spotId)}`;
+  // Forecast is the page that actually renders a single spot; the old
+  // `/paddlingout/?id=` landed on the directory with a query it ignores.
+  const lakeUrl = `https://kaayko.com/paddlingout/forecast?id=${encodeURIComponent(spotId)}`;
 
   return sendRawEmail({
     to: submission.contactEmail,

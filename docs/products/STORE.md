@@ -1,12 +1,12 @@
-# Store / Commerce Backend
+# Store Backend Product Map
 
-## Scope
+Last reviewed: 2026-09-05
 
-The Store backend serves Kaayko merchandise browsing, product voting, checkout, image delivery, and order administration.
+The Store backend supports kaay.store browsing, server-priced Stripe checkout, tax, webhook-created order records, email notifications, admin fulfillment, refunds, disputes, product administration, and retention.
 
-## Mounted routes on `main`
+## Runtime Mounts
 
-From [`functions/index.js`](../../functions/index.js):
+Mounted in `functions/index.js`:
 
 - `GET /products`
 - `GET /products/:id`
@@ -15,46 +15,93 @@ From [`functions/index.js`](../../functions/index.js):
 - `GET /images`
 - `GET /images/:productId/:fileName`
 - `POST /createPaymentIntent`
+- `POST /createPaymentIntent/tax`
 - `POST /createPaymentIntent/updateEmail`
 - `POST /createPaymentIntent/webhook`
-- `POST /admin/updateOrderStatus`
 - `GET /admin/getOrder`
 - `GET /admin/listOrders`
+- `POST /admin/updateOrderStatus`
+- `POST /admin/orders/delay-notice`
+- `GET /admin/products`
+- `PATCH /admin/products/:id`
 
-Primary route files:
+## Primary Files
 
-- [`functions/api/products/products.js`](../../functions/api/products/products.js)
-- [`functions/api/products/images.js`](../../functions/api/products/images.js)
-- [`functions/api/checkout/router.js`](../../functions/api/checkout/router.js)
-- [`functions/api/admin/updateOrderStatus.js`](../../functions/api/admin/updateOrderStatus.js)
-- [`functions/api/admin/getOrder.js`](../../functions/api/admin/getOrder.js)
+- `functions/api/products/products.js`
+- `functions/api/products/images.js`
+- `functions/api/checkout/router.js`
+- `functions/api/checkout/createPaymentIntent.js`
+- `functions/api/checkout/pricing.js`
+- `functions/api/checkout/tax.js`
+- `functions/api/checkout/updatePaymentIntentEmail.js`
+- `functions/api/checkout/stripeWebhook.js`
+- `functions/api/admin/getOrder.js`
+- `functions/api/admin/updateOrderStatus.js`
+- `functions/api/admin/orderNotices.js`
+- `functions/api/admin/products.js`
+- `functions/triggers/mailSender.js`
+- `functions/scheduled/orderRetention.js`
 
-## Frontend consumers
+## Security Model
 
-The companion frontend uses these routes from:
+- Product list/detail/vote are public.
+- Checkout create/tax/updateEmail are public but protected by origin checks and strict input validation.
+- Stripe webhook verifies Stripe signature and must receive the raw body before JSON parsing.
+- Admin order/product routes require Firebase auth plus platform-admin authorization.
+- Firestore rules deny direct client reads/writes to products, orders, payment intents, Stripe events, webhook failures, and mail docs.
+- Prices are server-authoritative. Client price fields are ignored.
 
-- `src/index.html`
-- `src/store.html`
-- `src/cart.html`
-- `src/order-success.html`
-- `src/js/kaayko_apiClient.js`
-- `src/js/kaayko_ui.js`
+## Purchase And Fulfillment Flow
 
-## External systems
+1. Buyer adds product to cart in frontend.
+2. Cart posts product id, size, gender, and quantity to `/createPaymentIntent`.
+3. Backend loads products from Firestore, validates availability/options/quantity, and computes subtotal.
+4. Backend creates a Stripe PaymentIntent and `payment_intents/{pi}` with status `created`.
+5. Cart collects shipping address and calls `/createPaymentIntent/tax` if tax is enabled.
+6. Cart posts contact details to `/createPaymentIntent/updateEmail`.
+7. Stripe confirms payment and redirects buyer to `/order-success`.
+8. Webhook handles `payment_intent.succeeded`, updates `payment_intents/{pi}`, writes `orders/{pi}_itemN`, and queues buyer/admin mail.
+9. `mailSender` sends Firestore `mail/{id}` docs through SMTP.
+10. Admin fulfills in Kortex Orders via `/admin/listOrders` and `/admin/updateOrderStatus`.
+11. Shipping confirmation is queued once when an order is marked shipped.
+12. Refund and dispute webhooks update money/fulfillment state and alert the owner.
 
-- Stripe for checkout and webhook confirmation
-- Firebase Auth for protected admin actions
-- Cloud Storage for product imagery
+## Launch Blockers
 
-## Security and access
+- Frontend currently exposes a Stripe `pk_test` key. Do not accept real purchases until matching live frontend/backend/webhook/tax config is provided.
+- `kaayko/src/legal/terms.html` still needs real legal operator details.
+- `MAIL_SMTP_URL` deployment must be verified.
+- Mail docs in `RETRY` need a scheduled redrive or admin alert.
+- Buyer-facing support/contact email must be normalized.
+- Admin delay notice UI currently needs response-shape alignment with `orderNotices.js`.
 
-- Stripe webhook handling is raw-body sensitive and mounted before `express.json()`.
-- Admin order routes are protected with `requireAuth` and `requireAdmin`.
-- Product browsing and voting are public.
-- Image delivery is proxied through the backend instead of exposing storage objects directly.
+## Tests
 
-## Quality and maintenance notes
+Run from `functions/`:
 
-- No dedicated commerce regression suite is wired into `functions/package.json` on `main`.
-- The safest minimum automation for this product is: route health checks, Stripe config verification, and protected-route authorization checks.
-- Any store deploy should validate both public catalog fetches and admin-only order mutations separately.
+```bash
+node ./node_modules/jest/bin/jest.js --runInBand \
+  __tests__/store-api.test.js \
+  __tests__/checkout-payment-intent.test.js \
+  __tests__/checkout-webhook.test.js \
+  __tests__/checkout-tax.test.js \
+  __tests__/checkout-refunds-disputes.test.js \
+  __tests__/order-fulfilment.test.js \
+  __tests__/order-delay-notice.test.js \
+  __tests__/mail-sender.test.js \
+  __tests__/order-retention.test.js \
+  __tests__/admin-products.test.js \
+  __tests__/auth-platform-admin.test.js \
+  --forceExit --detectOpenHandles
+```
+
+The September audit run passed 11 suites and 248 tests.
+
+## Related Docs
+
+- `docs/ORDER_TRACKING_SYSTEM.md`
+- `docs/ORDER_DATA_STRUCTURE.md`
+- `docs/DATA_RETENTION.md`
+- `docs/SALES_TAX.md`
+- `functions/api/checkout/README.md`
+

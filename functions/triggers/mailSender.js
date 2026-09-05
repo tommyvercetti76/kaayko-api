@@ -10,7 +10,7 @@
  * interchangeable — but NEVER BOTH: if the extension is ever installed
  * alongside this trigger, every email is sent twice. One or the other.
  *
- * Configuration (see docs/STRIPE_EMAIL_SETUP_GUIDE.md):
+ * Configuration (see docs/products/STORE.md and functions/api/checkout/README.md):
  *   MAIL_SMTP_URL  Secret Manager, ONE value: a full smtps:// URL, e.g.
  *                  smtps://user%40gmail.com:app-password@smtp.gmail.com:465
  *                  (the @ in the username MUST be written %40). Set it with
@@ -83,7 +83,7 @@ function readSmtpUrl(env = process.env) {
   if (!url) {
     return {
       error: `${SECRET_NAME} secret is not set — mail cannot be delivered. ` +
-             `Run: firebase functions:secrets:set ${SECRET_NAME} (see docs/STRIPE_EMAIL_SETUP_GUIDE.md)`
+             `Run: firebase functions:secrets:set ${SECRET_NAME} (see docs/products/STORE.md)`
     };
   }
   let parsed;
