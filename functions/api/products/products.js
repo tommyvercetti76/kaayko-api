@@ -67,8 +67,15 @@ async function fetchImagesFromStorage(productID) {
 router.get("/", async (_req, res) => {
   try {
     const snap = await db.collection("kaaykoproducts").get();
+    // Hidden and soft-deleted products never leave the server. This was a
+    // client-side filter only, so "hidden" work still shipped to every browser
+    // inside the public JSON payload.
+    const visible = snap.docs.filter(doc => {
+      const d = doc.data();
+      return d.isAvailable !== false && !d.deletedAt;
+    });
     const products = await Promise.all(
-      snap.docs.map(async docSnap => {
+      visible.map(async docSnap => {
         const d = docSnap.data();
         const base = {
           id:              docSnap.id,
@@ -85,6 +92,9 @@ router.get("/", async (_req, res) => {
           productType:     d.productType     || "",
           category:        d.category        || "",
           isAvailable:     d.isAvailable !== false,
+          soldOut:         d.soldOut === true,
+          storyCopy:       typeof d.storyCopy === "string" ? d.storyCopy : "",
+          fileRows:        Array.isArray(d.fileRows) ? d.fileRows : [],
           createdAt:       d.createdAt?.toDate?.()?.toISOString() || null,
           animalSlug:      d.animalSlug || null,
           imgSrc:          Array.isArray(d.imgSrc) ? d.imgSrc : [],
@@ -128,6 +138,9 @@ router.get("/:id", async (req, res) => {
     if (!docSnap.exists) return res.status(404).json({ success: false, error: "Not found", message: "Product not found", code: "NOT_FOUND" });
 
     const d = docSnap.data();
+    if (d.isAvailable === false || d.deletedAt) {
+      return res.status(404).json({ success: false, error: "Not found", message: "Product not found", code: "NOT_FOUND" });
+    }
     const product = {
       id,
       title:           d.title           || "",
@@ -143,6 +156,9 @@ router.get("/:id", async (req, res) => {
       productType:     d.productType     || "",
       category:        d.category        || "",
       isAvailable:     d.isAvailable !== false,
+      soldOut:         d.soldOut === true,
+      storyCopy:       typeof d.storyCopy === "string" ? d.storyCopy : "",
+      fileRows:        Array.isArray(d.fileRows) ? d.fileRows : [],
       createdAt:       d.createdAt?.toDate?.()?.toISOString() || null,
       animalSlug:      d.animalSlug || null,
       imgSrc:          Array.isArray(d.imgSrc) ? d.imgSrc : [],

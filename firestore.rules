@@ -35,9 +35,16 @@ service cloud.firestore {
     // STORE COLLECTIONS
     // ========================================
 
-    // Products — public read (catalog browsing), API-only writes
+    // Products — API-only, both ways.
+    //
+    // Public read used to be open so the client SDK could browse the catalogue,
+    // but nothing has ever used it: the storefront reads GET /api/products and
+    // no page in kaayko/src loads the Firestore SDK for products (verified
+    // Sept 2026). Leaving it open let anyone read straight past the API's field
+    // whitelist and see sellerEmail, kreatorId and stockQuantity — and, now
+    // that admins can hide a product, unpublished work too.
     match /kaaykoproducts/{productId} {
-      allow read: if true;
+      allow read: if false;
       allow write: if false;
     }
 

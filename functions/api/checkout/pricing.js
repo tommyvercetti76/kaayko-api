@@ -141,6 +141,7 @@ function resolveTaxCode(data) {
 /** A product is purchasable unless it is explicitly switched off. */
 function isPurchasable(data) {
   if (data.isAvailable === false) return false;
+  if (data.soldOut === true) return false;
   if (data.deletedAt) return false;
   return true;
 }

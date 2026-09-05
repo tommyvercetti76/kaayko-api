@@ -126,6 +126,12 @@ apiApp.get("/admin/listOrders", requireAuth, requireAdmin, listOrders);
 // with the choice to keep the order or cancel for a refund.
 apiApp.post("/admin/orders/delay-notice", requireAuth, requireAdmin, require("./api/admin/orderNotices").sendDelayNotice);
 
+// Store catalogue management. The only authenticated product write path — the
+// kreator router next door can only see documents carrying a kreatorId.
+const { listProducts, updateProduct } = require("./api/admin/products");
+apiApp.get("/admin/products", requireAuth, requireAdmin, listProducts);
+apiApp.patch("/admin/products/:id", requireAuth, requireAdmin, updateProduct);
+
 // 🥗 KALEKUTZ - Voice-first nutrition tracker
 apiApp.use("/kutz", require("./api/kutz/kutzRouter"));
 
