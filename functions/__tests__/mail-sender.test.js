@@ -81,14 +81,14 @@ afterAll(() => {
 
 // ────────────────────────────────────────────────────────────────
 describe('mailSender — trigger definition', () => {
-  test('is a us-central1 / 256MiB onCreate trigger on mail/{docId} bound to the SMTP credential secrets', () => {
+  test('is a us-central1 / 256MiB onCreate trigger on mail/{docId} bound to the MAIL_SMTP_URL secret', () => {
     expect(SECRET_NAME).toBe('MAIL_SMTP_URL');
     expect(mailSender.__trigger).toMatchObject({
       document: 'mail/{docId}',
       region: 'us-central1',
       memory: '256MiB'
     });
-    expect(mailSender.__trigger.secrets).toEqual(expect.arrayContaining(['ZOHO_EMAIL', 'EMAIL_PASSWORD']));
+    expect(mailSender.__trigger.secrets).toEqual(['MAIL_SMTP_URL']);
   });
 
   test('does not load the Express app or express itself', () => {
@@ -167,10 +167,8 @@ describe('mailSender — delivery', () => {
 
 // ────────────────────────────────────────────────────────────────
 describe('mailSender — configuration failures', () => {
-  test('no credentials at all marks the document ERROR and names both ways to fix it — nothing is sent', async () => {
+  test('an unset MAIL_SMTP_URL marks the document ERROR with a usable message — nothing is sent', async () => {
     delete process.env[SECRET_NAME];
-    delete process.env.ZOHO_EMAIL;
-    delete process.env.EMAIL_PASSWORD;
     seedMail('m_nosecret');
 
     const result = await mailSender(firestoreEvent('m_nosecret'));
@@ -180,43 +178,37 @@ describe('mailSender — configuration failures', () => {
     const d = delivery('m_nosecret');
     expect(d.state).toBe('ERROR');
     expect(d.attempts).toBe(1);
-    expect(d.error).toContain('No SMTP credentials configured');
-    // Both routes are named, so the operator does not have to read the source
-    // to find out which secret is missing.
-    expect(d.error).toContain('MAIL_SMTP_URL');
-    expect(d.error).toContain('ZOHO_EMAIL');
+    expect(d.error).toContain('MAIL_SMTP_URL is not configured');
+    // The message must be actionable without reading the source.
+    expect(d.error).toContain('smtps://');
+    expect(d.error).toContain('%40');
     expect(d.endTime).toBeTruthy();
-    expect(console.error).toHaveBeenCalledWith(expect.stringContaining('SMTP'));
+    expect(console.error).toHaveBeenCalledWith(expect.stringContaining('MAIL_SMTP_URL'));
   });
 
-  // The platform already held working Zoho credentials in Secret Manager and
-  // nothing consumed them, so mail sat unsent while a THIRD secret in a
-  // different shape was documented as the requirement.
-  test('falls back to the ZOHO_EMAIL + EMAIL_PASSWORD already in Secret Manager', async () => {
-    delete process.env[SECRET_NAME];
-    process.env.ZOHO_EMAIL = 'orders@kaayko.com';
-    process.env.EMAIL_PASSWORD = 'app@pass#word';
-    seedMail('m_zoho');
+  // The secret must EXIST for the function to deploy at all, so it is created
+  // holding this sentinel. It must never be mistaken for a working URL, and it
+  // must fail permanently rather than burning four connection attempts.
+  test("the UNCONFIGURED placeholder is treated as unset, not as a host", async () => {
+    process.env[SECRET_NAME] = 'UNCONFIGURED';
+    seedMail('m_placeholder');
 
-    const result = await mailSender(firestoreEvent('m_zoho'));
+    const result = await mailSender(firestoreEvent('m_placeholder'));
+
+    expect(result.state).toBe('ERROR');
+    expect(mockSendMail).not.toHaveBeenCalled();
+    expect(delivery('m_placeholder').attempts).toBe(1);
+    expect(delivery('m_placeholder').error).toContain('MAIL_SMTP_URL is not configured');
+  });
+
+  test('any provider works — the URL is the only configuration', async () => {
+    process.env[SECRET_NAME] = 'smtps://apikey:secret@smtp.resend.com:465';
+    seedMail('m_anyprovider');
+
+    const result = await mailSender(firestoreEvent('m_anyprovider'));
 
     expect(result.state).toBe('SUCCESS');
     expect(mockSendMail).toHaveBeenCalled();
-    delete process.env.ZOHO_EMAIL;
-    delete process.env.EMAIL_PASSWORD;
-  });
-
-  test('an explicit MAIL_SMTP_URL still wins over the Zoho fallback', async () => {
-    process.env[SECRET_NAME] = 'smtps://u%40x.com:p@smtp.other.com:465';
-    process.env.ZOHO_EMAIL = 'orders@kaayko.com';
-    process.env.EMAIL_PASSWORD = 'pw';
-    seedMail('m_precedence');
-
-    const result = await mailSender(firestoreEvent('m_precedence'));
-
-    expect(result.state).toBe('SUCCESS');
-    delete process.env.ZOHO_EMAIL;
-    delete process.env.EMAIL_PASSWORD;
   });
 
   test('a malformed MAIL_SMTP_URL is a permanent ERROR, not four connection timeouts', async () => {

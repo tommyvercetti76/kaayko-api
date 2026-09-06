@@ -127,13 +127,7 @@ exports.mailRedrive = onSchedule(
     schedule: 'every 15 minutes',
     region: 'us-central1',
     timeoutSeconds: 540,
-    // ONLY secrets that EXIST may be listed here. Firebase validates every
-    // declared secret at deploy time and fails the whole deploy if one is
-    // missing — which is exactly why mailSender was never deployed: it declared
-    // MAIL_SMTP_URL, that secret was never created, and the deploy died before
-    // anyone saw a mail. The code still PREFERS MAIL_SMTP_URL at runtime; to
-    // switch providers, create the secret and add it back to both lists here.
-    secrets: ['ZOHO_EMAIL', 'EMAIL_PASSWORD'],
+    secrets: ['MAIL_SMTP_URL'],
   },
   async () => { await runRedrive(); }
 );

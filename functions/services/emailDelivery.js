@@ -29,14 +29,13 @@ function fromAddress() {
 const SENSITIVE_TEMPLATES = new Set(['guest_access_code', 'guest_code_rotated']);
 
 function isConfigured() {
-  // "Configured" means mailSender can actually deliver: either an explicit SMTP
-  // URL, or the mailbox credentials that already exist in Secret Manager. It used
-  // to mean "a SendGrid key is set", which was never true anywhere.
-  const env = process.env;
-  const url = typeof env.MAIL_SMTP_URL === 'string' && env.MAIL_SMTP_URL.trim();
-  const user = typeof env.ZOHO_EMAIL === 'string' && env.ZOHO_EMAIL.trim();
-  const pass = typeof env.EMAIL_PASSWORD === 'string' && env.EMAIL_PASSWORD.trim();
-  return Boolean(url || (user && pass));
+  // "Configured" means mailSender can actually deliver. MAIL_SMTP_URL always
+  // exists so the functions can deploy; it holds the sentinel 'UNCONFIGURED'
+  // until a real provider URL is set, and that sentinel must not read as
+  // configured — otherwise an access code would be queued for a delivery that
+  // is not coming.
+  const url = typeof process.env.MAIL_SMTP_URL === 'string' ? process.env.MAIL_SMTP_URL.trim() : '';
+  return Boolean(url) && url !== 'UNCONFIGURED';
 }
 
 function escapeHtml(value = '') {

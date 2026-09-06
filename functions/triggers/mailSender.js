@@ -48,6 +48,9 @@ const nodemailer = require('nodemailer');
 const { resolveNotifyEmail } = require('../api/email/notifyAddress');
 
 const SECRET_NAME = 'MAIL_SMTP_URL';
+// Placeholder the secret holds until a provider is chosen. It exists so the
+// function can deploy; it can never be mistaken for a working URL.
+const UNCONFIGURED = 'UNCONFIGURED';
 const MAX_ATTEMPTS = 4;
 // A PROCESSING claim older than this belongs to an invocation that died
 // mid-send (functions time out long before it); the document may be re-claimed.
@@ -79,37 +82,24 @@ function getTransport(smtpUrl) {
  */
 function readSmtpUrl(env = process.env) {
   const raw = env[SECRET_NAME];
-  let url = typeof raw === 'string' ? raw.trim() : '';
+  const url = typeof raw === 'string' ? raw.trim() : '';
 
-  // Fall back to the mailbox credentials that already exist in Secret Manager.
-  //
-  // ZOHO_EMAIL and EMAIL_PASSWORD were configured long before this trigger was
-  // written and nothing consumed them, so the platform sat with working mail
-  // credentials and no sender. Requiring a THIRD secret in a different shape is
-  // how that happens. Composing the URL here means the only remaining step to
-  // working email is a deploy.
-  //
-  // MAIL_SMTP_URL still wins when set, so moving to another provider is one
-  // secret and no code change.
-  if (!url) {
-    const user = typeof env.ZOHO_EMAIL === 'string' ? env.ZOHO_EMAIL.trim() : '';
-    const pass = typeof env.EMAIL_PASSWORD === 'string' ? env.EMAIL_PASSWORD.trim() : '';
-    if (user && pass) {
-      const host = (typeof env.MAIL_SMTP_HOST === 'string' && env.MAIL_SMTP_HOST.trim()) || 'smtp.zoho.com';
-      const port = (typeof env.MAIL_SMTP_PORT === 'string' && env.MAIL_SMTP_PORT.trim()) || '465';
-      // encodeURIComponent so an '@' in the address and any punctuation in the
-      // app password cannot break URL parsing — the exact trap that made an
-      // earlier hand-written value unusable.
-      url = `smtps://${encodeURIComponent(user)}:${encodeURIComponent(pass)}@${host}:${port}`;
-    }
-  }
-
-  if (!url) {
+  // The secret must EXIST for the function to deploy at all — Firebase validates
+  // every declared secret and fails the whole deploy on a missing one, which is
+  // why this function went undeployed for months. So it is created up front
+  // holding this sentinel, and the real SMTP URL replaces it when a provider is
+  // chosen. An unconfigured value is a clear, permanent ERROR on the document,
+  // never a retry loop.
+  if (!url || url === UNCONFIGURED) {
     return {
-      error: `No SMTP credentials configured — mail cannot be delivered. ` +
-             `Set ${SECRET_NAME}, or ZOHO_EMAIL + EMAIL_PASSWORD, and grant them to the mailSender function.`
+      error: `${SECRET_NAME} is not configured — mail cannot be delivered. ` +
+             `Set it to an smtps://user:pass@host:port URL from any provider ` +
+             `(Resend, Postmark, SES, Brevo…), then redeploy mailSender and ` +
+             `mailRedrive. Remember to percent-encode '@' in the username as %40. ` +
+             `See functions/docs/EMAIL.md.`
     };
   }
+
   let parsed;
   try {
     parsed = new URL(url);
@@ -295,13 +285,11 @@ const mailSender = onDocumentCreated({
   region: 'us-central1',
   memory: '256MiB',
   timeoutSeconds: 60,
-  // ONLY secrets that EXIST may be listed here. Firebase validates every
-    // declared secret at deploy time and fails the whole deploy if one is
-    // missing — which is exactly why mailSender was never deployed: it declared
-    // MAIL_SMTP_URL, that secret was never created, and the deploy died before
-    // anyone saw a mail. The code still PREFERS MAIL_SMTP_URL at runtime; to
-    // switch providers, create the secret and add it back to both lists here.
-    secrets: ['ZOHO_EMAIL', 'EMAIL_PASSWORD']
+  // Firebase validates every declared secret at deploy time and fails the whole
+  // deploy if one is missing — exactly why this function went undeployed for
+  // months. MAIL_SMTP_URL now always exists, holding the UNCONFIGURED sentinel
+  // until a real provider URL replaces it.
+  secrets: [SECRET_NAME]
 }, async (event) => {
   const docId = event?.params?.docId || event?.data?.id;
   if (!docId) {

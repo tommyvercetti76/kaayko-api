@@ -33,20 +33,31 @@ await notify({
 ## Choosing a provider
 
 `mailSender` uses nodemailer, which speaks plain SMTP. **Any provider works.**
-Resolution order:
+There is exactly one setting:
 
-1. `MAIL_SMTP_URL` — a full `smtps://user:pass@host:port` URL. Wins if set.
-2. `ZOHO_EMAIL` + `EMAIL_PASSWORD` — the credentials already in Secret Manager.
-   Host defaults to `smtp.zoho.com:465`, overridable with `MAIL_SMTP_HOST` and
-   `MAIL_SMTP_PORT`.
+```
+MAIL_SMTP_URL = smtps://USER:PASS@smtp.provider.com:465
+```
 
-Switching provider is one command and no code change:
+The secret always exists, holding the sentinel `UNCONFIGURED` until you set a
+real value. That is deliberate: Firebase validates every declared secret at
+deploy time and fails the whole deploy if one is missing, which is why
+`mailSender` sat undeployed for months. With the sentinel in place the functions
+deploy, and any queued mail is marked `ERROR` with a message telling you exactly
+what to set — loudly, once, with no retry loop.
+
+To connect a provider:
 
 ```bash
 printf 'smtps://USER:PASS@smtp.provider.com:465' | \
   firebase functions:secrets:set MAIL_SMTP_URL --data-file=-
 firebase deploy --only functions:mailSender,functions:mailRedrive
 ```
+
+The redeploy is required: Cloud Functions pin the secret VERSION at deploy time,
+so a new version is not picked up until you redeploy. Once it is, `mailRedrive`
+delivers everything that failed while unconfigured within 15 minutes — nothing
+queued is lost.
 
 The username almost always contains `@`, which **must** be percent-encoded as
 `%40` or the URL will not parse. This has bitten this project before.
@@ -55,7 +66,6 @@ The username almost always contains `@`, which **must** be percent-encoded as
 
 | Provider | Free tier | Why you would pick it |
 |---|---|---|
-| **Zoho** (already configured) | included with the mailbox | Zero extra work — the credentials exist today |
 | **Resend** | 3,000/mo | Best developer experience, clean SMTP and dashboard |
 | **Postmark** | 100/mo, then ~$15 | Best transactional deliverability; strict no-marketing policy |
 | **AWS SES** | ~$0.10 per 1,000 | Cheapest at volume; most setup, needs a sandbox exit |
@@ -74,12 +84,12 @@ Deliverability is about the DOMAIN, not the provider. Whatever you choose:
 2. **DKIM** — the provider's signing keys, published as DNS records.
 3. **DMARC** — a policy record; start at `p=none` and read the reports.
 
-Without these, receipts land in spam regardless of provider. Zoho, Resend,
-Postmark and SES all walk you through it. **This is the step worth your time.**
+Without these, receipts land in spam regardless of provider. Resend, Postmark
+and SES all walk you through it. **This is the step worth your time.**
 
-A split worth considering: keep your mailbox provider for person-to-person mail
-and use a dedicated transactional provider for automated mail, so a mailbox
-problem cannot take down order receipts.
+Keep your mailbox provider for person-to-person mail and use a dedicated
+transactional provider for automated mail, so a mailbox problem cannot take down
+order receipts.
 
 ## Operating it
 
@@ -110,8 +120,11 @@ single email**:
 - `services/emailDelivery.js → SendGrid REST → pending_emails` — a second queue
   that nothing drained.
 
-Meanwhile `ZOHO_EMAIL` and `EMAIL_PASSWORD` sat in Secret Manager, correct and
-unused, because the sender wanted a third secret in a different shape.
+A Zoho mailbox credential (`ZOHO_EMAIL` / `EMAIL_PASSWORD`) sat in Secret Manager
+and was briefly wired in as a fallback — but SMTP rejected it with
+`535 Authentication Failed` against all five Zoho endpoints, so it was removed.
+One provider setting is simpler than two, and a fallback that does not
+authenticate is worse than none.
 
 Four real order emails — two customer receipts, two owner notifications — sat in
 `mail` with `state: (none)` and `attempts: 0`.
