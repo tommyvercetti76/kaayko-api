@@ -20,6 +20,7 @@ Mounted in `functions/index.js`:
 - `POST /createPaymentIntent/webhook`
 - `GET /admin/getOrder`
 - `GET /admin/listOrders`
+- `GET /admin/mailHealth`
 - `POST /admin/updateOrderStatus`
 - `POST /admin/orders/delay-notice`
 - `GET /admin/products`
@@ -36,6 +37,7 @@ Mounted in `functions/index.js`:
 - `functions/api/checkout/updatePaymentIntentEmail.js`
 - `functions/api/checkout/stripeWebhook.js`
 - `functions/api/admin/getOrder.js`
+- `functions/api/admin/mailHealth.js`
 - `functions/api/admin/updateOrderStatus.js`
 - `functions/api/admin/orderNotices.js`
 - `functions/api/admin/products.js`
@@ -71,9 +73,9 @@ Mounted in `functions/index.js`:
 - Frontend currently exposes a Stripe `pk_test` key. Do not accept real purchases until matching live frontend/backend/webhook/tax config is provided.
 - `kaayko/src/legal/terms.html` still needs real legal operator details.
 - `MAIL_SMTP_URL` deployment must be verified.
-- Mail docs in `RETRY` need a scheduled redrive or admin alert.
-- Buyer-facing support/contact email must be normalized.
-- Admin delay notice UI currently needs response-shape alignment with `orderNotices.js`.
+- Mail docs in `RETRY` now surface through `/admin/mailHealth`, but scheduled redrive is still not implemented.
+- Buyer-facing support/contact email must be owner-confirmed before switching to `orders@kaayko.com`.
+- Full test-mode purchase, buyer receipt, admin receipt, Kortex fulfillment, and shipping email smoke still needs to be run against real Stripe test flows.
 
 ## Tests
 
@@ -104,4 +106,3 @@ The September audit run passed 11 suites and 248 tests.
 - `docs/DATA_RETENTION.md`
 - `docs/SALES_TAX.md`
 - `functions/api/checkout/README.md`
-

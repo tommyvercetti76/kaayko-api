@@ -205,6 +205,12 @@ exports.mailSender = require('./triggers/mailSender').mailSender;
 // is a job rather than a sentence.
 exports.orderRetention = require('./scheduled/orderRetention').orderRetention;
 
+// Every 15 minutes: re-drive mail that was never attempted, is mid-retry, or was
+// abandoned by a dead invocation — and redact delivered access codes. mailSender
+// only fires on document create, so without this a message missed once is missed
+// forever. Four real order emails sat unsent for two days before this existed.
+exports.mailRedrive = require('./scheduled/mailRedrive').mailRedrive;
+
 // KORTEX: Weekly analytics digest — every Monday 9am IST (3:30am UTC)
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { runWeeklyDigest } = require("./api/kortex/analyticsAlertService");

@@ -26,7 +26,7 @@ beforeEach(() => {
   admin._mocks.resetAll();
   safety.resetCaches();
   gate.resetCache();
-  delete process.env.SENDGRID_API_KEY;
+  delete process.env.MAIL_SMTP_URL;
   admin._mocks.docData['admin_users/admin-uid'] = { role: 'admin', email: 'admin@kaayko.com', tenantId: 'kaayko-default', tenantIds: ['kaayko-default'] };
   admin._mocks.docData['admin_users/super-admin-uid'] = { role: 'super-admin', email: 'super@kaayko.com', tenantId: 'kaayko-default' };
 });
@@ -100,15 +100,19 @@ describe('Credentials never sit in the mail log', () => {
     expect(queued.status).toBe('not_configured');
     expect(docs('pending_emails/')).toHaveLength(0);
 
-    process.env.SENDGRID_API_KEY = 'SG.test';
+    process.env.MAIL_SMTP_URL = 'smtps://u%40kaayko.com:pw@smtp.test:465';   // a configured provider
     const sent = await email.deliver({ to: 'a@example.com', subject: 's', text: 'Access code: KX-SECRET', html: null, template: 'guest_access_code' },
       { fetchImpl: async () => ({ status: 202, ok: true, text: async () => '' }) });
     expect(sent.status).toBe('sent');
-    const log = docs('pending_emails/')[0];
-    expect(log.text).toBeUndefined();
-    expect(log.html).toBeUndefined();
-    expect(JSON.stringify(log)).not.toContain('KX-SECRET');
-    delete process.env.SENDGRID_API_KEY;
+    // The queue is now `mail`, delivered by mailSender. The credential IS in the
+    // document while it waits — that is unavoidable for something that must be
+    // emailed — so the guarantee moved: it is flagged sensitive, and
+    // scheduled/mailRedrive.js strips the body once delivery succeeds.
+    const mailDocs = docs('mail/');
+    expect(mailDocs).toHaveLength(1);
+    expect(mailDocs[0].sensitive).toBe(true);
+    expect(docs('pending_emails/')).toHaveLength(0);   // the second queue is gone
+    delete process.env.MAIL_SMTP_URL;
 
     const created = await createGuest({ email: 'owner@example.com' });
     const hashBefore = doc('tenants/' + created.body.workspace.id).guest.accessCodeHash;

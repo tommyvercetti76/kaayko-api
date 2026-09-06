@@ -79,11 +79,35 @@ function getTransport(smtpUrl) {
  */
 function readSmtpUrl(env = process.env) {
   const raw = env[SECRET_NAME];
-  const url = typeof raw === 'string' ? raw.trim() : '';
+  let url = typeof raw === 'string' ? raw.trim() : '';
+
+  // Fall back to the mailbox credentials that already exist in Secret Manager.
+  //
+  // ZOHO_EMAIL and EMAIL_PASSWORD were configured long before this trigger was
+  // written and nothing consumed them, so the platform sat with working mail
+  // credentials and no sender. Requiring a THIRD secret in a different shape is
+  // how that happens. Composing the URL here means the only remaining step to
+  // working email is a deploy.
+  //
+  // MAIL_SMTP_URL still wins when set, so moving to another provider is one
+  // secret and no code change.
+  if (!url) {
+    const user = typeof env.ZOHO_EMAIL === 'string' ? env.ZOHO_EMAIL.trim() : '';
+    const pass = typeof env.EMAIL_PASSWORD === 'string' ? env.EMAIL_PASSWORD.trim() : '';
+    if (user && pass) {
+      const host = (typeof env.MAIL_SMTP_HOST === 'string' && env.MAIL_SMTP_HOST.trim()) || 'smtp.zoho.com';
+      const port = (typeof env.MAIL_SMTP_PORT === 'string' && env.MAIL_SMTP_PORT.trim()) || '465';
+      // encodeURIComponent so an '@' in the address and any punctuation in the
+      // app password cannot break URL parsing — the exact trap that made an
+      // earlier hand-written value unusable.
+      url = `smtps://${encodeURIComponent(user)}:${encodeURIComponent(pass)}@${host}:${port}`;
+    }
+  }
+
   if (!url) {
     return {
-      error: `${SECRET_NAME} secret is not set — mail cannot be delivered. ` +
-             `Run: firebase functions:secrets:set ${SECRET_NAME} (see docs/products/STORE.md)`
+      error: `No SMTP credentials configured — mail cannot be delivered. ` +
+             `Set ${SECRET_NAME}, or ZOHO_EMAIL + EMAIL_PASSWORD, and grant them to the mailSender function.`
     };
   }
   let parsed;
@@ -271,7 +295,13 @@ const mailSender = onDocumentCreated({
   region: 'us-central1',
   memory: '256MiB',
   timeoutSeconds: 60,
-  secrets: [SECRET_NAME]
+  // ONLY secrets that EXIST may be listed here. Firebase validates every
+    // declared secret at deploy time and fails the whole deploy if one is
+    // missing — which is exactly why mailSender was never deployed: it declared
+    // MAIL_SMTP_URL, that secret was never created, and the deploy died before
+    // anyone saw a mail. The code still PREFERS MAIL_SMTP_URL at runtime; to
+    // switch providers, create the secret and add it back to both lists here.
+    secrets: ['ZOHO_EMAIL', 'EMAIL_PASSWORD']
 }, async (event) => {
   const docId = event?.params?.docId || event?.data?.id;
   if (!docId) {

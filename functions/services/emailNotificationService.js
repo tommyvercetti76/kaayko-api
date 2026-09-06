@@ -229,59 +229,40 @@ This is an automated notification.
  * @private
  */
 async function sendEmail({ to, from, subject, htmlBody, textBody }) {
-  const apiKey = getSendGridApiKey().value();
-  
-  // Production: Use SendGrid
-  if (apiKey && apiKey.length > 0) {
-    try {
-      const sgMail = require('@sendgrid/mail');
-      sgMail.setApiKey(apiKey);
-      
-      const msg = {
-        to,
-        from,
-        subject,
-        text: textBody,
-        html: htmlBody
-      };
-      
-      const [response] = await sgMail.send(msg);
-      
-      console.log('✅ Email sent via SendGrid:', {
-        to,
-        subject,
-        statusCode: response.statusCode,
-        messageId: response.headers['x-message-id']
-      });
-      
-      return {
-        success: true,
-        messageId: response.headers['x-message-id'],
-        provider: 'sendgrid'
-      };
-      
-    } catch (error) {
-      console.error('❌ SendGrid send failed:', error);
-      throw error;
-    }
+  // REWRITTEN 6 Sep 2026. This used to try SendGrid — a package that is not
+  // installed, behind a key that is not set — and then fall through to a
+  // console.log that returned `{success: true, provider: 'console-log'}`.
+  //
+  // Every caller in alumni, kortex, paddling and kreator believed its mail had
+  // been delivered. Nothing had. That silent success is why the outage survived
+  // months of use.
+  //
+  // It now delegates to notify(), which queues into the one `mail` collection
+  // that mailSender actually delivers, and it reports the truth.
+  const { notify } = require('./notify');
+
+  const result = await notify({
+    product: 'system',          // legacy callers are untagged; see notify() docs
+    kind: 'legacy',
+    to,
+    subject,
+    html: htmlBody,
+    text: textBody,
+    // No dedupeKey: notify() derives a content+day hash, so an accidental
+    // double-fire collapses while a genuine resend tomorrow still goes out.
+  });
+
+  if (!result.queued && result.reason !== 'already_queued') {
+    // Loud. A caller that cannot email must be able to tell.
+    console.error(`❌ Email NOT queued (${subject}): ${result.reason}`);
+    return { success: false, error: result.reason, provider: 'kaayko-mail' };
   }
-  
-  // Development/Fallback: Log to console
-  console.log('\n' + '='.repeat(80));
-  console.log('📧 EMAIL NOTIFICATION (Development Mode)');
-  console.log('='.repeat(80));
-  console.log('To:', to);
-  console.log('From:', from);
-  console.log('Subject:', subject);
-  console.log('-'.repeat(80));
-  console.log('Text Body:');
-  console.log(textBody);
-  console.log('='.repeat(80) + '\n');
-  
+
   return {
     success: true,
-    messageId: `dev-${Date.now()}`,
-    provider: 'console-log'
+    messageId: result.mailId,
+    provider: 'kaayko-mail',
+    deduped: result.reason === 'already_queued'
   };
 }
 

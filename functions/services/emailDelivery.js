@@ -29,7 +29,14 @@ function fromAddress() {
 const SENSITIVE_TEMPLATES = new Set(['guest_access_code', 'guest_code_rotated']);
 
 function isConfigured() {
-  return !!process.env.SENDGRID_API_KEY;
+  // "Configured" means mailSender can actually deliver: either an explicit SMTP
+  // URL, or the mailbox credentials that already exist in Secret Manager. It used
+  // to mean "a SendGrid key is set", which was never true anywhere.
+  const env = process.env;
+  const url = typeof env.MAIL_SMTP_URL === 'string' && env.MAIL_SMTP_URL.trim();
+  const user = typeof env.ZOHO_EMAIL === 'string' && env.ZOHO_EMAIL.trim();
+  const pass = typeof env.EMAIL_PASSWORD === 'string' && env.EMAIL_PASSWORD.trim();
+  return Boolean(url || (user && pass));
 }
 
 function escapeHtml(value = '') {
@@ -71,43 +78,61 @@ async function sendViaSendGrid({ to, subject, text, html }, fetchImpl) {
  * Deliver one message. Never throws; returns { status: 'sent'|'queued'|'failed', id, error? }.
  */
 async function deliver(message, { fetchImpl } = {}) {
+  // REWRITTEN 6 Sep 2026. This used to POST to SendGrid (no key, never
+  // configured) and otherwise park the message in `pending_emails`, a second
+  // queue nothing ever drained. It now goes through notify() into the one `mail`
+  // collection that mailSender actually delivers.
+  //
+  // The sensitive-template rule is PRESERVED and still matters. It exists so a
+  // guest access code is never left sitting in a queue that cannot be drained.
+  // Now that a provider exists the code is delivered in seconds, so queueing it
+  // is correct — but the document is tagged `sensitive: true` so
+  // scheduled/mailRedrive.js can strip the body once delivery succeeds, rather
+  // than leaving a live credential in Firestore until retention runs at 90 days.
   const { to, subject, text, html, template = null, meta = null } = message;
-  // The log never keeps a body: an access code in a queued email would defeat the hash at rest.
-  const record = {
-    to,
-    subject,
-    template,
-    meta,
-    from: fromAddress(),
-    createdAt: FieldValue.serverTimestamp(),
-    createdAtMs: Date.now()
-  };
+  const { notify } = require('./notify');
 
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(to || ''))) {
     return { status: 'failed', error: 'invalid recipient' };
   }
 
-  if (!isConfigured()) {
-    // Nothing that carries a credential is queued: it could not be sent later without storing the code.
-    if (SENSITIVE_TEMPLATES.has(template)) return { status: 'not_configured', id: null };
-    try {
-      const ref = await db.collection('pending_emails').add({ ...record, status: 'queued', reason: 'no_provider' });
-      return { status: 'queued', id: ref.id };
-    } catch (error) {
-      console.error('[Email] queue write failed:', error.message);
-      return { status: 'failed', error: error.message };
-    }
+  const sensitive = SENSITIVE_TEMPLATES.has(template);
+
+  // PRESERVED PROPERTY: a message carrying a live credential is never written to
+  // the queue when there is no way to send it. Queueing it would leave an access
+  // code sitting in Firestore indefinitely for a delivery that is not coming.
+  // With credentials present it is queued and then redacted after delivery by
+  // scheduled/mailRedrive.js, so the code is at rest for seconds, not forever.
+  if (sensitive && !isConfigured()) {
+    return { status: 'not_configured', id: null };
   }
 
-  try {
-    await sendViaSendGrid({ to, subject, text, html }, fetchImpl);
-    const ref = await db.collection('pending_emails').add({ ...record, status: 'sent', sentAtMs: Date.now() }).catch(() => null);
-    return { status: 'sent', id: ref?.id || null };
-  } catch (error) {
-    console.error('[Email] send failed:', error.message);
-    const ref = await db.collection('pending_emails').add({ ...record, status: 'failed', error: error.message }).catch(() => null);
-    return { status: 'failed', id: ref?.id || null, error: error.message };
+  const result = await notify({
+    product: 'kortex',
+    kind: template || 'kortex-mail',
+    to,
+    subject,
+    html,
+    text,
+    // Access codes must never be deduped away — a rotated code is a NEW code
+    // and has to reach the person even if the subject line is identical.
+    dedupeKey: sensitive ? `kortex_${template}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}` : undefined,
+  });
+
+  if (!result.queued && result.reason !== 'already_queued') {
+    console.error('[Email] queue failed:', result.reason);
+    return { status: 'failed', error: result.reason };
   }
+
+  if (sensitive && result.mailId) {
+    // Marked for post-delivery redaction. Written separately so an older
+    // notify() cannot silently drop the flag.
+    await db.collection('mail').doc(result.mailId)
+      .set({ sensitive: true }, { merge: true })
+      .catch((e) => console.error('[Email] could not flag sensitive mail:', e.message));
+  }
+
+  return { status: 'sent', id: result.mailId };
 }
 
 // ─── Templates ────────────────────────────────────────────────────────────────

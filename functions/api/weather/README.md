@@ -40,7 +40,8 @@ Routes:
 - `POST /paddleScore/batch`
 - `GET /paddleScore/metrics`
 
-Public rating must validate spot IDs and avoid raw IP storage.
+Public rating must validate spot IDs and avoid raw IP storage. The current
+working tree does this for new public rating labels through `callerKey()`.
 
 ## Forecast
 
@@ -79,4 +80,3 @@ Run:
 npm run test:paddlingout
 node ./node_modules/jest/bin/jest.js --runInBand __tests__/weather-paddle-score.test.js --forceExit --detectOpenHandles
 ```
-

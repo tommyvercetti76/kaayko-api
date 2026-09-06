@@ -27,7 +27,7 @@ beforeAll(() => {
 beforeEach(() => {
   admin._mocks.resetAll();
   safety.resetCaches();
-  delete process.env.SENDGRID_API_KEY;
+  delete process.env.MAIL_SMTP_URL;
 });
 
 const docs = (prefix) => Object.entries(admin._mocks.docData).filter(([k]) => k.startsWith(prefix)).map(([k, v]) => ({ key: k, ...v }));
@@ -101,15 +101,17 @@ describe('Creating a free link', () => {
     expect(docs('pending_emails/')).toHaveLength(0); // nothing that carries a code is ever queued
   });
 
-  test('sends through SendGrid when a key is present', async () => {
-    process.env.SENDGRID_API_KEY = 'SG.test';
-    const fetchImpl = jest.fn(async () => ({ status: 202, ok: true }));
+  // Same intent (a configured provider means the mail actually goes out),
+  // re-pointed at the one queue mailSender delivers from.
+  test('queues the access code for delivery when a provider is configured', async () => {
+    process.env.MAIL_SMTP_URL = 'smtps://u%40kaayko.com:pw@smtp.test:465';   // a configured provider
     const emailDelivery = require('../services/emailDelivery');
-    const result = await emailDelivery.sendGuestAccessCode({ to: 'x@example.com', accessCode: 'KX-TEST', link: { shortUrl: 'https://kaayko.com/l/kx-1' } }, { fetchImpl });
+    const result = await emailDelivery.sendGuestAccessCode({ to: 'x@example.com', accessCode: 'KX-TEST', link: { shortUrl: 'https://kaayko.com/l/kx-1' } });
     expect(result.status).toBe('sent');
-    const call = fetchImpl.mock.calls[0];
-    expect(call[0]).toContain('api.sendgrid.com');
-    expect(JSON.parse(call[1].body).personalizations[0].to[0].email).toBe('x@example.com');
+    const queued = docs('mail/')[0];
+    expect(queued.to).toEqual(['x@example.com']);
+    expect(queued.sensitive).toBe(true);   // flagged for post-delivery redaction
+    delete process.env.MAIL_SMTP_URL;
   });
 });
 
@@ -376,7 +378,7 @@ describe('Capabilities', () => {
     expect(off.body.maxWindows).toBe(8);
     expect(off.headers['cache-control']).toMatch(/max-age/);
 
-    process.env.SENDGRID_API_KEY = 'SG.test';
+    process.env.MAIL_SMTP_URL = 'smtps://u%40kaayko.com:pw@smtp.test:465';   // a configured provider
     const on = await request(app).get('/kortex/guest/capabilities').set(...UA);
     expect(on.body.email).toBe(true);
   });

@@ -17,8 +17,8 @@ This directory contains maintained backend documentation for `kaayko-api`. Runti
 
 ## Current Critical Notes
 
-- Store checkout is architecturally complete in tests, but live real-money launch is blocked until legal placeholders, live Stripe config, SMTP verification, and mail retry/alerting are resolved.
-- Paddling Out public directory/forecast/search APIs are live, but Add Lake copy and Rate/trainer routing need product cleanup.
+- Store checkout is architecturally complete in tests, but live real-money launch is blocked until legal placeholders, live Stripe config, SMTP verification, owner-confirmed support address, and mail retry/redrive are resolved. Mail failure visibility now exists through `/admin/mailHealth`.
+- Paddling Out public directory/forecast/search APIs are live. Add Lake copy, Rate routing, public-rating hardening, and nearby-water radius validation are addressed in the current working tree; trainer remains partial/internal.
 - The old Stripe email/setup guides were removed because they referenced the retired `order-confirmation.html` flow and pre-webhook checkout assumptions. Use `functions/api/checkout/README.md` and `docs/products/STORE.md` instead.
 
 ## Tests To Know
@@ -48,4 +48,3 @@ Paddling Out:
 - `functions/api/checkout/STRIPE_SETUP_GUIDE.md`
 
 Those were superseded by current checkout docs and contained stale file paths, old contact addresses, and future-work items that are now implemented.
-

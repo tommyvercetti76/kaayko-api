@@ -26,7 +26,7 @@ beforeEach(() => {
   admin._mocks.resetAll();
   safety.resetCaches();
   gate.resetCache();
-  delete process.env.SENDGRID_API_KEY;
+  delete process.env.MAIL_SMTP_URL;
   admin._mocks.docData['admin_users/admin-uid'] = { role: 'admin', email: 'admin@kaayko.com', tenantId: 'kaayko-default', tenantIds: ['kaayko-default'] };
   admin._mocks.docData['admin_users/super-admin-uid'] = { role: 'super-admin', email: 'super@kaayko.com', tenantId: 'kaayko-default' };
 });
@@ -326,15 +326,17 @@ describe('Tenant kill switch', () => {
 });
 
 describe('Email delivery content parts', () => {
-  test('an empty HTML part is not sent to SendGrid', async () => {
-    process.env.SENDGRID_API_KEY = 'SG.test';
+  // Same intent as before (an empty part must never be included), re-pointed at
+  // the queue that replaced the direct SendGrid POST.
+  test('an empty HTML part is not written into the queued message', async () => {
+    process.env.MAIL_SMTP_URL = 'smtps://u%40kaayko.com:pw@smtp.test:465';   // a configured provider
     const email = require('../services/emailDelivery');
-    const calls = [];
-    const fetchImpl = async (url, opts) => { calls.push(JSON.parse(opts.body)); return { status: 202, ok: true, text: async () => '' }; };
-    const result = await email.deliver({ to: 'ops@example.com', subject: 's', text: 'plain only', html: null }, { fetchImpl });
+    const result = await email.deliver({ to: 'ops@example.com', subject: 's', text: 'plain only', html: null });
     expect(result.status).toBe('sent');
-    expect(calls[0].content).toEqual([{ type: 'text/plain', value: 'plain only' }]);
-    delete process.env.SENDGRID_API_KEY;
+    const queued = docs('mail/')[0];
+    expect(queued.message.text).toBe('plain only');
+    expect(queued.message.html).toBeUndefined();
+    delete process.env.MAIL_SMTP_URL;
   });
 });
 

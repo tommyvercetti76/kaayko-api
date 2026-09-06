@@ -75,7 +75,7 @@ Search and forecast public APIs are live:
 Public rating:
 
 - `POST /paddleScore/publicRating` is intended for the no-auth public Rate page.
-- It must validate public spot IDs, avoid raw IP storage for new ratings, and use hardened client identity.
+- It validates public spot IDs, avoids raw IP storage for new ratings, and uses hardened client identity in the current working tree.
 
 Trainer:
 
@@ -94,10 +94,19 @@ node ./node_modules/jest/bin/jest.js --runInBand __tests__/weather-paddle-score.
 
 The September audit run passed both suites.
 
-## Current P0/P1 Backlog
+## Current Status And Remaining Work
 
-- Align Add Lake frontend copy with admin-review behavior.
-- Fix public Rate routing/UX or implement missing trainer APIs.
-- Harden public rating IP handling and public spot validation.
-- Lower-bound/validate `nearbyWater` radius.
+Resolved in the current working tree:
 
+- Add Lake frontend copy matches admin-review behavior.
+- Public Rate routing no longer sends normal users to trainer.
+- Public rating IP handling and spot validation are hardened.
+- `nearbyWater` radius is lower-bounded and validates bad input.
+- Submit geocoding uses the backend proxy.
+
+Remaining:
+
+- Run a real Add Lake approve/reject smoke with image upload and Storage cleanup.
+- Decide whether trainer gets the missing endpoints behind admin auth or is retired.
+- Add a submitter confirmation email if the product wants immediate acknowledgement.
+- Add rate limits around weather/scoring endpoints before high-volume public traffic.
