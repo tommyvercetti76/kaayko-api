@@ -66,6 +66,9 @@ apiApp.use(express.json());
 apiApp.use("/images", require("./api/products/images"));
 apiApp.get("/helloWorld", (_r, res) => res.send("OK"));
 apiApp.use("/products", require("./api/products/products"));
+// Arcade: per-product mini-games and the reward codes they mint. Public by design —
+// every outcome is decided server-side (see api/arcade/arcade.js).
+apiApp.use("/arcade", require("./api/arcade/arcade"));
 apiApp.use("/animals", require("./api/products/animals"));
 apiApp.use("/paddlingOut", require("./api/weather/paddlingout"));
 apiApp.use("/paddle-trainer", require("./api/weather/paddleTrainer"));
@@ -128,6 +131,9 @@ apiApp.post("/admin/orders/delay-notice", requireAuth, requirePlatformAdmin, req
 
 // Store catalogue management. The only authenticated product write path — the
 // kreator router next door can only see documents carrying a kreatorId.
+// Patron pricing — the owner's own list. Admin-only; the storefront cannot reach it.
+apiApp.use("/admin/patrons", require("./api/admin/patrons"));
+
 const { listProducts, updateProduct } = require("./api/admin/products");
 apiApp.get("/admin/products", requireAuth, requirePlatformAdmin, listProducts);
 

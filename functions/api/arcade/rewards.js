@@ -1,0 +1,216 @@
+/**
+ * arcade/rewards.js — what a won game is actually worth, decided server-side.
+ *
+ * Three separate things live here, all of which must be enforced away from the browser:
+ *
+ *   1. Reward codes. Single use, time limited, and only ever worth a percentage off the
+ *      ELIGIBLE part of a cart. Totes and t-shirts are premium: they are excluded from
+ *      the discount base even when a winning code is present.
+ *   2. The monthly order cap. Two orders per calendar month, counted against a hash of
+ *      the checkout email. There are no accounts, so email is the only handle we have;
+ *      it is stored hashed so the ledger is a counter, not a customer list.
+ *   3. Patrons. People the owner chooses, who get their own percentage or their own
+ *      fixed price on named products. This is the only path to a discount on premium.
+ */
+
+const admin = require("firebase-admin");
+const { DISCOUNTABLE_TYPES, REWARDS, emailKey, REWARD_PERCENT } = require("./arcade");
+const { loadStanding } = require("./penalty");
+
+const ORDER_LEDGER = "arcade_order_ledger";
+const PATRONS = "kaayko_patrons";
+
+const MAX_ORDERS_PER_MONTH = 2;
+const MAX_PATRON_PERCENT = 100;
+
+const monthKey = (d = new Date()) => d.toISOString().slice(0, 7); // YYYY-MM
+
+const isEligible = (item) => DISCOUNTABLE_TYPES.has(String(item?.productType || "").toLowerCase());
+
+/**
+ * Subtotal of the discountable lines only.
+ * @param {Array<{productType?:string, unitPriceCents?:number, quantity?:number, lineTotalCents?:number}>} items
+ */
+function eligibleSubtotalCents(items) {
+  return (items || []).reduce((sum, i) => {
+    if (!isEligible(i)) return sum;
+    const line = Number.isFinite(i.lineTotalCents)
+      ? i.lineTotalCents
+      : (Number(i.unitPriceCents) || 0) * (Number(i.quantity) || 0);
+    return sum + Math.max(0, line);
+  }, 0);
+}
+
+/**
+ * Validate a reward code against a cart and compute the discount.
+ * Never throws on a bad code: an invalid code is a zero discount plus a reason.
+ *
+ * @returns {Promise<{applied:boolean, discountCents:number, percent:number, code:string|null, reason:string|null}>}
+ */
+async function computeRewardDiscount(db, { items, rewardCode, email, token }) {
+  const none = (reason) => ({ applied: false, discountCents: 0, percent: 0, scope: null, code: null, reason });
+  const code = String(rewardCode || "").trim().toUpperCase();
+  if (!code) return none(null);
+
+  const ref = db.collection(REWARDS).doc(code);
+  const snap = await ref.get();
+  if (!snap.exists) return none("NO_SUCH_CODE");
+
+  const r = snap.data();
+  if (r.redeemed) return none("ALREADY_REDEEMED");
+
+  // Penalty rules 2 and 3. A locked token buys nothing, and a code minted before the
+  // strike that locked it is dead — otherwise "win, then paste" would be free money.
+  const owner = r.token || token;
+  if (owner) {
+    const standing = await loadStanding(db, owner);
+    if (standing.locked) return none("LOCKED");
+    const minted = r.createdAt && typeof r.createdAt.toMillis === "function" ? r.createdAt.toMillis() : 0;
+    if (standing.voidedAt && minted && standing.voidedAt > minted) return none("VOIDED");
+  }
+  // Codes live one hour from minting, claimed or not.
+  if (r.expiresAt && r.expiresAt.toMillis() < Date.now()) return none("EXPIRED");
+  // A code won under one email cannot be handed to another.
+  if (r.emailKey && email && r.emailKey !== emailKey(email)) return none("WRONG_OWNER");
+
+  // Scope decides the base. A Beggathon code was argued for at the cart, so it takes
+  // the whole cart; a game code only ever touches the non-premium lines.
+  const scope = r.scope === "cart" ? "cart" : "eligible";
+  const base = scope === "cart"
+    ? (items || []).reduce((sum, i) => sum + Math.max(0, Number.isFinite(i.lineTotalCents)
+        ? i.lineTotalCents
+        : (Number(i.unitPriceCents) || 0) * (Number(i.quantity) || 0)), 0)
+    : eligibleSubtotalCents(items);
+  if (base <= 0) return none(scope === "cart" ? "EMPTY_CART" : "NO_ELIGIBLE_ITEMS");
+
+  const percent = Math.min(Number(r.percent) || REWARD_PERCENT, 50);
+  return {
+    applied: true,
+    discountCents: Math.floor((base * percent) / 100),
+    percent,
+    scope,
+    code,
+    reason: null
+  };
+}
+
+/** Burn the code. Called only once the payment intent for `orderId` exists. */
+async function redeemReward(db, code, orderId) {
+  if (!code) return;
+  await db.collection(REWARDS).doc(String(code).toUpperCase()).set({
+    redeemed: true,
+    orderId: orderId || null,
+    redeemedAt: admin.firestore.FieldValue.serverTimestamp()
+  }, { merge: true });
+}
+
+/* ── the monthly cap ──────────────────────────────────────────────────────── */
+
+/**
+ * How many orders this email has placed this calendar month.
+ * @returns {Promise<{count:number, limit:number, allowed:boolean}>}
+ */
+async function monthlyOrderStatus(db, email) {
+  const key = emailKey(email);
+  if (!email) return { count: 0, limit: MAX_ORDERS_PER_MONTH, allowed: true };
+  const snap = await db.collection(ORDER_LEDGER).doc(`${key}_${monthKey()}`).get();
+  const count = snap.exists ? Number(snap.data().count) || 0 : 0;
+  return { count, limit: MAX_ORDERS_PER_MONTH, allowed: count < MAX_ORDERS_PER_MONTH };
+}
+
+/** Record one placed order against the month. Atomic, so two tabs cannot both squeeze in. */
+async function recordOrder(db, email, orderId) {
+  if (!email) return;
+  const key = emailKey(email);
+  const ref = db.collection(ORDER_LEDGER).doc(`${key}_${monthKey()}`);
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    const count = snap.exists ? Number(snap.data().count) || 0 : 0;
+    tx.set(ref, {
+      count: count + 1,
+      month: monthKey(),
+      lastOrderId: orderId || null,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+  });
+}
+
+/* ── patrons: the owner's own list ────────────────────────────────────────── */
+
+/**
+ * A patron record keyed by email hash:
+ *   { label, percent, fixedPrices: { <productID>: <dollars> }, active, note }
+ *
+ * `percent` applies to the whole cart, premium included — this is the deliberate
+ * exception to the no-discount-on-premium rule, and only the owner can grant it.
+ */
+async function loadPatron(db, email) {
+  if (!email) return null;
+  const snap = await db.collection(PATRONS).doc(emailKey(email)).get();
+  if (!snap.exists) return null;
+  const p = snap.data();
+  return p.active === false ? null : p;
+}
+
+/**
+ * Patron pricing, applied to an already-priced cart.
+ * A fixed price wins over a percentage on the same line.
+ *
+ * @returns {{discountCents:number, percent:number, fixedLines:number, label:string|null}}
+ */
+function applyPatronPricing(patron, items) {
+  if (!patron) return { discountCents: 0, percent: 0, fixedLines: 0, label: null };
+
+  const fixed = patron.fixedPrices && typeof patron.fixedPrices === "object" ? patron.fixedPrices : {};
+  const percent = Math.max(0, Math.min(Number(patron.percent) || 0, MAX_PATRON_PERCENT));
+
+  let discountCents = 0;
+  let fixedLines = 0;
+
+  for (const item of items || []) {
+    const qty = Number(item.quantity) || 0;
+    const unit = Number(item.unitPriceCents) || 0;
+    const line = Number.isFinite(item.lineTotalCents) ? item.lineTotalCents : unit * qty;
+    const override = fixed[item.productID] ?? fixed[item.productId];
+
+    if (Number.isFinite(Number(override))) {
+      const target = Math.round(Number(override) * 100) * qty;
+      if (target < line) { discountCents += line - target; fixedLines += 1; }
+      continue;                        // a fixed price is the whole deal for that line
+    }
+    if (percent > 0) discountCents += Math.floor((line * percent) / 100);
+  }
+
+  return { discountCents, percent, fixedLines, label: patron.label || null };
+}
+
+/**
+ * Penalty rules 1 and 9. What pasting costs, computed here and shown as its own line at
+ * checkout. Never silent: the cart prints it before anybody is asked to pay.
+ *
+ * @returns {Promise<{percent:number, cents:number}>}
+ */
+async function computeSurcharge(db, { items, token }) {
+  if (!token) return { percent: 0, cents: 0 };
+  const standing = await loadStanding(db, token);
+  const percent = Math.max(0, Math.min(5, standing.surchargePercent || 0));
+  if (!percent) return { percent: 0, cents: 0 };
+  const base = (items || []).reduce((sum, i) => sum + Math.max(0, Number.isFinite(i.lineTotalCents)
+    ? i.lineTotalCents
+    : (Number(i.unitPriceCents) || 0) * (Number(i.quantity) || 0)), 0);
+  return { percent, cents: Math.round((base * percent) / 100) };
+}
+
+module.exports = {
+  computeRewardDiscount,
+  computeSurcharge,
+  redeemReward,
+  eligibleSubtotalCents,
+  monthlyOrderStatus,
+  recordOrder,
+  loadPatron,
+  applyPatronPricing,
+  MAX_ORDERS_PER_MONTH,
+  ORDER_LEDGER,
+  PATRONS
+};

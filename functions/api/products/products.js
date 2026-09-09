@@ -102,7 +102,8 @@ router.get("/", async (_req, res) => {
           imgSrc:          Array.isArray(d.imgSrc) ? d.imgSrc : [],
           previewSrc:      Array.isArray(d.previewSrc) ? d.previewSrc : [],
           theme:           d.theme || "",
-          nationalPark:    d.nationalPark || ""
+          nationalPark:    d.nationalPark || "",
+          featured:        d.featured === true
         };
 
         // Trust Firestore imgSrc/previewSrc only when the URLs are the new
@@ -168,7 +169,8 @@ router.get("/:id", async (req, res) => {
       imgSrc:          Array.isArray(d.imgSrc) ? d.imgSrc : [],
       previewSrc:      Array.isArray(d.previewSrc) ? d.previewSrc : [],
       theme:           d.theme || "",
-      nationalPark:    d.nationalPark || ""
+      nationalPark:    d.nationalPark || "",
+      featured:        d.featured === true
     };
 
     // Same fallback rule as the list endpoint — regenerate if any URL is a

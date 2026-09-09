@@ -21,6 +21,7 @@
 
 const crypto = require('crypto');
 const admin = require('firebase-admin');
+const { computeRewardDiscount, computeSurcharge, redeemReward, monthlyOrderStatus, recordOrder, loadPatron, applyPatronPricing } = require('../arcade/rewards');
 const { resolveCart } = require('./pricing');
 const { resolveNotifyEmail } = require('../email/notifyAddress');
 
@@ -152,9 +153,56 @@ async function createPaymentIntent(req, res) {
       });
     }
 
-    const { items, subtotalCents, totalCents, currency } = cart;
+    const { items, subtotalCents, currency } = cart;
+    let { totalCents } = cart;
     const totalQuantity = items.reduce((sum, i) => sum + i.quantity, 0);
     const contact = normaliseProvisionalContact(body);
+
+    // ── Discounts, all decided here and never by the browser ─────────────────
+    // The client may post a reward code and an email. Neither is trusted: the code
+    // is looked up, checked for reuse and expiry, and applied only to the eligible
+    // (non-premium) lines. Patron pricing comes from the owner's own list.
+    const buyerEmail = contact?.email || body.email || null;
+
+    const store = admin.firestore();
+    const monthly = await monthlyOrderStatus(store, buyerEmail);
+    if (!monthly.allowed) {
+      return res.status(429).json({
+        success: false,
+        error: 'Too Many Orders',
+        message: `This address has already placed ${monthly.count} orders this month. The limit is ${monthly.limit}.`,
+        code: 'MONTHLY_LIMIT'
+      });
+    }
+
+    const arcadeToken = String(body.arcadeToken || '').trim().slice(0, 64) || null;
+    const reward = await computeRewardDiscount(store, { items, rewardCode: body.rewardCode, email: buyerEmail, token: arcadeToken });
+    const patron = await loadPatron(store, buyerEmail);
+    const patronDeal = applyPatronPricing(patron, items);
+
+    // A patron price and a game reward do not stack: whichever helps more is applied.
+    const useReward = reward.applied && reward.discountCents >= patronDeal.discountCents;
+    const discountCents = Math.min(
+      Math.max(0, useReward ? reward.discountCents : patronDeal.discountCents),
+      Math.max(0, totalCents - 50)          // never take the charge below Stripe's floor
+    );
+    const discountSource = discountCents <= 0 ? null : (useReward ? 'arcade' : 'patron');
+    totalCents = totalCents - discountCents;
+
+    // Penalty rules 1 and 9. Pasting into the Beggathon adds a percent to the order,
+    // up to five. It is added here, server-side, and returned so the cart can print it
+    // on its own line — a shopper is never quietly charged more than they were shown.
+    const surcharge = await computeSurcharge(store, { items, token: arcadeToken });
+    totalCents = totalCents + surcharge.cents;
+    if (surcharge.cents > 0) {
+      console.log(`[checkout] paste surcharge +${surcharge.percent}% (+$${(surcharge.cents / 100).toFixed(2)})`);
+    }
+
+    if (discountCents > 0) {
+      console.log(`[checkout] ${discountSource} discount -$${(discountCents / 100).toFixed(2)}`);
+    } else if (body.rewardCode && reward.reason) {
+      console.log(`[checkout] reward code rejected: ${reward.reason}`);
+    }
 
     console.log(
       `[checkout] Pricing ${items.length} line(s), ${totalQuantity} unit(s), total $${(totalCents / 100).toFixed(2)} (server-priced)`
@@ -216,6 +264,10 @@ async function createPaymentIntent(req, res) {
         ...(item.taxCode ? { taxCode: item.taxCode } : {})
       })),
       subtotalCents,
+      discountCents,
+      discountSource,
+      surchargeCents: surcharge.cents,
+      surchargePercent: surcharge.percent,
       // Sales tax is unknown until the shipping address is complete. These
       // fields ALWAYS exist so every reader sees the same shape; the tax route
       // rewrites them and the PaymentIntent amount once the address arrives.
@@ -264,6 +316,17 @@ async function createPaymentIntent(req, res) {
       }]
     });
 
+    // Burn the reward and count the order only now that the intent exists, so an
+    // abandoned attempt cannot consume either. Neither is worth failing checkout for.
+    if (discountSource === 'arcade' && reward.code) {
+      await redeemReward(store, reward.code, paymentIntent.id).catch(
+        (e) => console.error('[checkout] reward redeem failed:', e.message));
+    }
+    if (buyerEmail) {
+      await recordOrder(store, buyerEmail, paymentIntent.id).catch(
+        (e) => console.error('[checkout] order ledger failed:', e.message));
+    }
+
     console.log(`[checkout] Stored payment_intents/${paymentIntent.id} with ${items.length} line item(s)`);
 
     return res.json({
@@ -272,6 +335,16 @@ async function createPaymentIntent(req, res) {
       paymentIntentId: paymentIntent.id,
       amount: totalCents,
       subtotalCents,
+      // What came off, and why. The cart shows this rather than computing its own
+      // discount — the number the card is charged is the only one worth displaying.
+      discountCents,
+      discountSource,
+      surchargeCents: surcharge.cents,
+      surchargePercent: surcharge.percent,
+      discountPercent: discountCents > 0 ? (useReward ? reward.percent : patronDeal.percent) : 0,
+      discountScope: discountCents > 0 && useReward ? reward.scope : null,
+      // Present only when a code was offered and not honoured, so the shopper is told.
+      rewardReason: (!useReward || discountCents <= 0) && body.rewardCode ? (reward.reason || null) : null,
       currency,
       // Echo the server's view so the client can reconcile its cart display.
       items: items.map(i => ({
