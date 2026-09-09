@@ -141,6 +141,15 @@ apiApp.get("/admin/products", requireAuth, requirePlatformAdmin, listProducts);
 apiApp.get("/admin/mailHealth", requireAuth, requirePlatformAdmin, require("./api/admin/mailHealth").mailHealth);
 apiApp.patch("/admin/products/:id", requireAuth, requirePlatformAdmin, updateProduct);
 
+// Kaayko property cards. The copy printed on the business cards and shown at
+// /card. Public read is unauthenticated because the card page is public; every
+// write is admin-only and whitelisted field by field.
+const { publicCards, listCards, updateCard, updateBrand } = require("./api/admin/cards");
+apiApp.get("/cards", publicCards);
+apiApp.get("/admin/cards", requireAuth, requirePlatformAdmin, listCards);
+apiApp.patch("/admin/cards", requireAuth, requirePlatformAdmin, updateBrand);
+apiApp.patch("/admin/cards/:slug", requireAuth, requirePlatformAdmin, updateCard);
+
 // 🥗 KALEKUTZ - Voice-first nutrition tracker
 apiApp.use("/kutz", require("./api/kutz/kutzRouter"));
 
