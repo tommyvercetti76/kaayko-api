@@ -206,6 +206,29 @@ const {
 exports.warmPaddleScoreCache    = warmPaddleScoreCache;
 exports.aggregatePaddleFeedback = aggregatePaddleFeedback;
 
+// Keep one `api` instance resident. Measured 12 Sep 2026: 24 of the last 41
+// GET /paddlingOut requests were cold starts (up to 5.3 s of skeletons) because
+// traffic is too sparse to keep Cloud Run's scale-to-zero instance alive. A
+// request every 5 minutes stays inside the idle window and also primes the
+// per-instance image listing + Firestore channels the list route depends on.
+// Cost: ~290 tiny invocations/day. The guaranteed alternative is
+// `minInstances: 1` on exports.api (~$8–10/month) — an owner decision.
+exports.keepApiWarm = require('firebase-functions/v2/scheduler').onSchedule({
+  schedule: 'every 5 minutes',
+  timeZone: 'America/Los_Angeles',
+  timeoutSeconds: 60,
+  memory: '128MiB'
+}, async () => {
+  const base = process.env.KAAYKO_API_BASE || 'https://api-vwcc5j4qda-uc.a.run.app';
+  const t0 = Date.now();
+  try {
+    const r = await fetch(`${base}/paddlingOut`, { signal: AbortSignal.timeout(25000), headers: { 'User-Agent': 'kaayko-keepwarm/1.0' } });
+    console.log(`keepApiWarm: ${r.status} in ${Date.now() - t0}ms`);
+  } catch (err) {
+    console.warn(`keepApiWarm: failed after ${Date.now() - t0}ms — ${err.message}`);
+  }
+});
+
 // Monthly re-validation of static enrichment data (gauges, FCC vintage, tips age)
 exports.enrichmentFreshness = require('./scheduled/enrichmentFreshness').enrichmentFreshness;
 
