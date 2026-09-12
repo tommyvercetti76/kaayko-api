@@ -1,11 +1,17 @@
 // functions/api/weather/paddlingout.js
 //
-// GET /paddlingOut       — all curated paddling spots with pre-warmed paddle scores
-// GET /paddlingOut/:id   — single spot
+// GET  /paddlingOut                 — all public paddling spots with pre-warmed paddle scores
+// GET  /paddlingOut/:id             — single spot
+// GET  /paddlingOut/geocode, /reverse-geocode — cached Nominatim proxies
+// POST /paddlingOut/submitEntry     — community submission (multipart, 2–5 photos)
+// Admin (platform admin only):
+//   GET/POST /paddlingOut/admin/submissions[/:id/validate|reject]
+//   GET/PATCH /paddlingOut/admin/spots[/:id], POST/DELETE …/:id/images, POST …/:id/warm-score
 //
-// Paddle scores are NEVER computed inline here. They are pre-computed every 15 minutes
-// by the warmPaddleScoreCache scheduled function and stored in paddle_score_cache.
-// This endpoint reads that collection in a single Firestore read — lightning quick.
+// Public reads never compute paddle scores inline. They are pre-computed every
+// 15 minutes by warmPaddleScoreCache into paddle_score_cache. The ONE exception
+// is warmScoreNow(): when an admin publishes or moves a spot, its score is
+// computed immediately so the home list never shows "—" for a fresh spot.
 
 const express = require('express');
 const { resolveNotifyEmail } = require('../email/notifyAddress');
@@ -15,8 +21,10 @@ const crypto  = require('crypto');
 const Busboy  = require('busboy');
 const PaddleScoreCache = require('../../cache/paddleScoreCache');
 const { isPublicPaddlingSpot } = require('./communitySpotVisibility');
-const { requireAdmin, optionalAuthForAdmin } = require('../../middleware/authMiddleware');
+const { requireAdmin, requirePlatformAdmin, optionalAuthForAdmin } = require('../../middleware/authMiddleware');
 const { sendRawEmail } = require('../../services/emailNotificationService');
+const { stripImageMetadata } = require('./imageSanitize');
+const { computePaddleScoreForSpot } = require('./paddleScoreCompute');
 
 const db     = admin.firestore();
 const bucket = admin.storage().bucket();
@@ -26,11 +34,35 @@ const Timestamp = admin.firestore.Timestamp;
 const LAKE_SUBMISSION_LIMIT_PER_DAY = 5;
 const COMMUNITY_GO_LIVE_DELAY_MS = 48 * 60 * 60 * 1000;
 const LAKE_SUBMISSION_DEDUPE_MS = 7 * 24 * 60 * 60 * 1000;
-const SUBMISSION_IMAGE_LIMIT = 3;
+// A single photo is not enough to review a launch (one framed shot can hide a
+// private dock or a fenced ramp); two is the floor, five the ceiling.
+const SUBMISSION_IMAGE_MIN = 2;
+const SUBMISSION_IMAGE_LIMIT = 5;
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const MAX_TOTAL_IMAGE_BYTES = SUBMISSION_IMAGE_LIMIT * MAX_IMAGE_BYTES;
+const MAX_TOTAL_IMAGE_MB = Math.round(MAX_TOTAL_IMAGE_BYTES / (1024 * 1024));
 const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
+// Two public spots closer than this are almost certainly the same launch. The
+// submission is still accepted (a second ramp on the same lake is legitimate)
+// but the admin card is flagged so the reviewer looks before approving.
+const NEAR_DUPLICATE_METRES = 400;
+// Display tags an admin can put on a spot. The card renders these as chips;
+// anything outside this list is dropped on write so the client never has to
+// escape free text from the catalogue.
+const SPOT_TAGS = Object.freeze({
+  'community':  'Community',
+  'new':        'New',
+  'verified':   'Verified',
+  'staff-pick': 'Staff pick',
+  'seasonal':   'Seasonal',
+  'river':      'River',
+  'boat-ramp':  'Boat ramp'
+});
+// Honeypot: a field no human sees. Bots that fill every input get a 201 and
+// nothing stored, so they don't learn the trap exists.
+const HONEYPOT_FIELD = 'website';
 const SUBMISSION_FIELDS = new Set([
+  HONEYPOT_FIELD,
   'lakeName',
   'name',
   'city',
@@ -57,7 +89,20 @@ const SUBMISSION_FIELDS = new Set([
   'source'
 ]);
 
-function submitEntryUpload(req, res, next) {
+// Multipart parser shared by the public submit form and the admin photo-add
+// route. Parses on req.rawBody when Firebase has already buffered the body
+// (Cloud Functions), otherwise streams the request (tests, emulator).
+function imageUploadMiddleware(options = {}) {
+  const allowedFields = options.fields || SUBMISSION_FIELDS;
+  const maxFiles = options.maxFiles || SUBMISSION_IMAGE_LIMIT;
+  return function parseMultipart(req, res, next) {
+    return submitEntryUpload(req, res, next, { allowedFields, maxFiles });
+  };
+}
+
+function submitEntryUpload(req, res, next, options = {}) {
+  const allowedFields = options.allowedFields || SUBMISSION_FIELDS;
+  const maxFiles = options.maxFiles || SUBMISSION_IMAGE_LIMIT;
   const contentType = String(req.headers['content-type'] || '');
   if (!contentType.toLowerCase().startsWith('multipart/form-data')) {
     req.files = [];
@@ -67,7 +112,7 @@ function submitEntryUpload(req, res, next) {
   const busboy = Busboy({
     headers: req.headers,
     limits: {
-      files: SUBMISSION_IMAGE_LIMIT,
+      files: maxFiles,
       fileSize: MAX_IMAGE_BYTES,
       fields: 30,
       fieldSize: 1000
@@ -85,7 +130,7 @@ function submitEntryUpload(req, res, next) {
 
   busboy.on('field', (name, value, info = {}) => {
     if (uploadError) return;
-    if (!SUBMISSION_FIELDS.has(name)) return;
+    if (!allowedFields.has(name)) return;
     if (Object.prototype.hasOwnProperty.call(fields, name)) {
       return fail('Duplicate form fields are not allowed');
     }
@@ -113,7 +158,7 @@ function submitEntryUpload(req, res, next) {
       size += chunk.length;
       totalBytes += chunk.length;
       if (totalBytes > MAX_TOTAL_IMAGE_BYTES) {
-        fail('Total image upload must be 15 MB or smaller');
+        fail(`Total image upload must be ${MAX_TOTAL_IMAGE_MB} MB or smaller`);
         return;
       }
       chunks.push(chunk);
@@ -131,7 +176,7 @@ function submitEntryUpload(req, res, next) {
     });
   });
 
-  busboy.on('filesLimit', () => fail(`Upload ${SUBMISSION_IMAGE_LIMIT} images or fewer`));
+  busboy.on('filesLimit', () => fail(`Upload ${maxFiles} images or fewer`));
   busboy.on('fieldsLimit', () => fail('Too many form fields'));
   busboy.on('error', () => {
     if (finished) return;
@@ -260,21 +305,24 @@ function imageExtension(mime) {
   return 'bin';
 }
 
-function validateSubmissionImages(files) {
-  if (!Array.isArray(files) || files.length === 0) {
-    const err = new Error('At least one lake image is required');
+function validateSubmissionImages(files, { min = SUBMISSION_IMAGE_MIN, max = SUBMISSION_IMAGE_LIMIT } = {}) {
+  const count = Array.isArray(files) ? files.length : 0;
+  if (count < min) {
+    const err = new Error(min === 1
+      ? 'At least one lake image is required'
+      : `At least ${min} lake photos are required (${count} received)`);
     err.code = 'IMAGE_REQUIRED';
     throw err;
   }
-  if (files.length > SUBMISSION_IMAGE_LIMIT) {
-    const err = new Error(`Upload ${SUBMISSION_IMAGE_LIMIT} images or fewer`);
+  if (count > max) {
+    const err = new Error(`Upload ${max} images or fewer`);
     err.code = 'TOO_MANY_IMAGES';
     throw err;
   }
 
   const totalBytes = files.reduce((sum, file) => sum + (file.size || 0), 0);
   if (totalBytes > MAX_TOTAL_IMAGE_BYTES) {
-    const err = new Error('Total image upload must be 15 MB or smaller');
+    const err = new Error(`Total image upload must be ${MAX_TOTAL_IMAGE_MB} MB or smaller`);
     err.code = 'IMAGES_TOO_LARGE';
     throw err;
   }
@@ -286,10 +334,13 @@ function validateSubmissionImages(files) {
       err.code = 'INVALID_IMAGE_SIGNATURE';
       throw err;
     }
+    // Public bucket, anonymous submitter: never publish the phone's GPS fix,
+    // device model or capture time embedded in the file.
+    const cleaned = stripImageMetadata(file.buffer, detectedMime);
     return {
-      file,
+      file: { ...file, buffer: cleaned },
       mime: detectedMime,
-      size: file.size || file.buffer.length,
+      size: cleaned.length,
       ext: imageExtension(detectedMime)
     };
   });
@@ -333,13 +384,18 @@ async function reserveSubmissionSlot({ ipHash, dedupeKey }) {
   });
 }
 
-async function uploadSubmissionImages(images, spotId) {
+async function uploadSubmissionImages(images, spotId, options = {}) {
+  const source = options.source || 'paddlingout_submitentry';
   const uploaded = [];
   try {
     for (let i = 0; i < images.length; i++) {
       const image = images[i];
       const random = crypto.randomBytes(6).toString('hex');
-      const path = `images/paddling_out/${spotId}-${i + 1}-${random}.${image.ext}`;
+      // Filename starts with the spot id so fetchSpotImages' prefix listing
+      // picks it up; the timestamp keeps admin-added photos sorting after the
+      // originals instead of colliding with `-1-`, `-2-` from the submission.
+      const seq = options.sequencePrefix ? `${options.sequencePrefix}${i + 1}` : String(i + 1);
+      const path = `images/paddling_out/${spotId}-${seq}-${random}.${image.ext}`;
       const fileRef = bucket.file(path);
       await fileRef.save(image.file.buffer, {
         resumable: false,
@@ -347,8 +403,8 @@ async function uploadSubmissionImages(images, spotId) {
           contentType: image.mime,
           cacheControl: 'public, max-age=31536000, immutable',
           metadata: {
-            source: 'paddlingout_submitentry',
-            communitySubmission: 'true'
+            source,
+            communitySubmission: source === 'paddlingout_submitentry' ? 'true' : 'false'
           }
         },
         validation: 'md5'
@@ -360,6 +416,7 @@ async function uploadSubmissionImages(images, spotId) {
         size: image.size
       });
     }
+    invalidateImageListCache();
     return uploaded;
   } catch (err) {
     await Promise.allSettled(uploaded.map(image => bucket.file(image.path).delete()));
@@ -372,6 +429,7 @@ async function deleteSubmissionImages(imagePaths) {
   const results = await Promise.allSettled(
     imagePaths.map(path => bucket.file(path).delete())
   );
+  invalidateImageListCache();
   return results.map((result, index) => ({
     path: imagePaths[index],
     deleted: result.status === 'fulfilled',
@@ -391,8 +449,14 @@ function publicSubmissionPayload(docSnap) {
     region: data.region || '',
     country: data.country || '',
     launchHint: data.launchHint || '',
+    text: data.text || '',
+    description: data.description || '',
     parkingAvl: data.parkingAvl || 'N',
     restroomsAvl: data.restroomsAvl || 'N',
+    tags: normalizeTags(data.tags),
+    possibleDuplicateOf: data.possibleDuplicateOf || null,
+    validationNotes: data.validationNotes || null,
+    rejectionReason: data.rejectionReason || null,
     imgSrc: Array.isArray(data.imgSrc) ? data.imgSrc : [],
     imageCount: data.imageCount || 0,
     imagePaths: Array.isArray(data.imagePaths) ? data.imagePaths : [],
@@ -463,6 +527,28 @@ function escapeForEmail(value) {
 let _imageListCache = { at: 0, files: null };
 const IMAGE_LIST_TTL_MS = 60 * 1000;
 
+function invalidateImageListCache() {
+  _imageListCache = { at: 0, files: null };
+}
+
+// Files that belong to ONE spot id. Curated photos are `<id><n>.webp`, community
+// and admin uploads are `<id>-<seq>-<12 hex>.<ext>` (seq = `1` or `a<ts>-1`).
+// Matching the full shape, not just the prefix, stops `whiterock` from claiming
+// `whiterock-north-1-….jpg` and lets one spot's delete route touch only its
+// own files.
+const IMAGE_EXT_RE = '(?:jpe?g|png|webp)';
+function fileBelongsToSpot(fileName, spotId) {
+  const name = String(fileName || '').toLowerCase();
+  const id = String(spotId || '').toLowerCase();
+  if (!id || !name.startsWith(id)) return false;
+  const rest = name.slice(id.length);
+  return new RegExp(`^(?:\\d*\\.${IMAGE_EXT_RE}|-(?:a[0-9a-z]+-)?\\d+-[0-9a-f]{12}\\.${IMAGE_EXT_RE})$`).test(rest);
+}
+
+function spotImagePathsFromList(names, spotId) {
+  return names.filter(name => fileBelongsToSpot(name.split('/').pop() || '', spotId));
+}
+
 async function listAllSpotImages() {
   if (_imageListCache.files && Date.now() - _imageListCache.at < IMAGE_LIST_TTL_MS) {
     return _imageListCache.files;
@@ -476,21 +562,79 @@ async function listAllSpotImages() {
 async function fetchSpotImages(spotId) {
   try {
     const names = await listAllSpotImages();
-    return names
-      .filter(name => {
-        const fileName = (name.split('/').pop() || '').toLowerCase();
-        return fileName.startsWith(spotId.toLowerCase());
-      })
-      .map(publicStorageUrl);
+    // Strict ownership (verified 12 Sep 2026: all 90 bucket files conform), so
+    // `jenny` no longer picks up a future `jenny-lake-…` spot's photos.
+    return spotImagePathsFromList(names, spotId).map(publicStorageUrl);
   } catch (err) {
     console.error(`fetchSpotImages failed for ${spotId}:`, err.message);
     return [];
   }
 }
 
+// Haversine distance in metres between two coordinate pairs.
+function distanceMetres(lat1, lng1, lat2, lng2) {
+  const R = 6371000;
+  const toRad = d => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a = Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+// Nearest existing spot (public or pending) within NEAR_DUPLICATE_METRES, or
+// null. One collection read; the catalogue is small enough that a bounding-box
+// query is not worth an index.
+async function findNearbySpot(lat, lng, excludeId = null) {
+  try {
+    const snapshot = await db.collection('paddlingSpots').get();
+    let best = null;
+    snapshot.forEach(docSnap => {
+      if (docSnap.id === excludeId) return;
+      const data = docSnap.data() || {};
+      if (data.archived === true || String(data.submissionStatus || '').toLowerCase() === 'rejected') return;
+      const la = Number(data.location?.latitude);
+      const ln = Number(data.location?.longitude);
+      if (!Number.isFinite(la) || !Number.isFinite(ln)) return;
+      const d = distanceMetres(lat, lng, la, ln);
+      if (d <= NEAR_DUPLICATE_METRES && (!best || d < best.distanceMetres)) {
+        best = {
+          id: docSnap.id,
+          lakeName: data.title || data.lakeName || docSnap.id,
+          distanceMetres: Math.round(d),
+          isPublic: isPublicPaddlingSpot(data)
+        };
+      }
+    });
+    return best;
+  } catch (err) {
+    console.warn('findNearbySpot failed:', err.message);
+    return null;
+  }
+}
+
+function normalizeTags(value) {
+  const list = Array.isArray(value) ? value : (typeof value === 'string' ? value.split(',') : []);
+  const out = [];
+  list.forEach(raw => {
+    const tag = String(raw || '').trim().toLowerCase();
+    if (SPOT_TAGS[tag] && !out.includes(tag)) out.push(tag);
+  });
+  return out.slice(0, 4);
+}
+
 async function submitEntryHandler(req, res) {
   try {
     const body = req.body || {};
+    if (sanitizeText(body[HONEYPOT_FIELD], 50)) {
+      // Bot filled the invisible field. Say yes, store nothing.
+      return res.status(201).json({
+        success: true,
+        id: `community-${crypto.randomBytes(4).toString('hex')}`,
+        goLiveAt: null,
+        message: 'Entry received. It will appear on the map once our team reviews and approves it.'
+      });
+    }
     const lakeName = sanitizeText(body.lakeName || body.name, 120);
     const city = sanitizeText(body.city, 80);
     const region = sanitizeText(body.region || body.state, 80);
@@ -542,11 +686,17 @@ async function submitEntryHandler(req, res) {
         (hasLng && (Number.isNaN(lng) || lng < -180 || lng > 180))) {
       return res.status(400).json({ success: false, error: 'Invalid coordinates' });
     }
+    // Null Island and the poles are where broken geocoders and empty GPS fixes
+    // land; no paddling launch is there.
+    if ((Math.abs(lat) < 0.01 && Math.abs(lng) < 0.01) || Math.abs(lat) > 85) {
+      return res.status(400).json({ success: false, error: 'Those coordinates are not a real launch point. Drop the pin on the water.' });
+    }
 
     const ip = getClientIp(req);
     const ipHash = hashValue(ip);
     const dedupeKey = normalizedSubmissionKey({ lakeName, city, region, country, lat, lng });
     await reserveSubmissionSlot({ ipHash, dedupeKey });
+    const nearbySpot = await findNearbySpot(lat, lng);
 
     const locationPieces = [city, region, country].filter(Boolean);
     const subtitle = locationPieces.join(', ');
@@ -588,12 +738,17 @@ async function submitEntryHandler(req, res) {
       launchHint,
       city,
       region,
-      country
+      country,
+      tags: [],
+      archived: false
     };
 
     const submissionDoc = {
       spotId,
       ...publicSpotDoc,
+      description,
+      // Reviewer aids — never rendered publicly
+      possibleDuplicateOf: nearbySpot,
       contactEmail: anonymous ? null : email,
       anonymous,
       notificationStatus: anonymous ? 'not_requested' : 'pending_validation_notice',
@@ -629,8 +784,9 @@ async function submitEntryHandler(req, res) {
         text:
           `A community paddling spot was submitted and is awaiting review.\n\n` +
           `Name: ${lakeName}\nLocation: ${subtitle}\nCoords: ${coords}\n` +
-          `From: ${anonymous ? 'anonymous' : email}\n\n` +
-          `Review it in Kortex → Submissions: https://kaayko.com/admin/kortex#/submissions`,
+          `From: ${anonymous ? 'anonymous' : email}\n` +
+          (nearbySpot ? `Possible duplicate of: ${nearbySpot.lakeName} (${nearbySpot.distanceMetres} m away)\n` : '') +
+          `\nReview it in Kortex → Submissions: https://kaayko.com/admin/kortex#/submissions`,
         html:
           `<p>A community paddling spot is awaiting review.</p>` +
           `<p><strong>${esc(lakeName)}</strong><br>${esc(subtitle)}<br>Coords: ${esc(coords)}<br>` +
@@ -672,13 +828,45 @@ async function submitEntryHandler(req, res) {
 router.post('/submitEntry', submitEntryUpload, submitEntryHandler);
 router.post('/lakeRequests', submitEntryUpload, submitEntryHandler);
 
+// ── Admin moderation + catalogue management ──────────────────────────────
+// Every route below publishes or edits PUBLIC content, so it needs a platform
+// administrator: `admin` is a self-serve role (anyone can provision it), and
+// requireAdmin alone would let a tenant admin approve spam onto the map.
+// requireAdmin still runs first because it is what turns X-Admin-Key into
+// req.user.authMethod = 'admin-key', which requirePlatformAdmin honours.
+const adminGuard = [optionalAuthForAdmin, requireAdmin, requirePlatformAdmin];
+
+const SPOT_ID_RE = /^[a-zA-Z0-9_-]+$/;
+
+// Compute and cache a paddle score for a spot right now. Used when a spot
+// becomes public (approve) or moves (coordinate edit) so the home list shows a
+// score immediately instead of "—" until the 15-minute warmer next runs.
+// Best-effort with a hard timeout: never blocks or fails the admin action.
+async function warmScoreNow(spotId, data) {
+  const lat = Number(data.location?.latitude);
+  const lng = Number(data.location?.longitude);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return { warmed: false, reason: 'no coordinates' };
+  try {
+    const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('score compute timed out')), 12000));
+    const score = await Promise.race([
+      computePaddleScoreForSpot({ id: spotId, lat, lng, name: data.title || data.lakeName || spotId }),
+      timeout
+    ]);
+    if (!score) return { warmed: false, reason: 'weather unavailable' };
+    await new PaddleScoreCache().set(spotId, score);
+    return { warmed: true, rating: score.rating ?? null };
+  } catch (err) {
+    console.warn(`warmScoreNow failed for ${spotId}:`, err.message);
+    return { warmed: false, reason: err.message };
+  }
+}
+
 /**
  * GET /paddlingOut/admin/submissions
  *
- * Admin-only view of community lake submissions. Uses the existing X-Admin-Key
- * path through requireAdmin for lightweight internal review tools.
+ * Admin-only view of community lake submissions.
  */
-router.get('/admin/submissions', optionalAuthForAdmin, requireAdmin, async (req, res) => {
+router.get('/admin/submissions', ...adminGuard, async (req, res) => {
   try {
     const status = sanitizeText(req.query.status, 40);
     const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 100);
@@ -694,7 +882,7 @@ router.get('/admin/submissions', optionalAuthForAdmin, requireAdmin, async (req,
       );
     }
 
-    return res.json({ success: true, submissions });
+    return res.json({ success: true, submissions, tags: SPOT_TAGS });
   } catch (err) {
     console.error('paddlingOut GET /admin/submissions error:', err.message, err.stack);
     return res.status(500).json({ success: false, error: 'Failed to load submissions' });
@@ -704,13 +892,14 @@ router.get('/admin/submissions', optionalAuthForAdmin, requireAdmin, async (req,
 /**
  * POST /paddlingOut/admin/submissions/:id/validate
  *
- * Marks a community submission validated. Validated submissions are immediately
- * public; pending submissions also become public automatically when goLiveAt
- * passes.
+ * Marks a community submission validated → public immediately. Refuses to
+ * publish a spot that has no coordinates or no photos (an admin can PATCH /
+ * add photos first), and warms its paddle score so the card is complete on the
+ * very next page load.
  */
-router.post('/admin/submissions/:id/validate', optionalAuthForAdmin, requireAdmin, async (req, res) => {
+router.post('/admin/submissions/:id/validate', ...adminGuard, async (req, res) => {
   const id = req.params.id;
-  if (!id || !/^[a-zA-Z0-9_-]+$/.test(id)) {
+  if (!id || !SPOT_ID_RE.test(id)) {
     return res.status(400).json({ success: false, error: 'Invalid submission ID' });
   }
 
@@ -726,10 +915,36 @@ router.post('/admin/submissions/:id/validate', optionalAuthForAdmin, requireAdmi
       return res.status(404).json({ success: false, error: 'Submission not found' });
     }
 
+    const spotData = spotSnap.data() || {};
+    const submissionData = submissionSnap.data() || {};
+    if (String(submissionData.status || '').toLowerCase() === 'rejected') {
+      return res.status(409).json({ success: false, error: 'This submission was rejected and its photos were deleted. Ask for a fresh submission.' });
+    }
+    const lat = Number(spotData.location?.latitude);
+    const lng = Number(spotData.location?.longitude);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      return res.status(422).json({ success: false, error: 'Cannot publish: the spot has no coordinates. Edit it and set a location first.' });
+    }
+    const images = await fetchSpotImages(id);
+    if (!images.length) {
+      return res.status(422).json({ success: false, error: 'Cannot publish: the spot has no photos. Add at least one photo first.' });
+    }
+    if (!spotData.title && !spotData.lakeName) {
+      return res.status(422).json({ success: false, error: 'Cannot publish: the spot has no name.' });
+    }
+
     const actor = adminActor(req);
     const notes = sanitizeText(req.body?.notes, 500);
+    const requestedTags = req.body?.tags !== undefined ? normalizeTags(req.body.tags) : null;
+    const existingTags = normalizeTags(spotData.tags);
+    // Default display tag for a community spot; the admin can remove it later.
+    const tags = requestedTags !== null
+      ? requestedTags
+      : (existingTags.length ? existingTags : ['community']);
     const validationUpdate = {
       submissionStatus: 'validated',
+      archived: false,
+      tags,
       validatedAt: FieldValue.serverTimestamp(),
       validatedBy: actor,
       updatedAt: FieldValue.serverTimestamp()
@@ -746,41 +961,45 @@ router.post('/admin/submissions/:id/validate', optionalAuthForAdmin, requireAdmi
     ]);
 
     const submission = {
-      ...submissionSnap.data(),
+      ...submissionData,
       ...submissionUpdate,
       spotId: id
     };
 
-    let notification = { success: true, status: 'not_requested' };
-    if (submission.contactEmail) {
-      try {
-        const emailResult = await notifySubmissionValidated(submission, id);
-        notification = {
-          success: emailResult.success !== false,
-          status: 'sent',
-          provider: emailResult.provider || null,
-          messageId: emailResult.messageId || null
-        };
-      } catch (emailErr) {
-        console.warn('paddlingOut validation email failed:', emailErr.message);
-        notification = {
-          success: false,
-          status: 'failed',
-          error: emailErr.message
-        };
-      }
-
-      await submissionRef.set({
-        notificationStatus: notification.status,
-        notificationResult: notification,
-        notificationUpdatedAt: FieldValue.serverTimestamp()
-      }, { merge: true });
-    }
+    // Score + email in parallel: neither depends on the other and both are
+    // best-effort from the admin's point of view.
+    const [paddleScore, notification] = await Promise.all([
+      warmScoreNow(id, spotData),
+      (async () => {
+        if (!submission.contactEmail) return { success: true, status: 'not_requested' };
+        let result;
+        try {
+          const emailResult = await notifySubmissionValidated(submission, id);
+          result = {
+            success: emailResult.success !== false,
+            status: 'sent',
+            provider: emailResult.provider || null,
+            messageId: emailResult.messageId || null
+          };
+        } catch (emailErr) {
+          console.warn('paddlingOut validation email failed:', emailErr.message);
+          result = { success: false, status: 'failed', error: emailErr.message };
+        }
+        await submissionRef.set({
+          notificationStatus: result.status,
+          notificationResult: result,
+          notificationUpdatedAt: FieldValue.serverTimestamp()
+        }, { merge: true });
+        return result;
+      })()
+    ]);
 
     return res.json({
       success: true,
       id,
       status: 'validated',
+      tags,
+      paddleScore,
       notification
     });
   } catch (err) {
@@ -796,9 +1015,9 @@ router.post('/admin/submissions/:id/validate', optionalAuthForAdmin, requireAdmi
  * Rejected submissions never auto-publish, and uploaded images are deleted by
  * default so rejected media does not remain publicly addressable.
  */
-router.post('/admin/submissions/:id/reject', optionalAuthForAdmin, requireAdmin, async (req, res) => {
+router.post('/admin/submissions/:id/reject', ...adminGuard, async (req, res) => {
   const id = req.params.id;
-  if (!id || !/^[a-zA-Z0-9_-]+$/.test(id)) {
+  if (!id || !SPOT_ID_RE.test(id)) {
     return res.status(400).json({ success: false, error: 'Invalid submission ID' });
   }
 
@@ -816,14 +1035,24 @@ router.post('/admin/submissions/:id/reject', optionalAuthForAdmin, requireAdmin,
 
     const submission = submissionSnap.data() || {};
     const actor = adminActor(req);
-    const reason = sanitizeText(req.body?.reason, 500);
+    // The SPA sends `rejectionReason`; older tooling sent `reason`. Accept both
+    // — the note used to be silently dropped.
+    const reason = sanitizeText(req.body?.rejectionReason ?? req.body?.reason, 500);
     const deleteImages = req.body?.deleteImages !== false;
-    const deletionResult = deleteImages
-      ? await deleteSubmissionImages(submission.imagePaths || [])
-      : [];
+    // Delete every file with this spot's prefix (admin-added photos included),
+    // not only the ones recorded at submission time.
+    let imagePaths = Array.isArray(submission.imagePaths) ? submission.imagePaths.slice() : [];
+    if (deleteImages) {
+      try {
+        const listed = spotImagePathsFromList(await listAllSpotImages(), id);
+        listed.forEach(pth => { if (!imagePaths.includes(pth)) imagePaths.push(pth); });
+      } catch (_) { /* fall back to the recorded paths */ }
+    }
+    const deletionResult = deleteImages ? await deleteSubmissionImages(imagePaths) : [];
 
     const spotUpdate = {
       submissionStatus: 'rejected',
+      archived: true,
       imgSrc: [],
       imageCount: 0,
       rejectedAt: FieldValue.serverTimestamp(),
@@ -840,7 +1069,9 @@ router.post('/admin/submissions/:id/reject', optionalAuthForAdmin, requireAdmin,
 
     await Promise.all([
       spotRef.set(spotUpdate, { merge: true }),
-      submissionRef.set(submissionUpdate, { merge: true })
+      submissionRef.set(submissionUpdate, { merge: true }),
+      // A rejected spot must not keep a cached score around.
+      db.collection('paddle_score_cache').doc(id).delete().catch(() => {})
     ]);
 
     return res.json({
@@ -852,6 +1083,374 @@ router.post('/admin/submissions/:id/reject', optionalAuthForAdmin, requireAdmin,
   } catch (err) {
     console.error(`paddlingOut POST /admin/submissions/${id}/reject error:`, err.message, err.stack);
     return res.status(500).json({ success: false, error: 'Failed to reject submission' });
+  }
+});
+
+// ── Admin spot catalogue (curated + community) ───────────────────────────
+
+function adminSpotPayload(docSnap, images, cachedScore) {
+  const data = docSnap.data() || {};
+  return {
+    id: docSnap.id,
+    lakeName: data.lakeName || '',
+    title: data.title || data.lakeName || '',
+    subtitle: data.subtitle || '',
+    text: data.text || '',
+    launchHint: data.launchHint || '',
+    city: data.city || '',
+    region: data.region || '',
+    country: data.country || '',
+    location: data.location || {},
+    parkingAvl: data.parkingAvl || 'N',
+    restroomsAvl: data.restroomsAvl || 'N',
+    youtubeURL: data.youtubeURL || '',
+    waterType: data.waterType || null,
+    tags: normalizeTags(data.tags),
+    archived: data.archived === true,
+    communitySubmission: data.communitySubmission === true,
+    submissionStatus: data.submissionStatus || null,
+    isPublic: isPublicPaddlingSpot(data),
+    images: images.map(path => ({ path, url: publicStorageUrl(path) })),
+    hasCachedScore: !!cachedScore,
+    rating: cachedScore?.rating ?? null,
+    updatedAt: data.updatedAt || null,
+    updatedBy: data.updatedBy || null,
+    validatedAt: data.validatedAt || null
+  };
+}
+
+/**
+ * GET /paddlingOut/admin/spots
+ *
+ * Every spot in the catalogue — curated, community, archived, pending — with
+ * the public-visibility verdict, photos and whether a score is cached. This
+ * is the only listing that bypasses isPublicPaddlingSpot.
+ */
+router.get('/admin/spots', ...adminGuard, async (req, res) => {
+  try {
+    const [snapshot, names, scores] = await Promise.all([
+      db.collection('paddlingSpots').get(),
+      listAllSpotImages().catch(() => []),
+      new PaddleScoreCache().getAll()
+    ]);
+    const spots = snapshot.docs.map(docSnap =>
+      adminSpotPayload(docSnap, spotImagePathsFromList(names, docSnap.id), scores.get(docSnap.id) || null)
+    );
+    spots.sort((a, b) => a.title.localeCompare(b.title));
+    return res.json({ success: true, spots, tags: SPOT_TAGS });
+  } catch (err) {
+    console.error('paddlingOut GET /admin/spots error:', err.message, err.stack);
+    return res.status(500).json({ success: false, error: 'Failed to load spots' });
+  }
+});
+
+/**
+ * GET /paddlingOut/admin/spots/:id — one spot, same shape, regardless of visibility.
+ */
+router.get('/admin/spots/:id', ...adminGuard, async (req, res) => {
+  const id = req.params.id;
+  if (!id || !SPOT_ID_RE.test(id)) return res.status(400).json({ success: false, error: 'Invalid spot ID' });
+  try {
+    const [docSnap, images, cached] = await Promise.all([
+      db.collection('paddlingSpots').doc(id).get(),
+      fetchSpotImagePaths(id),
+      new PaddleScoreCache().get(id)
+    ]);
+    if (!docSnap.exists) return res.status(404).json({ success: false, error: 'Spot not found' });
+    return res.json({ success: true, spot: adminSpotPayload(docSnap, images, cached), tags: SPOT_TAGS });
+  } catch (err) {
+    console.error(`paddlingOut GET /admin/spots/${id} error:`, err.message);
+    return res.status(500).json({ success: false, error: 'Failed to load spot' });
+  }
+});
+
+async function fetchSpotImagePaths(spotId) {
+  try {
+    return spotImagePathsFromList(await listAllSpotImages(), spotId);
+  } catch (err) {
+    console.error(`fetchSpotImagePaths failed for ${spotId}:`, err.message);
+    return [];
+  }
+}
+
+// Which fields an admin may change, and how each is cleaned. Anything not
+// listed (submissionStatus, communitySubmission, validatedBy, source, …) is
+// ignored on write so the moderation trail cannot be rewritten through PATCH.
+const SPOT_EDITABLE = {
+  lakeName:     v => sanitizeText(v, 120),
+  title:        v => sanitizeText(v, 120),
+  subtitle:     v => sanitizeText(v, 160),
+  text:         v => sanitizeText(v, 800),
+  launchHint:   v => sanitizeText(v, 160),
+  city:         v => sanitizeText(v, 80),
+  region:       v => sanitizeText(v, 80),
+  country:      v => sanitizeText(v, 80),
+  youtubeURL:   v => {
+    const url = sanitizeText(v, 300);
+    if (!url) return '';
+    return /^https:\/\/(www\.)?(youtube\.com|youtu\.be)\//i.test(url) ? url : null;
+  },
+  parkingAvl:   v => sanitizeYesNo(v),
+  restroomsAvl: v => sanitizeYesNo(v),
+  waterType:    v => {
+    const t = sanitizeText(v, 20).toLowerCase();
+    if (!t) return null;
+    return ['lake', 'reservoir', 'river', 'coastal', 'bay', 'canal'].includes(t) ? t : undefined;
+  },
+  tags:         v => normalizeTags(v),
+  archived:     v => parseBoolean(v)
+};
+
+/**
+ * PATCH /paddlingOut/admin/spots/:id
+ *
+ * Edit any spot's data (name, copy, location, amenities, tags, published
+ * flag). Location edits invalidate and re-warm the cached score. Edits to a
+ * community spot are mirrored into its review record so the Submissions tab
+ * shows the corrected values.
+ */
+router.patch('/admin/spots/:id', ...adminGuard, async (req, res) => {
+  const id = req.params.id;
+  if (!id || !SPOT_ID_RE.test(id)) return res.status(400).json({ success: false, error: 'Invalid spot ID' });
+  const body = req.body || {};
+
+  try {
+    const spotRef = db.collection('paddlingSpots').doc(id);
+    const spotSnap = await spotRef.get();
+    if (!spotSnap.exists) return res.status(404).json({ success: false, error: 'Spot not found' });
+    const current = spotSnap.data() || {};
+
+    const update = {};
+    const changed = [];
+    for (const [field, clean] of Object.entries(SPOT_EDITABLE)) {
+      if (!Object.prototype.hasOwnProperty.call(body, field)) continue;
+      const value = clean(body[field]);
+      if (value === undefined || (value === null && field === 'youtubeURL')) {
+        return res.status(400).json({ success: false, error: `Invalid value for ${field}` });
+      }
+      update[field] = value;
+      changed.push(field);
+    }
+
+    // Name: keep title and lakeName in step when only one was sent, so the card
+    // (title first) and the search index (lakeName) never disagree.
+    if (update.lakeName !== undefined && update.title === undefined) update.title = update.lakeName;
+    if (update.title !== undefined && update.lakeName === undefined) update.lakeName = update.title;
+    if ((update.title !== undefined && !update.title) || (update.lakeName !== undefined && !update.lakeName)) {
+      return res.status(400).json({ success: false, error: 'Name cannot be empty' });
+    }
+
+    // Location
+    let locationChanged = false;
+    if (body.lat !== undefined || body.lng !== undefined || body.location) {
+      const lat = parseCoordinate(body.lat ?? body.location?.latitude);
+      const lng = parseCoordinate(body.lng ?? body.location?.longitude);
+      if (lat === null || lng === null || Number.isNaN(lat) || Number.isNaN(lng) ||
+          lat < -85 || lat > 85 || lng < -180 || lng > 180 ||
+          (Math.abs(lat) < 0.01 && Math.abs(lng) < 0.01)) {
+        return res.status(400).json({ success: false, error: 'Invalid coordinates' });
+      }
+      const prev = current.location || {};
+      if (Number(prev.latitude) !== lat || Number(prev.longitude) !== lng) {
+        update.location = { latitude: lat, longitude: lng };
+        locationChanged = true;
+        changed.push('location');
+      }
+    }
+
+    // Subtitle follows city/region/country unless the admin set it explicitly.
+    if (update.subtitle === undefined && (update.city !== undefined || update.region !== undefined || update.country !== undefined)) {
+      const pieces = [
+        update.city ?? current.city,
+        update.region ?? current.region,
+        update.country ?? current.country
+      ].filter(Boolean);
+      if (pieces.length) update.subtitle = pieces.join(', ');
+    }
+
+    if (!changed.length) {
+      return res.status(400).json({ success: false, error: 'Nothing to update' });
+    }
+
+    // Publishing a community spot through the archived toggle must go through
+    // validate (it has the photo/coordinate guardrails). Un-archiving a
+    // community spot that was never validated stays hidden anyway, so tell the
+    // admin instead of silently doing nothing.
+    if (update.archived === false && current.communitySubmission === true &&
+        String(current.submissionStatus || '').toLowerCase() !== 'validated') {
+      return res.status(409).json({ success: false, error: 'This community spot has not been approved. Approve it from Submissions instead.' });
+    }
+
+    update.updatedAt = FieldValue.serverTimestamp();
+    update.updatedBy = adminActor(req);
+
+    const writes = [spotRef.set(update, { merge: true })];
+    const submissionRef = db.collection('paddling_lake_submissions').doc(id);
+    if (current.communitySubmission === true) {
+      const mirror = {};
+      ['lakeName', 'title', 'subtitle', 'text', 'launchHint', 'city', 'region', 'country', 'location', 'parkingAvl', 'restroomsAvl', 'tags']
+        .forEach(f => { if (update[f] !== undefined) mirror[f] = update[f]; });
+      if (Object.keys(mirror).length) {
+        mirror.updatedAt = FieldValue.serverTimestamp();
+        mirror.editedBy = update.updatedBy;
+        writes.push(submissionRef.set(mirror, { merge: true }));
+      }
+    }
+    if (locationChanged || update.archived === true) {
+      writes.push(db.collection('paddle_score_cache').doc(id).delete().catch(() => {}));
+    }
+    await Promise.all(writes);
+
+    // Audit trail — who changed what. Append-only; never rendered publicly.
+    db.collection('paddling_spot_audit').add({
+      spotId: id,
+      actor: update.updatedBy,
+      fields: changed,
+      before: Object.fromEntries(changed.map(f => [f, current[f] ?? null])),
+      after: Object.fromEntries(changed.map(f => [f, update[f] ?? null])),
+      at: FieldValue.serverTimestamp()
+    }).catch(err => console.warn('paddling_spot_audit write failed:', err.message));
+
+    const merged = { ...current, ...update };
+    const paddleScore = locationChanged && isPublicPaddlingSpot(merged)
+      ? await warmScoreNow(id, merged)
+      : null;
+
+    const [images, cached] = await Promise.all([fetchSpotImagePaths(id), new PaddleScoreCache().get(id)]);
+    const fresh = await spotRef.get();
+    return res.json({
+      success: true,
+      spot: adminSpotPayload(fresh, images, cached),
+      changed,
+      paddleScore
+    });
+  } catch (err) {
+    console.error(`paddlingOut PATCH /admin/spots/${id} error:`, err.message, err.stack);
+    return res.status(500).json({ success: false, error: 'Failed to update spot' });
+  }
+});
+
+/**
+ * POST /paddlingOut/admin/spots/:id/images  (multipart, field `images`)
+ *
+ * Add 1–5 photos to any spot. Same signature and metadata-strip pipeline as
+ * community uploads. Total per spot is capped so a card never carries a
+ * runaway carousel.
+ */
+const MAX_IMAGES_PER_SPOT = 8;
+
+router.post('/admin/spots/:id/images', ...adminGuard, imageUploadMiddleware({ fields: new Set(['note']) }), async (req, res) => {
+  const id = req.params.id;
+  if (!id || !SPOT_ID_RE.test(id)) return res.status(400).json({ success: false, error: 'Invalid spot ID' });
+  try {
+    const spotRef = db.collection('paddlingSpots').doc(id);
+    const spotSnap = await spotRef.get();
+    if (!spotSnap.exists) return res.status(404).json({ success: false, error: 'Spot not found' });
+
+    const images = validateSubmissionImages(req.files || [], { min: 1, max: SUBMISSION_IMAGE_LIMIT });
+    const existing = await fetchSpotImagePaths(id);
+    if (existing.length + images.length > MAX_IMAGES_PER_SPOT) {
+      return res.status(400).json({ success: false, error: `A spot can have at most ${MAX_IMAGES_PER_SPOT} photos (${existing.length} already).` });
+    }
+
+    const uploaded = await uploadSubmissionImages(images, id, {
+      source: 'admin_spot_photos',
+      sequencePrefix: `a${Date.now().toString(36)}-`
+    });
+    const all = await fetchSpotImagePaths(id);
+    await spotRef.set({
+      imgSrc: all.map(publicStorageUrl),
+      imageCount: all.length,
+      updatedAt: FieldValue.serverTimestamp(),
+      updatedBy: adminActor(req)
+    }, { merge: true });
+    if (spotSnap.data()?.communitySubmission === true) {
+      await db.collection('paddling_lake_submissions').doc(id).set({
+        imgSrc: all.map(publicStorageUrl),
+        imageCount: all.length,
+        imagePaths: all,
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+    }
+
+    return res.status(201).json({
+      success: true,
+      added: uploaded.map(u => ({ path: u.path, url: u.url })),
+      images: all.map(path => ({ path, url: publicStorageUrl(path) }))
+    });
+  } catch (err) {
+    if (['IMAGE_REQUIRED', 'TOO_MANY_IMAGES', 'IMAGES_TOO_LARGE', 'INVALID_IMAGE_SIGNATURE'].includes(err.code)) {
+      return res.status(400).json({ success: false, error: err.message });
+    }
+    console.error(`paddlingOut POST /admin/spots/${id}/images error:`, err.message, err.stack);
+    return res.status(500).json({ success: false, error: 'Failed to add photos' });
+  }
+});
+
+/**
+ * DELETE /paddlingOut/admin/spots/:id/images?path=images/paddling_out/<file>
+ *
+ * Remove one photo. The path must sit under the spot prefix AND belong to this
+ * spot id, so one spot's route can never delete another spot's file. A public
+ * spot keeps at least one photo.
+ */
+router.delete('/admin/spots/:id/images', ...adminGuard, async (req, res) => {
+  const id = req.params.id;
+  if (!id || !SPOT_ID_RE.test(id)) return res.status(400).json({ success: false, error: 'Invalid spot ID' });
+  const path = String(req.query.path || req.body?.path || '');
+  const fileName = path.split('/').pop() || '';
+  if (!path.startsWith('images/paddling_out/') || path.includes('..') || path.split('/').length !== 3 ||
+      !fileBelongsToSpot(fileName, id)) {
+    return res.status(400).json({ success: false, error: 'That photo does not belong to this spot' });
+  }
+  try {
+    const spotRef = db.collection('paddlingSpots').doc(id);
+    const spotSnap = await spotRef.get();
+    if (!spotSnap.exists) return res.status(404).json({ success: false, error: 'Spot not found' });
+    const data = spotSnap.data() || {};
+    const existing = await fetchSpotImagePaths(id);
+    if (!existing.includes(path)) return res.status(404).json({ success: false, error: 'Photo not found' });
+    if (isPublicPaddlingSpot(data) && existing.length <= 1) {
+      return res.status(409).json({ success: false, error: 'A published spot needs at least one photo. Add another before removing this one.' });
+    }
+    const [result] = await deleteSubmissionImages([path]);
+    if (!result.deleted) return res.status(500).json({ success: false, error: 'Failed to delete photo' });
+    const all = existing.filter(p => p !== path);
+    await spotRef.set({
+      imgSrc: all.map(publicStorageUrl),
+      imageCount: all.length,
+      updatedAt: FieldValue.serverTimestamp(),
+      updatedBy: adminActor(req)
+    }, { merge: true });
+    if (data.communitySubmission === true) {
+      await db.collection('paddling_lake_submissions').doc(id).set({
+        imgSrc: all.map(publicStorageUrl),
+        imageCount: all.length,
+        imagePaths: all,
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+    }
+    return res.json({ success: true, images: all.map(p => ({ path: p, url: publicStorageUrl(p) })) });
+  } catch (err) {
+    console.error(`paddlingOut DELETE /admin/spots/${id}/images error:`, err.message, err.stack);
+    return res.status(500).json({ success: false, error: 'Failed to delete photo' });
+  }
+});
+
+/**
+ * POST /paddlingOut/admin/spots/:id/warm-score — recompute the cached score now.
+ */
+router.post('/admin/spots/:id/warm-score', ...adminGuard, async (req, res) => {
+  const id = req.params.id;
+  if (!id || !SPOT_ID_RE.test(id)) return res.status(400).json({ success: false, error: 'Invalid spot ID' });
+  try {
+    const spotSnap = await db.collection('paddlingSpots').doc(id).get();
+    if (!spotSnap.exists) return res.status(404).json({ success: false, error: 'Spot not found' });
+    const result = await warmScoreNow(id, spotSnap.data() || {});
+    return res.json({ success: true, paddleScore: result });
+  } catch (err) {
+    console.error(`paddlingOut POST /admin/spots/${id}/warm-score error:`, err.message);
+    return res.status(500).json({ success: false, error: 'Failed to warm score' });
   }
 });
 
@@ -950,6 +1549,77 @@ router.get('/geocode', async (req, res) => {
   }
 });
 
+// ── Reverse geocode proxy (cached) ────────────────────────────────────────
+// "Use my location" on the submit form hands back a coordinate; this turns it
+// into city / region / country so the submitter does not retype what the pin
+// already knows. Same shared identity, throttle and per-IP limiter as /geocode.
+// Coordinates are rounded to ~100 m for the cache key; nothing about the caller
+// is stored.
+const REVERSE_CACHE = new Map(); // "lat,lng" -> { at, data }
+
+function pickPlace(address = {}) {
+  return address.city || address.town || address.village || address.hamlet ||
+    address.municipality || address.county || address.suburb || '';
+}
+
+router.get('/reverse-geocode', async (req, res) => {
+  const lat = Number(req.query.lat);
+  const lng = Number(req.query.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+    return res.status(400).json({ success: false, error: 'lat and lng are required' });
+  }
+  const ip = getClientIp(req);
+  if (geocodeRateLimited(ip)) {
+    return res.status(429).json({ success: false, error: 'Too many lookups. Try again in a minute.' });
+  }
+
+  const key = `${lat.toFixed(3)},${lng.toFixed(3)}`;
+  const hit = REVERSE_CACHE.get(key);
+  if (hit && (Date.now() - hit.at) < GEOCODE_TTL_MS) {
+    res.set('Cache-Control', 'public, max-age=86400');
+    return res.json(hit.data);
+  }
+
+  const since = Date.now() - _lastNominatimAt;
+  if (since < 1100) await new Promise(r => setTimeout(r, 1100 - since));
+  _lastNominatimAt = Date.now();
+
+  try {
+    const url = 'https://nominatim.openstreetmap.org/reverse?format=json&addressdetails=1&zoom=14' +
+      '&lat=' + encodeURIComponent(lat.toFixed(5)) + '&lon=' + encodeURIComponent(lng.toFixed(5));
+    const r = await fetch(url, {
+      headers: {
+        'User-Agent': 'Kaayko/1.0 (+https://kaayko.com; rohan@kaayko.com)',
+        'Accept-Language': 'en'
+      },
+      signal: AbortSignal.timeout(8000)
+    });
+    if (!r.ok) return res.status(502).json({ success: false, error: 'Lookup unavailable' });
+    const raw = await r.json();
+    const address = raw?.address || {};
+    const data = {
+      success: true,
+      city: sanitizeText(pickPlace(address), 80),
+      region: sanitizeText(address.state || address.region || address.province || address.state_district || '', 80),
+      country: sanitizeText(address.country || '', 80),
+      countryCode: sanitizeText(address.country_code || '', 2).toUpperCase(),
+      // A hint for the name field ONLY when the pin is on named water. Never
+      // fall back to raw.name — at zoom 14 that is the suburb ("Dallas").
+      water: sanitizeText(address.water || address.river || address.reservoir || address.lake || '', 120),
+      displayName: sanitizeText(raw?.display_name || '', 240)
+    };
+    REVERSE_CACHE.set(key, { at: Date.now(), data });
+    if (REVERSE_CACHE.size > GEOCODE_MAX_ENTRIES) {
+      REVERSE_CACHE.delete(REVERSE_CACHE.keys().next().value);
+    }
+    res.set('Cache-Control', 'public, max-age=86400');
+    return res.json(data);
+  } catch (err) {
+    console.error('paddlingOut /reverse-geocode error:', err.message);
+    return res.status(504).json({ success: false, error: 'Lookup timed out' });
+  }
+});
+
 const { applyCraftAdjustment } = require('./craftAdjustments');
 const { getPreparationTips } = require('./paddleTips');
 const { getHydrology } = require('./hydrologyService');
@@ -985,6 +1655,7 @@ router.get('/', async (req, res) => {
           parkingAvl:   data.parkingAvl   || 'N',
           restroomsAvl: data.restroomsAvl || 'N',
           communitySubmission: data.communitySubmission === true,
+          tags:         normalizeTags(data.tags),
           // Enrichment (absent on unenriched/community spots — clients render nothing)
           waterType:    data.waterType || null,
           cellCoverage: data.cellCoverage ? { grade: data.cellCoverage.grade } : null
@@ -1055,6 +1726,7 @@ router.get('/:id', async (req, res) => {
       parkingAvl:   data.parkingAvl   || 'N',
       restroomsAvl: data.restroomsAvl || 'N',
       communitySubmission: data.communitySubmission === true,
+      tags:         normalizeTags(data.tags),
       // Full enrichment on the detail route (absent fields stay null/undefined)
       waterType:    data.waterType || null,
       cellCoverage: data.cellCoverage || null,
@@ -1090,3 +1762,5 @@ router.get('/:id', async (req, res) => {
 });
 
 module.exports = router;
+// Test seams (not part of the HTTP surface).
+module.exports._test = { invalidateImageListCache, fileBelongsToSpot, normalizeTags, distanceMetres, SPOT_TAGS };

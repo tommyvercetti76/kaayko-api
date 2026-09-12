@@ -75,7 +75,10 @@ router.put("/products/:id", requireKreatorAuth, requireActiveKreator, handler);
 | `stripe_events` | checkout | Handled Stripe event IDs (webhook duplicate suppression) |
 | `webhook_failures` | checkout | Permanently un-processable webhook deliveries, for triage |
 | `mail` | checkout, email | Outbound mail queue. Delivered by the `mailSender` Firestore trigger (`functions/triggers/mailSender.js`) over SMTP — NOT the Firestore Send Email extension, which is not installed. Do not install it alongside: mail would send twice. |
-| `paddlingSpots` | weather | Paddle spot definitions |
+| `paddlingSpots` | weather | Paddle spot definitions (curated + community; `archived`, `tags[]`, `communitySubmission`, `submissionStatus`) |
+| `paddling_lake_submissions` | weather | Review record per community spot (contact email, ipHash, imagePaths, possibleDuplicateOf) |
+| `paddle_score_cache` | weather | 15-min warmed scores; also written inline by admin publish / location edit |
+| `paddling_spot_audit` | weather | Append-only log of admin spot edits (who, fields, before/after) |
 | `public_paddle_ratings` | weather | Public ratings from rate.html (deduped by fingerprint+spot+day) |
 | `rate_limits` | weather | IP-based daily rate limits for public ratings |
 | `short_links` | kortex | Short link definitions (enriched with intent, audience, etc.) |
