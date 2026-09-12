@@ -46,12 +46,18 @@ const CRAFT_WIND_ADVICE = {
 function getPreparationTips({ conditions, craft, spot = null, hydrology = null, warningMessages = [] } = {}) {
   if (!conditions) return [];
   const tips = [];
-  const tempC = Number(conditions.temperature);
-  const humidity = Number(conditions.humidity);
-  const windMph = (Number(conditions.windSpeed) || 0) * KPH_TO_MPH;
-  const uv = Number(conditions.uvIndex);
-  const cloud = Number(conditions.cloudCover);
-  const waterC = Number(conditions.waterTemp);
+  // Number(null) is 0, so a MISSING reading used to pass every threshold — a
+  // null water temperature read as 0 °C and fired the drysuit tip on all 18
+  // spots, sensor or not (caught 12 Sep 2026). Absent must stay absent.
+  const num = v => (v === null || v === undefined || v === '' ? NaN : Number(v));
+  const tempC = num(conditions.temperature);
+  const humidity = num(conditions.humidity);
+  const windMph = (Number.isFinite(num(conditions.windSpeed)) ? num(conditions.windSpeed) : 0) * KPH_TO_MPH;
+  const uv = num(conditions.uvIndex);
+  const cloud = num(conditions.cloudCover);
+  // Measured only: the estimator's guess is never a reason to tell someone to
+  // wear a drysuit. waterTempMeasured is set by paddleScoreCompute.
+  const waterC = conditions.waterTempMeasured === true ? num(conditions.waterTemp) : NaN;
   const craftId = sanitizeCraft(craft);
   const profile = CRAFT_PROFILES[craftId];
 
