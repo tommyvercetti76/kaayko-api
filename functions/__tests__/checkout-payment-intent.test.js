@@ -530,17 +530,31 @@ describe('Checkout — Stripe call hygiene', () => {
   // The derived idempotency key must therefore depend on the cart alone: the
   // same cart from the same client yields the same key whatever happened to a
   // previous intent's tax, and the PaymentIntent is always created pre-tax.
-  test('the derived idempotency key is stable for the same cart and client', async () => {
+  test('the derived idempotency key is stable for the same cart and checkout session', async () => {
     seedProduct('stable-3', { actualPrice: 39.99 });
     const app = buildHandlerApp();
 
-    await post(app, { items: [{ productId: 'stable-3', size: 'M' }] }, { 'X-Forwarded-For': '198.51.100.42' });
-    await post(app, { items: [{ productId: 'stable-3', size: 'M' }] }, { 'X-Forwarded-For': '198.51.100.42' });
+    await post(app, { items: [{ productId: 'stable-3', size: 'M' }], checkoutSession: 'cs-1111-2222-3333' });
+    await post(app, { items: [{ productId: 'stable-3', size: 'M' }], checkoutSession: 'cs-1111-2222-3333' });
 
     const [first, second] = mockStripeCreate.mock.calls.map(c => c[1].idempotencyKey);
     expect(first).toBe(second);
     expect(mockStripeCreate.mock.calls[0][0].amount).toBe(3999);
     expect(mockStripeCreate.mock.calls[0][0].metadata.taxCalculationId).toBeUndefined();
+  });
+
+  // Two shoppers behind one NAT with the same bag must NEVER share a PaymentIntent.
+  test('two shoppers with identical carts from the same IP get different keys', async () => {
+    seedProduct('stable-4', { actualPrice: 39.99 });
+    const app = buildHandlerApp();
+
+    await post(app, { items: [{ productId: 'stable-4', size: 'M' }], checkoutSession: 'cs-shopper-a-0001' }, { 'X-Forwarded-For': '198.51.100.42' });
+    await post(app, { items: [{ productId: 'stable-4', size: 'M' }], checkoutSession: 'cs-shopper-b-0002' }, { 'X-Forwarded-For': '198.51.100.42' });
+    await post(app, { items: [{ productId: 'stable-4', size: 'M' }] }, { 'X-Forwarded-For': '198.51.100.42' });
+    await post(app, { items: [{ productId: 'stable-4', size: 'M' }] }, { 'X-Forwarded-For': '198.51.100.42' });
+
+    const keys = mockStripeCreate.mock.calls.map(c => c[1].idempotencyKey);
+    expect(new Set(keys).size).toBe(4);
   });
 });
 

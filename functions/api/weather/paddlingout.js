@@ -31,7 +31,8 @@ const bucket = admin.storage().bucket();
 const FieldValue = admin.firestore.FieldValue;
 const Timestamp = admin.firestore.Timestamp;
 
-const LAKE_SUBMISSION_LIMIT_PER_DAY = 5;
+const LAKE_SUBMISSION_LIMIT_PER_DAY = 5;        // per IP hash
+const LAKE_SUBMISSION_LIMIT_PER_EMAIL = 3;      // per contact email, when one is given
 const COMMUNITY_GO_LIVE_DELAY_MS = 48 * 60 * 60 * 1000;
 const LAKE_SUBMISSION_DEDUPE_MS = 7 * 24 * 60 * 60 * 1000;
 // A single photo is not enough to review a launch (one framed shot can hide a
@@ -346,21 +347,31 @@ function validateSubmissionImages(files, { min = SUBMISSION_IMAGE_MIN, max = SUB
   });
 }
 
-async function reserveSubmissionSlot({ ipHash, dedupeKey }) {
+async function reserveSubmissionSlot({ ipHash, dedupeKey, emailHash = null }) {
   const today = new Date().toISOString().split('T')[0];
   const rateDocId = `${ipHash}_${today}`;
   const rateRef = db.collection('lake_submission_rate_limits').doc(rateDocId);
+  // Second bucket keyed on the (hashed) contact email: a carrier NAT shares
+  // one IP across thousands of people, so the IP cap alone is either too
+  // tight for them or too loose for one person cycling connections.
+  const emailRef = emailHash ? db.collection('lake_submission_rate_limits').doc(`e_${emailHash}_${today}`) : null;
   const dedupeRef = db.collection('paddling_lake_submission_keys').doc(dedupeKey);
   const expiresAt = Timestamp.fromMillis(Date.now() + LAKE_SUBMISSION_DEDUPE_MS);
 
   await db.runTransaction(async transaction => {
-    const [rateSnap, dedupeSnap] = await Promise.all([
+    const [rateSnap, dedupeSnap, emailSnap] = await Promise.all([
       transaction.get(rateRef),
-      transaction.get(dedupeRef)
+      transaction.get(dedupeRef),
+      emailRef ? transaction.get(emailRef) : Promise.resolve(null)
     ]);
 
     if (rateSnap.exists && (rateSnap.data().count || 0) >= LAKE_SUBMISSION_LIMIT_PER_DAY) {
       const err = new Error('Daily lake submission limit reached. Please try again tomorrow.');
+      err.code = 'RATE_LIMIT';
+      throw err;
+    }
+    if (emailSnap && emailSnap.exists && (emailSnap.data().count || 0) >= LAKE_SUBMISSION_LIMIT_PER_EMAIL) {
+      const err = new Error('You have reached today\'s limit for this email address. Please try again tomorrow.');
       err.code = 'RATE_LIMIT';
       throw err;
     }
@@ -376,6 +387,14 @@ async function reserveSubmissionSlot({ ipHash, dedupeKey }) {
       ipHash,
       updatedAt: FieldValue.serverTimestamp()
     }, { merge: true });
+    if (emailRef) {
+      transaction.set(emailRef, {
+        count: FieldValue.increment(1),
+        date: today,
+        emailHash,
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+    }
     transaction.set(dedupeRef, {
       ipHash,
       createdAt: FieldValue.serverTimestamp(),
@@ -506,6 +525,33 @@ async function notifySubmissionValidated(submission, spotId) {
       'Thanks for helping grow the paddling map.',
       'Kaayko'
     ].join('\n')
+  });
+}
+
+// Tell a submitter who asked to be notified that their entry was not used —
+// the delay notice promised an answer either way. Reason is optional and is
+// the admin's own words, so it is escaped for the HTML body.
+async function notifySubmissionRejected(submission, reason) {
+  if (!submission.contactEmail) return { success: true, status: 'not_requested' };
+  const lakeName = escapeForEmail(submission.lakeName || 'your lake');
+  const why = reason ? escapeForEmail(reason) : '';
+  return sendRawEmail({
+    to: submission.contactEmail,
+    subject: `Your Kaayko lake entry was not added`,
+    html: `
+      <p>Hi,</p>
+      <p>Thanks for sending <strong>${lakeName}</strong> to Paddling Out. We reviewed it and could not add it this time.</p>
+      ${why ? `<p>Reason: ${why}</p>` : ''}
+      <p>If you think we got this wrong, reply to this email, or <a href="https://kaayko.com/paddlingout/submitentry">submit it again</a> with a public launch point and photos of the water and the put-in.</p>
+      <p>Kaayko</p>
+    `,
+    text: [
+      'Hi,', '',
+      `Thanks for sending ${submission.lakeName || 'your lake'} to Paddling Out. We reviewed it and could not add it this time.`,
+      reason ? `Reason: ${reason}` : '',
+      'If you think we got this wrong, reply to this email, or submit it again with a public launch point and photos of the water and the put-in: https://kaayko.com/paddlingout/submitentry',
+      '', 'Kaayko'
+    ].filter(l => l !== '').join('\n')
   });
 }
 
@@ -695,7 +741,7 @@ async function submitEntryHandler(req, res) {
     const ip = getClientIp(req);
     const ipHash = hashValue(ip);
     const dedupeKey = normalizedSubmissionKey({ lakeName, city, region, country, lat, lng });
-    await reserveSubmissionSlot({ ipHash, dedupeKey });
+    await reserveSubmissionSlot({ ipHash, dedupeKey, emailHash: email ? hashValue(email) : null });
     const nearbySpot = await findNearbySpot(lat, lng);
 
     const locationPieces = [city, region, country].filter(Boolean);
@@ -1064,7 +1110,7 @@ router.post('/admin/submissions/:id/reject', ...adminGuard, async (req, res) => 
       status: 'rejected',
       rejectionReason: reason || null,
       imageDeletionResult: deletionResult,
-      notificationStatus: submission.contactEmail ? 'rejected_not_sent' : (submission.notificationStatus || 'not_requested')
+      notificationStatus: submission.contactEmail ? 'rejection_pending' : (submission.notificationStatus || 'not_requested')
     };
 
     await Promise.all([
@@ -1074,11 +1120,24 @@ router.post('/admin/submissions/:id/reject', ...adminGuard, async (req, res) => 
       db.collection('paddle_score_cache').doc(id).delete().catch(() => {})
     ]);
 
+    let notification = { success: true, status: 'not_requested' };
+    if (submission.contactEmail) {
+      try {
+        const r = await notifySubmissionRejected(submission, reason);
+        notification = { success: r.success !== false, status: 'rejection_sent', provider: r.provider || null, messageId: r.messageId || null };
+      } catch (emailErr) {
+        console.warn('paddlingOut rejection email failed:', emailErr.message);
+        notification = { success: false, status: 'rejection_failed', error: emailErr.message };
+      }
+      await submissionRef.set({ notificationStatus: notification.status, notificationResult: notification, notificationUpdatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    }
+
     return res.json({
       success: true,
       id,
       status: 'rejected',
-      imagesDeleted: deletionResult.filter(item => item.deleted).length
+      imagesDeleted: deletionResult.filter(item => item.deleted).length,
+      notification
     });
   } catch (err) {
     console.error(`paddlingOut POST /admin/submissions/${id}/reject error:`, err.message, err.stack);

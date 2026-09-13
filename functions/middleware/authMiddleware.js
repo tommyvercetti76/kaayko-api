@@ -51,8 +51,10 @@ async function requireAuth(req, res, next) {
 
     const idToken = authHeader.split('Bearer ')[1];
 
-    // Verify the ID token
-    const decodedToken = await admin.auth().verifyIdToken(idToken);
+    // Verify the ID token AND that it has not been revoked — a removed admin
+    // must stop working now, not when the hour-long token expires. One extra
+    // Auth lookup per admin request; these routes are low-volume.
+    const decodedToken = await admin.auth().verifyIdToken(idToken, true);
     
     // Attach user info to request
     req.user = {
@@ -354,7 +356,7 @@ async function optionalAuth(req, res, next) {
     }
 
     const idToken = authHeader.split('Bearer ')[1];
-    const decodedToken = await admin.auth().verifyIdToken(idToken);
+    const decodedToken = await admin.auth().verifyIdToken(idToken, true);
     
     req.user = {
       uid: decodedToken.uid,

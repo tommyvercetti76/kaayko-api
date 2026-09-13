@@ -94,25 +94,35 @@ function extractSelections(body) {
   return null;
 }
 
-/** Resolve a Stripe idempotency key: client-supplied when sane, else derived. */
+/**
+ * Resolve a Stripe idempotency key.
+ *
+ * Order of preference:
+ *   1. a sane client-supplied `idempotencyKey` (kept for API callers);
+ *   2. the cart page's `checkoutSession` nonce + the cart fingerprint — one
+ *      shopper retrying the same bag inside the window reuses their intent;
+ *   3. otherwise a random key: a fresh intent every call.
+ *
+ * The client IP is deliberately NOT part of the key any more. Two shoppers
+ * behind one carrier NAT with the same bag in the same 5-minute bucket used to
+ * hash to the same key, and Stripe handed the second shopper the first one's
+ * PaymentIntent (and client secret). An abandoned duplicate intent is harmless;
+ * a shared one is not.
+ */
 function resolveIdempotencyKey(req, cart) {
   const supplied = typeof req.body.idempotencyKey === 'string' ? req.body.idempotencyKey.trim() : '';
   if (CLIENT_KEY_RE.test(supplied)) return `kaayko:${supplied}`;
 
-  let clientKey = 'unknown';
-  try {
-    clientKey = require('../kortex/clientIp').getClientIp(req) || req.ip || 'unknown';
-  } catch (_) {
-    clientKey = req.ip || 'unknown';
+  const session = typeof req.body.checkoutSession === 'string' ? req.body.checkoutSession.trim() : '';
+  if (!CLIENT_KEY_RE.test(session)) {
+    return `kaayko:${crypto.randomBytes(24).toString('hex')}`;
   }
 
-  // A retry of the same cart from the same client within the bucket window
-  // reuses the same Stripe PaymentIntent instead of creating a duplicate.
   // Only the SUBTOTAL takes part: sales tax is added to the PaymentIntent later
   // (POST /createPaymentIntent/tax, once the address is known) and must never
   // change which key a retry of the same cart derives.
   const fingerprint = JSON.stringify({
-    c: clientKey,
+    n: session,
     s: cart.subtotalCents,
     i: cart.items.map(i => [i.productId, i.size, i.gender, i.quantity]),
     w: Math.floor(Date.now() / IDEMPOTENCY_BUCKET_MS)
