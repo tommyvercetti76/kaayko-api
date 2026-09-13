@@ -20,8 +20,7 @@ const stripeWebhook = require('./stripeWebhook');
 // Mirrors ADMIN_ORIGIN_ALLOWLIST in functions/index.js. Checkout is a
 // first-party-only surface: no other site has a legitimate reason to open a
 // payment intent against the Kaayko catalogue.
-const { KAAYKO_WEB_ORIGINS } = require('../../config/origins');
-const CHECKOUT_ORIGIN_ALLOWLIST = new Set(KAAYKO_WEB_ORIGINS);
+const { isKaaykoOrigin } = require('../../config/origins');
 
 /**
  * Browser callers must come from a Kaayko origin. Non-browser callers (Stripe's
@@ -36,7 +35,7 @@ function restrictCheckoutOrigin(req, res, next) {
   if (!origin) return next();
 
   const allowed =
-    CHECKOUT_ORIGIN_ALLOWLIST.has(origin) ||
+    isKaaykoOrigin(origin) ||
     (process.env.FUNCTIONS_EMULATOR === 'true' && /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin));
 
   if (!allowed) {

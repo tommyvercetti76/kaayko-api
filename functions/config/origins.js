@@ -22,4 +22,17 @@ const KAAYKO_WEB_ORIGINS = Object.freeze([
   'https://kaay-store.firebaseapp.com',
 ]);
 
-module.exports = { KAAYKO_WEB_ORIGINS };
+/**
+ * Firebase Hosting preview channels: https://kaaykostore--<channel>-<hash>.web.app
+ * and https://kaay-store--<channel>-<hash>.web.app. Only someone who can deploy
+ * to the project can mint one, so they carry the same trust as a production
+ * deploy — and without them the checkout cannot be smoke-tested before it ships.
+ */
+const KAAYKO_PREVIEW_ORIGIN = /^https:\/\/(?:kaaykostore|kaay-store)--[a-z0-9-]+\.web\.app$/;
+
+/** True for every origin Kaayko serves its own pages from, previews included. */
+function isKaaykoOrigin(origin) {
+  return typeof origin === 'string' && (KAAYKO_WEB_ORIGINS.includes(origin) || KAAYKO_PREVIEW_ORIGIN.test(origin));
+}
+
+module.exports = { KAAYKO_WEB_ORIGINS, KAAYKO_PREVIEW_ORIGIN, isKaaykoOrigin };

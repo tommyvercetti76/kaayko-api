@@ -37,7 +37,7 @@ const admin = require('firebase-admin');
 
 const PRODUCTS_COLLECTION = 'kaaykoproducts';
 
-/** Tier-symbol → cents. Mirrors PRICE_MAP in kaayko/src/js/kaayko_ui.js. */
+/** Tier-symbol → cents. Mirrored by PRICE_SYMBOL_CENTS / priceCents() in kaayko/src/js/priceMap.js — change both. */
 const PRICE_SYMBOL_CENTS = Object.freeze({
   '$': 1999,
   '$$': 2999,
