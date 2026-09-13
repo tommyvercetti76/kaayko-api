@@ -68,9 +68,10 @@ function mailDocs() {
 // ────────────────────────────────────────────────────────────────
 describe('Ship-time statement (FTC 16 CFR 435)', () => {
   test('there is exactly one ship-time sentence and it is the agreed one', () => {
-    expect(policy.SHIP_TIME_TEXT).toBe('Made to order — ships in 5–7 business days, delivered within 7–14.');
-    expect(policy.SHIP_DAYS).toEqual({ min: 5, max: 7 });
-    expect(policy.DELIVERY_DAYS).toEqual({ min: 7, max: 14 });
+    // Changed 13 Sep 2026: a promise we control. Same sentence as /legal/shipping and the bag.
+    expect(policy.SHIP_TIME_TEXT).toBe('Made to order — on its way within 10 business days, and in your hands in about two weeks.');
+    expect(policy.SHIP_DAYS).toEqual({ min: 5, max: 10 });
+    expect(policy.DELIVERY_DAYS).toEqual({ min: 10, max: 20 });
     expect(policy.RETURNS_POLICY_URL).toBe('https://kaayko.com/legal/returns');
   });
 
@@ -257,9 +258,10 @@ describe('POST /admin/orders/delay-notice — the notice', () => {
 
   test('consentRequired counts from the order date plus the promised delivery window', () => {
     const ordered = new Date('2026-09-01T00:00:00Z');
+    // DELIVERY_DAYS.max (20) + DELAY_CONSENT_DAYS (30) = day 50 is the boundary.
     expect(consentRequired(new Date('2026-10-10T00:00:00Z'), ordered)).toBe(false); // day 39
-    expect(consentRequired(new Date('2026-10-15T00:00:00Z'), ordered)).toBe(false); // day 44 (boundary)
-    expect(consentRequired(new Date('2026-10-16T00:00:00Z'), ordered)).toBe(true);  // day 45
+    expect(consentRequired(new Date('2026-10-21T00:00:00Z'), ordered)).toBe(false); // day 50 (boundary)
+    expect(consentRequired(new Date('2026-10-22T00:00:00Z'), ordered)).toBe(true);  // day 51
     expect(consentRequired(new Date('2027-01-01T00:00:00Z'), null)).toBe(false);    // unknown order date → standard rule
   });
 

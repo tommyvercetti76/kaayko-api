@@ -24,6 +24,7 @@
 
 const admin = require('firebase-admin');
 const { renderTemplate, escapeHtml, renderEmail, formatMoney, queueMailOnce } = require('../email/render');
+const { allocateOrderNumber, newStatusToken, statusUrl } = require('../../services/orderNumber');
 const { resolveNotifyEmail } = require('../email/notifyAddress');
 const { recordTaxTransaction, reverseTaxTransaction } = require('./tax');
 
@@ -431,10 +432,20 @@ async function handlePaymentSuccess(paymentIntent, event) {
   // can be matched to this order without a Stripe lookup.
   const chargeId = resolveChargeId(paymentIntent);
 
+  // The number a customer can say out loud, and the token behind the status
+  // link in their receipt. Minted once: a re-run for the same intent reuses
+  // what the document already holds. See services/orderNumber.js.
+  const orderNumber = ctx.piDoc?.orderNumber || await allocateOrderNumber(db);
+  const statusToken = ctx.piDoc?.statusToken || newStatusToken();
+  ctx.orderNumber = orderNumber;
+  ctx.statusToken = statusToken;
+
   // 1. Update the payment intent record (order-level money lives HERE, once).
   //    set(merge) rather than update() so a missing doc does not throw NOT_FOUND.
   await db.collection('payment_intents').doc(paymentIntent.id).set({
     paymentIntentId: paymentIntent.id,
+    orderNumber,
+    statusToken,
     chargeId,
     status: 'succeeded',
     paymentStatus: 'succeeded',
@@ -464,6 +475,7 @@ async function handlePaymentSuccess(paymentIntent, event) {
   //    that would double-count revenue across the collection.
   const sharedFields = {
     parentOrderId: paymentIntent.id,
+    orderNumber,
     chargeId,
     currency: ctx.currency,
 
@@ -891,9 +903,32 @@ async function handleChargeRefunded(charge, event) {
     stripeLabel: 'View in Stripe Dashboard →'
   }, { id: paymentIntentId, metadata: charge.metadata || {} });
 
+  // The customer is told by the same path whoever pressed the button — Kortex,
+  // the Stripe dashboard, or a dispute. One mail per distinct refunded total.
+  let customerNotified = false;
+  if (piDoc.customerEmail) {
+    const previouslyRefunded = Number(piDoc.refundedCents) || 0;
+    const thisRefundCents = refundedCents - previouslyRefunded > 0 ? refundedCents - previouslyRefunded : refundedCents;
+    const link = piDoc.orderNumber && piDoc.statusToken ? statusUrl(piDoc.orderNumber, piDoc.statusToken) : '';
+    const html = renderEmail('refundNotice.html', {
+      orderNumber: piDoc.orderNumber || paymentIntentId,
+      refundedAmount: formatMoney(thisRefundCents, currency),
+      orderTotal: formatMoney(amountCents, currency),
+      note: full
+        ? (cancelFulfilment ? 'The order is cancelled and will not ship.' : 'That closes the order.')
+        : 'The rest of the order is unaffected.',
+      statusButton: link ? `<p style="margin:16px 0 0"><a class="cta" href="${escapeHtml(link)}">See the order</a></p>` : ''
+    });
+    customerNotified = await queueMailOnce(db, `${paymentIntentId}_customer_refund_${refundedCents}`, {
+      to: piDoc.customerEmail,
+      message: { subject: `↩️ Refund issued — order ${piDoc.orderNumber || paymentIntentId}`, html },
+      paymentIntentId
+    });
+  }
+
   await markEventProcessed(db, event, { paymentIntentId, paymentStatus, refundedCents });
 
-  console.log(`↩️  ${full ? 'Full' : 'Partial'} refund recorded for ${paymentIntentId}: ${refundedCents} cents`);
+  console.log(`↩️  ${full ? 'Full' : 'Partial'} refund recorded for ${paymentIntentId}: ${refundedCents} cents${customerNotified ? ', customer notified' : ''}`);
   return { refunded: true, paymentIntentId, paymentStatus, refundedCents, items: items.length, ownerNotified: notified };
 }
 
@@ -1066,6 +1101,10 @@ async function handleDisputeClosed(dispute, event) {
 function buildItemViews(ctx) {
   return ctx.items.map((item, index) => ({
     number: index + 1,
+    imgSrc: typeof item.imgSrc === 'string' && /^https:\/\//.test(item.imgSrc) ? item.imgSrc : null,
+    imgTag: typeof item.imgSrc === 'string' && /^https:\/\//.test(item.imgSrc)
+      ? `<img src="${escapeHtml(item.imgSrc)}" width="56" height="70" alt="" style="width:56px;height:70px;object-fit:cover;border-radius:4px;display:block">`
+      : '',
     productTitle: item.productTitle,
     size: item.size || '—',
     gender: item.gender || '—',
@@ -1168,11 +1207,19 @@ async function sendOrderConfirmationEmails(db, paymentIntent, ctx, customerEmail
 
   const sent = { customer: false, admin: false };
 
+  const orderNumber = ctx.orderNumber || paymentIntent.id;
+  const trackUrl = ctx.orderNumber && ctx.statusToken ? statusUrl(ctx.orderNumber, ctx.statusToken) : '';
+
   if (!customerEmail) {
     console.warn(`⚠️  No customer email for ${paymentIntent.id}, skipping customer notification`);
   } else {
     const customerHtml = renderEmail('orderConfirmation.html', {
       orderId: paymentIntent.id,
+      orderNumber,
+      statusUrl: trackUrl,
+      statusButton: trackUrl
+        ? `<p style="margin:18px 0 0"><a class="cta" href="${escapeHtml(trackUrl)}">See your order</a></p>`
+        : '',
       items: itemViews,
       itemCount,
       subtotal,
@@ -1183,7 +1230,7 @@ async function sendOrderConfirmationEmails(db, paymentIntent, ctx, customerEmail
     sent.customer = await queueMailOnce(db, `${paymentIntent.id}_customer`, {
       to: customerEmail,
       message: {
-        subject: '🛶 Order Confirmation - Kaayko',
+        subject: `🧾 Order ${orderNumber} confirmed — Kaayko`,
         html: customerHtml
       },
       paymentIntentId: paymentIntent.id
@@ -1193,6 +1240,7 @@ async function sendOrderConfirmationEmails(db, paymentIntent, ctx, customerEmail
 
   const adminHtml = renderEmail('newOrderNotification.html', {
     orderId: paymentIntent.id,
+    orderNumber,
     customerEmail: customerEmail || 'Not provided',
     items: itemViews,
     itemCount,
@@ -1209,7 +1257,7 @@ async function sendOrderConfirmationEmails(db, paymentIntent, ctx, customerEmail
   sent.admin = await queueMailOnce(db, `${paymentIntent.id}_admin`, {
     to: adminEmail,
     message: {
-      subject: '🔔 New Order - Kaayko Store',
+      subject: `🔔 New order ${orderNumber} - Kaayko Store`,
       html: adminHtml
     },
     paymentIntentId: paymentIntent.id

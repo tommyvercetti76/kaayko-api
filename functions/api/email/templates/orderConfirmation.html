@@ -73,8 +73,22 @@
       color: #ffd700;
     }
     .line-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
       padding: 12px 0;
       border-bottom: 1px solid #e0e0e0;
+    }
+    .line-item-body { flex: 1 1 auto; min-width: 0; }
+    .cta {
+      display: inline-block;
+      padding: 12px 22px;
+      background: #333;
+      color: #fff !important;
+      text-decoration: none;
+      border-radius: 999px;
+      font-weight: 600;
+      font-size: 14px;
     }
     .line-item:last-of-type {
       border-bottom: none;
@@ -157,8 +171,8 @@
     <div class="details">
       <h3>Order Details</h3>
       <div class="detail-row">
-        <span class="detail-label">Order ID</span>
-        <span class="detail-value">{{orderId}}</span>
+        <span class="detail-label">Order number</span>
+        <span class="detail-value">{{orderNumber}}</span>
       </div>
       <div class="detail-row">
         <span class="detail-label">Items</span>
@@ -170,17 +184,21 @@
       <h3>Your Items</h3>
       {{#each items}}
       <div class="line-item">
-        <div class="line-item-main">
-          <span class="line-item-title">{{productTitle}}</span>
-          <span class="line-item-total">{{lineTotal}}</span>
+        {{{imgTag}}}
+        <div class="line-item-body">
+          <div class="line-item-main">
+            <span class="line-item-title">{{productTitle}}</span>
+            <span class="line-item-total">{{lineTotal}}</span>
+          </div>
+          <div class="line-item-meta">{{variant}} &middot; Qty {{quantity}} &times; {{unitPrice}}</div>
         </div>
-        <div class="line-item-meta">{{variant}} &middot; Qty {{quantity}} &times; {{unitPrice}}</div>
       </div>
       {{/each}}
       <div class="detail-row total-row">
         <span class="detail-label">Order Total</span>
         <span class="detail-value amount">{{orderTotal}}</span>
       </div>
+      {{{statusButton}}}
     </div>
     
     <div class="message">
@@ -188,7 +206,7 @@
       <strong>{{shipTimeText}}</strong><br>
       Every piece is made when you order it, which is why it takes a few days. You'll receive a shipping confirmation email with tracking information the moment your package is on the way. If anything changes that timing, we'll email you the new date and the choice to keep your order or cancel it for a full refund.
       <br><br>
-      <strong>Questions?</strong> Reply to this email — a person reads it — or write to <a href="mailto:{{supportEmail}}" style="color: #ffd700;">{{supportEmail}}</a>
+      <strong>Questions?</strong> Reply to this email — a person reads it — and quote <strong>{{orderNumber}}</strong>.
     </div>
     
     <div class="footer">

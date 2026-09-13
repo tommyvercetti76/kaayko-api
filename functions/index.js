@@ -118,6 +118,8 @@ apiApp.use("/auth", require("./api/auth/authRoutes"));
 
 // 💳 CHECKOUT & PAYMENTS
 apiApp.use("/createPaymentIntent", require("./api/checkout/router")); // Stripe payment intent creation
+// 🧾 The customer's own order: status by receipt token, number by client secret (no account).
+apiApp.use("/orders", require("./api/orders/router"));
 
 // � BILLING & SUBSCRIPTIONS
 apiApp.use("/billing", require("./api/billing/router")); // Subscription management for Kortex
@@ -131,6 +133,10 @@ apiApp.get("/admin/listOrders", requireAuth, requirePlatformAdmin, listOrders);
 // FTC Mail Order Rule: a delay past the promised ship date must be notified,
 // with the choice to keep the order or cancel for a refund.
 apiApp.post("/admin/orders/delay-notice", requireAuth, requirePlatformAdmin, require("./api/admin/orderNotices").sendDelayNotice);
+// Refund and cancel go through Stripe; the charge.refunded webhook does the bookkeeping and mails the customer.
+const { refundOrder, cancelOrder } = require("./api/admin/orderActions");
+apiApp.post("/admin/orders/refund", requireAuth, requirePlatformAdmin, refundOrder);
+apiApp.post("/admin/orders/cancel", requireAuth, requirePlatformAdmin, cancelOrder);
 
 // Store catalogue management. The only authenticated product write path — the
 // kreator router next door can only see documents carrying a kreatorId.

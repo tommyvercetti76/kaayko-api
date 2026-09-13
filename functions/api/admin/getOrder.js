@@ -166,6 +166,7 @@ async function groupIntoShipments(db, orders) {
     if (!byParent.has(parentId)) {
       byParent.set(parentId, {
         parentOrderId: parentId,
+        orderNumber: order.orderNumber || null,
         createdAt: order.createdAt || null,
         orderStatus: order.orderStatus || null,
         fulfillmentStatus: order.fulfillmentStatus || null,
@@ -197,7 +198,11 @@ async function groupIntoShipments(db, orders) {
       quantity: order.quantity || 1,
       unitPriceCents: order.unitPriceCents || 0,
       lineTotalCents: order.lineTotalCents || 0,
-      orderStatus: order.orderStatus || null
+      orderStatus: order.orderStatus || null,
+      // Frozen at purchase (13 Sep 2026); older lines have none.
+      imgSrc: typeof order.imgSrc === 'string' ? order.imgSrc : null,
+      productType: order.productType || null,
+      kreatorId: order.kreatorId || null
     });
     shipment.itemsTotalCents += order.lineTotalCents || 0;
     shipment.unitCount += order.quantity || 1;
@@ -216,6 +221,10 @@ async function groupIntoShipments(db, orders) {
         const pi = piSnap.data();
         shipment.orderTotalCents = pi.totalCents ?? pi.totalAmount ?? shipment.itemsTotalCents;
         shipment.paidAt = pi.paidAt || null;
+        shipment.orderNumber = pi.orderNumber || shipment.orderNumber || null;
+        shipment.paymentStatus = pi.paymentStatus || shipment.paymentStatus;
+        shipment.refundedCents = Number(pi.refundedCents) || 0;
+        shipment.cancelledAt = pi.cancelledAt || null;
         if (!shipment.shippingAddress && pi.shippingAddress) {
           shipment.shippingAddress = pi.shippingAddress;
           shipment.shippingAddressMissing = false;

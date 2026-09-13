@@ -16,14 +16,15 @@
  *     to decide whether a revised date needs the buyer's express consent.
  */
 
-const SHIP_DAYS = Object.freeze({ min: 5, max: 7 });       // business days until it ships
-const DELIVERY_DAYS = Object.freeze({ min: 7, max: 14 });  // calendar days until it arrives
+const SHIP_DAYS = Object.freeze({ min: 5, max: 10 });      // business days until it ships (we print and pack ourselves)
+const DELIVERY_DAYS = Object.freeze({ min: 10, max: 20 }); // calendar days until it arrives
 
-// The literal sentence customers see. Built from the numbers above so the
-// prose and the arithmetic in orderNotices.js can never disagree.
+// The literal sentence customers see — the same one as /legal/shipping and the
+// bag. Built from the numbers above so prose and the arithmetic in
+// orderNotices.js can never disagree. Changed 13 Sep 2026 from "5–7 business
+// days": a promise we do not control is not a promise.
 const SHIP_TIME_TEXT =
-  `Made to order — ships in ${SHIP_DAYS.min}–${SHIP_DAYS.max} business days, ` +
-  `delivered within ${DELIVERY_DAYS.min}–${DELIVERY_DAYS.max}.`;
+  `Made to order — on its way within ${SHIP_DAYS.max} business days, and in your hands in about two weeks.`;
 
 // A revised date more than this many days past the original promise needs the
 // buyer's express consent (silence is not consent); inside it, silence keeps

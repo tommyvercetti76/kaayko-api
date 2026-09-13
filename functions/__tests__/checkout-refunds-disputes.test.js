@@ -163,7 +163,7 @@ describe('charge.refunded — full refund', () => {
     expect(alert.message.html).toContain('do not ship');
     expect(alert.message.html).toContain('buyer@example.com');
     expect(alert.message.html).not.toContain('{{');
-    expect(mailDocs()).toHaveLength(1);
+    expect(mailDocs()).toHaveLength(2)   // the owner alert and, since 13 Sep 2026, the customer refund notice;
 
     expect(admin._mocks.docData['stripe_events/evt_refund_full']).toMatchObject({ paymentIntentId: PI_ID, paymentStatus: 'refunded' });
   });
@@ -212,7 +212,7 @@ describe('charge.refunded — full refund', () => {
     expect(replay.status).toBe(200);
     expect(replay.body.ownerNotified).toBe(false);
 
-    expect(mailDocs()).toHaveLength(1);
+    expect(mailDocs()).toHaveLength(2)   // owner alert + customer notice, once each;
     expect(pi().refundedCents).toBe(13996);
   });
 });
@@ -252,7 +252,7 @@ describe('charge.refunded — partial refund', () => {
 
     expect(pi().refundedCents).toBe(5000);
     expect(pi().lastRefundId).toBe('re_2');
-    expect(mailDocs().map(m => m.path).sort()).toEqual([`mail/${PI_ID}_refund_2000`, `mail/${PI_ID}_refund_5000`]);
+    expect(mailDocs().map(m => m.path).sort()).toEqual([`mail/${PI_ID}_customer_refund_2000`, `mail/${PI_ID}_customer_refund_5000`, `mail/${PI_ID}_refund_2000`, `mail/${PI_ID}_refund_5000`]);
   });
 
   test('allocateRefund: pro-rata, capped at each line total, remainder to the first items', () => {

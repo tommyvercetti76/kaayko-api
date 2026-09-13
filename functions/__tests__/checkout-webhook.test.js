@@ -486,3 +486,79 @@ describe('Checkout Webhook — payment_intent.payment_failed', () => {
     expect(second.body.duplicate).toBe(true);
   });
 });
+
+// ─── 13 Sep 2026: the order number, the receipt's contents, the refund mail ───
+describe('Checkout Webhook — order number, receipt, refund notice', () => {
+  afterEach(() => jest.restoreAllMocks());
+
+  test('a paid intent is given a KAAY number and a status token, on the intent and on every line', async () => {
+    seedPaymentIntentDoc();
+    const app = buildWebhookApp();
+    const res = await post(app, succeededEvent('evt_num_1', basePaymentIntent()));
+    expect(res.status).toBe(200);
+
+    const pi = admin._mocks.docData[`payment_intents/${PI_ID}`];
+    expect(pi.orderNumber).toMatch(/^KAAY-\d{4,}$/);
+    expect(pi.statusToken).toMatch(/^[A-Za-z0-9_-]{40,}$/);
+    expect(admin._mocks.docData[`orders/${PI_ID}_item1`].orderNumber).toBe(pi.orderNumber);
+    expect(admin._mocks.docData[`orders/${PI_ID}_item2`].orderNumber).toBe(pi.orderNumber);
+  });
+
+  test('the receipt names the order number, shows the frozen image and links the status page; pi_ appears nowhere the customer reads', async () => {
+    seedPaymentIntentDoc();
+    const app = buildWebhookApp();
+    await post(app, succeededEvent('evt_num_2', basePaymentIntent()));
+
+    const pi = admin._mocks.docData[`payment_intents/${PI_ID}`];
+    const customer = admin._mocks.docData[`mail/${PI_ID}_customer`];
+    expect(customer).toBeDefined();
+    expect(customer.message.subject).toBe(`🧾 Order ${pi.orderNumber} confirmed — Kaayko`);
+    expect(customer.message.html).toContain(pi.orderNumber);
+    expect(customer.message.html).toContain('src="https://firebasestorage.googleapis.com/v0/b/x/o/sabarmati.webp"');
+    expect(customer.message.html).toContain(`https://kaay.store/order/${pi.orderNumber}?t=${pi.statusToken}`);
+    expect(customer.message.html).toContain('on its way within 10 business days');
+    // The Stripe id is bookkeeping, not something a customer is asked to quote.
+    const visible = customer.message.html.replace(/<style[\s\S]*?<\/style>/, '');
+    expect(visible).not.toContain(PI_ID);
+
+    const owner = admin._mocks.docData[`mail/${PI_ID}_admin`];
+    expect(owner.message.subject).toContain(pi.orderNumber);
+  });
+
+  test('a second delivery of the same intent keeps the number it already has', async () => {
+    seedPaymentIntentDoc({ orderNumber: 'KAAY-2222', statusToken: 'keep-this-token-keep-this-token-keep-this-token' });
+    const app = buildWebhookApp();
+    await post(app, succeededEvent('evt_num_3', basePaymentIntent()));
+    const pi = admin._mocks.docData[`payment_intents/${PI_ID}`];
+    expect(pi.orderNumber).toBe('KAAY-2222');
+    expect(pi.statusToken).toBe('keep-this-token-keep-this-token-keep-this-token');
+    expect(admin._mocks.docData[`orders/${PI_ID}_item1`].orderNumber).toBe('KAAY-2222');
+  });
+
+  test('a refund emails the customer once, with the amount and the order number, whoever issued it', async () => {
+    seedPaymentIntentDoc({ orderNumber: 'KAAY-3333', statusToken: 'tok-tok-tok-tok-tok-tok-tok-tok-tok-tok-tok', customerEmail: 'buyer@example.com', paymentStatus: 'paid', fulfillmentStatus: 'processing' });
+    const app = buildWebhookApp();
+    await post(app, succeededEvent('evt_num_4', basePaymentIntent()));
+
+    const charge = {
+      id: 'ch_refund_1', object: 'charge', payment_intent: PI_ID, currency: 'usd',
+      amount: 13996, amount_refunded: 13996, refunded: true, metadata: {}
+    };
+    const res = await post(app, { id: 'evt_refund_1', type: 'charge.refunded', created: 1789300000, data: { object: charge } });
+    expect(res.status).toBe(200);
+
+    const mail = admin._mocks.docData[`mail/${PI_ID}_customer_refund_13996`];
+    expect(mail).toBeDefined();
+    expect(mail.to).toBe('buyer@example.com');
+    expect(mail.message.subject).toBe('↩️ Refund issued — order KAAY-3333');
+    expect(mail.message.html).toContain('$139.96');
+    expect(mail.message.html).toContain('KAAY-3333');
+    expect(mail.message.html).toContain('cancelled and will not ship');
+    expect(mail.message.html).toContain('https://kaay.store/order/KAAY-3333?t=tok-tok-tok-tok-tok-tok-tok-tok-tok-tok-tok');
+
+    // Redelivery of the same event: no second mail.
+    const again = await post(app, { id: 'evt_refund_1', type: 'charge.refunded', created: 1789300000, data: { object: charge } });
+    expect(again.status).toBe(200);
+    expect(Object.keys(admin._mocks.docData).filter((k) => k.startsWith(`mail/${PI_ID}_customer_refund_`))).toHaveLength(1);
+  });
+});
