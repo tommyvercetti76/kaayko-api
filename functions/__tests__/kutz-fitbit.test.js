@@ -185,16 +185,28 @@ describe('GET /fitbit/initiate', () => {
     expect(authUrl).toContain('heartrate');
   });
 
-  it('encodes the uid as base64url state parameter', async () => {
+  it('issues a signed, expiring state bound to the uid — never bare base64(uid)', async () => {
     const res = await request(app)
       .get('/api/kutz/fitbit/initiate')
       .set(authHeader());
     const url    = new URL(res.body.data.authUrl);
     const state  = url.searchParams.get('state');
-    const decoded = Buffer.from(state, 'base64url').toString();
-    expect(decoded).toBe('user-uid'); // VALID_USER_TOKEN → uid: user-uid
+    const [payload, sig] = state.split('.');
+    expect(sig).toMatch(/^[A-Za-z0-9_-]{40,}$/);
+    const data = JSON.parse(Buffer.from(payload, 'base64url').toString());
+    expect(data.uid).toBe('user-uid'); // VALID_USER_TOKEN → uid: user-uid
+    expect(data.exp).toBeGreaterThan(Date.now());
+    expect(typeof data.n).toBe('string');
+    // The old, forgeable shape must no longer be what we mint.
+    expect(Buffer.from(state, 'base64url').toString()).not.toBe('user-uid');
   });
 });
+
+/** A state exactly as /initiate would hand to Fitbit for the signed-in user. */
+async function mintState() {
+  const res = await request(app).get('/api/kutz/fitbit/initiate').set(authHeader());
+  return new URL(res.body.data.authUrl).searchParams.get('state');
+}
 
 // ─── /fitbit/callback ─────────────────────────────────────────────────────────
 
@@ -209,7 +221,7 @@ describe('GET /fitbit/callback', () => {
   });
 
   it('redirects to /kutz?fitbit=error when code is missing', async () => {
-    const state = Buffer.from('user-uid').toString('base64url');
+    const state = await mintState();
     const res   = await request(app)
       .get('/api/kutz/fitbit/callback')
       .query({ state }); // no code
@@ -218,7 +230,7 @@ describe('GET /fitbit/callback', () => {
   });
 
   it('redirects to /kutz?fitbit=connected after successful token exchange', async () => {
-    const state = Buffer.from('user-uid').toString('base64url');
+    const state = await mintState();
 
     // Mock successful token exchange
     mockFetch.mockResolvedValueOnce({
@@ -240,7 +252,7 @@ describe('GET /fitbit/callback', () => {
   });
 
   it('redirects to /kutz?fitbit=error when token exchange fails', async () => {
-    const state = Buffer.from('user-uid').toString('base64url');
+    const state = await mintState();
 
     mockFetch.mockResolvedValueOnce({
       ok:   false,
@@ -253,6 +265,17 @@ describe('GET /fitbit/callback', () => {
 
     expect([301, 302, 307, 308]).toContain(res.status);
     expect(res.headers.location).toContain('fitbit=error');
+  });
+
+  it('rejects a forged state (bare base64 of a uid) instead of binding tokens to that account', async () => {
+    const forged = Buffer.from('victim-uid').toString('base64url');
+    mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({ access_token: 'x', refresh_token: 'y', user_id: 'z', expires_in: 3600 }) });
+    const res = await request(app)
+      .get('/api/kutz/fitbit/callback')
+      .query({ code: 'auth-code-xyz', state: forged });
+    expect([301, 302, 307, 308]).toContain(res.status);
+    expect(res.headers.location).toContain('fitbit=error');
+    expect(mockFetch).not.toHaveBeenCalled();
   });
 
   it('redirects to /kutz?fitbit=error when state is missing', async () => {

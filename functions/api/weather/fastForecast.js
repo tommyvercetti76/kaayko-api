@@ -7,6 +7,9 @@
 
 const express = require('express');
 const router = express.Router();
+// 120 forecasts per client per 10 minutes: far above any real visitor, well below
+// what it takes to burn the paid weather quota through cache misses.
+router.use(rateLimit(120, 10 * 60 * 1000));
 const admin = require('firebase-admin');
 const { logger } = require('firebase-functions');
 const ForecastCache = require('../../cache/forecastCache');
@@ -19,6 +22,7 @@ const { ALGORITHM_VERSION } = require('./scoringConstants');
 const { applyCraftAdjustment, sanitizeCraft } = require('./craftAdjustments');
 const { setPublicCache } = require('../lib/apiResponse');
 const { requireAdmin } = require('../../middleware/authMiddleware');
+const rateLimit = require('../../middleware/rateLimit');
 
 const db = admin.firestore();
 

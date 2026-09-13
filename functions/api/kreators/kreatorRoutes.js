@@ -515,6 +515,20 @@ router.post('/auth/google/signin', async (req, res) => {
       });
     }
 
+    // The token must come from Google sign-in with a verified address. Any
+    // Firebase ID token in the project (anonymous, email/password with an
+    // unverified address, a custom token) used to pass this check and could
+    // mint a session for whichever kreator shared that email string.
+    const provider = decodedToken.firebase && decodedToken.firebase.sign_in_provider;
+    if (provider !== 'google.com' || decodedToken.email_verified !== true || !decodedToken.email) {
+      return res.status(401).json({
+        success: false,
+        error: 'Unauthorized',
+        message: 'Sign in with a verified Google account to continue',
+        code: 'PROVIDER_NOT_ALLOWED'
+      });
+    }
+
     const googleEmail = decodedToken.email;
     const googleUid = decodedToken.uid;
 
@@ -564,7 +578,7 @@ router.post('/auth/google/signin', async (req, res) => {
     }
 
     // Create session token
-    const sessionToken = await kreatorService.createSessionToken(kreator.uid);
+    const sessionToken = await kreatorService.createSessionToken(kreator.uid, kreator.sessionVersion);
 
     // Update last login
     await kreatorService.updateLastLogin(kreator.uid, {
@@ -611,6 +625,28 @@ router.post('/auth/google/signin', async (req, res) => {
  * POST /kreators/auth/google/connect
  * Connect Google account to kreator profile
  */
+/**
+ * POST /kreators/auth/logout
+ * Revokes every session for this kreator (this device and all others) by
+ * bumping the account's session version. Sessions could not be revoked at all
+ * before this route existed.
+ */
+router.post('/auth/logout', requireKreatorAuth, async (req, res) => {
+  try {
+    const db = require('firebase-admin').firestore();
+    const { FieldValue } = require('firebase-admin/firestore');
+    await db.collection('kreators').doc(req.kreator.uid).update({
+      sessionVersion: FieldValue.increment(1),
+      lastLogoutAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp()
+    });
+    return res.json({ success: true, message: 'Signed out everywhere' });
+  } catch (error) {
+    console.error('[KreatorAPI] Logout failed:', error);
+    return res.status(500).json({ success: false, error: 'Internal Server Error', code: 'LOGOUT_FAILED' });
+  }
+});
+
 router.post('/auth/google/connect', requireKreatorAuth, async (req, res) => {
   try {
     const { googleUid, googleProfile } = req.body;

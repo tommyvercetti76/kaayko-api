@@ -21,6 +21,7 @@
 const admin = require('firebase-admin');
 const db    = admin.firestore();
 
+const crypto        = require('crypto');
 const CLIENT_ID     = process.env.FITBIT_CLIENT_ID;
 const CLIENT_SECRET = process.env.FITBIT_CLIENT_SECRET;
 const REDIRECT_URI  = process.env.FITBIT_REDIRECT_URI
@@ -28,6 +29,50 @@ const REDIRECT_URI  = process.env.FITBIT_REDIRECT_URI
 const APP_RETURN    = 'https://kaaykostore.web.app/kutz';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
+
+// ── OAuth state ───────────────────────────────────────────────────────────────
+// The state used to be base64(uid): anyone could start the flow with another
+// user's uid and bind their own Fitbit tokens to that account. It is now a
+// signed, expiring payload; the callback only trusts a uid it can verify.
+const STATE_TTL_MS = 10 * 60 * 1000;
+function stateKey() {
+  return crypto.createHmac('sha256', CLIENT_SECRET || 'fitbit-unconfigured').update('kaayko-fitbit-oauth-state').digest();
+}
+function signState(uid) {
+  const payload = Buffer.from(JSON.stringify({ uid, n: crypto.randomBytes(8).toString('hex'), exp: Date.now() + STATE_TTL_MS })).toString('base64url');
+  const sig = crypto.createHmac('sha256', stateKey()).update(payload).digest('base64url');
+  return `${payload}.${sig}`;
+}
+/** @returns {string|null} the uid the state was minted for, or null */
+function readState(state) {
+  const [payload, sig] = String(state || '').split('.');
+  if (!payload || !sig) return null;
+  const expected = crypto.createHmac('sha256', stateKey()).update(payload).digest('base64url');
+  const a = Buffer.from(sig), b = Buffer.from(expected);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
+  let data;
+  try { data = JSON.parse(Buffer.from(payload, 'base64url').toString()); } catch { return null; }
+  if (!data || typeof data.uid !== 'string' || !data.uid || typeof data.exp !== 'number' || data.exp < Date.now()) return null;
+  return data.uid;
+}
+
+// ── Token storage ─────────────────────────────────────────────────────────────
+// Tokens live in users/{uid}/kutzPrivate/fitbit, which firestore.rules denies to
+// every client. They used to sit in kutzProfile/fitbit, which the signed-in user
+// can read — a leaked refresh token is a standing grant to their Fitbit data.
+// A legacy doc is moved across the first time it is needed.
+const privateRef = (uid) => db.collection('users').doc(uid).collection('kutzPrivate').doc('fitbit');
+const legacyRef  = (uid) => db.collection('users').doc(uid).collection('kutzProfile').doc('fitbit');
+async function loadFitbit(uid) {
+  const snap = await privateRef(uid).get();
+  if (snap.exists) return snap.data();
+  const legacy = await legacyRef(uid).get();
+  if (!legacy.exists) return null;
+  const data = legacy.data();
+  await privateRef(uid).set(data);
+  await legacyRef(uid).delete();
+  return data;
+}
 
 function basicAuth() {
   return Buffer.from(`${CLIENT_ID}:${CLIENT_SECRET}`).toString('base64');
@@ -53,8 +98,7 @@ async function refreshAccessToken(uid, refreshToken) {
 
   const tokens = await resp.json();
 
-  await db.collection('users').doc(uid)
-    .collection('kutzProfile').doc('fitbit')
+  await privateRef(uid)
     .update({
       accessToken:  tokens.access_token,
       refreshToken: tokens.refresh_token,
@@ -76,7 +120,7 @@ async function fitbitAuth(req, res) {
   }
 
   const uid   = req.user.uid;
-  const state = Buffer.from(uid).toString('base64url');
+  const state = signState(uid);
 
   const params = new URLSearchParams({
     response_type: 'code',
@@ -100,7 +144,7 @@ async function fitbitCallback(req, res) {
   }
 
   try {
-    const uid = Buffer.from(state, 'base64url').toString();
+    const uid = readState(state);
     if (!uid) throw new Error('Invalid state');
 
     // Exchange authorization code for tokens
@@ -126,8 +170,7 @@ async function fitbitCallback(req, res) {
     const tokens = await tokenResp.json();
 
     // Store tokens securely in Firestore
-    await db.collection('users').doc(uid)
-      .collection('kutzProfile').doc('fitbit')
+    await privateRef(uid)
       .set({
         accessToken:  tokens.access_token,
         refreshToken: tokens.refresh_token,
@@ -150,11 +193,9 @@ async function fitbitSync(req, res) {
   const uid = req.user.uid;
 
   try {
-    const fitbitSnap = await db.collection('users').doc(uid)
-      .collection('kutzProfile').doc('fitbit')
-      .get();
+    const fitbitData = await loadFitbit(uid);
 
-    if (!fitbitSnap.exists) {
+    if (!fitbitData) {
       return res.status(404).json({
         success: false,
         error:   'Fitbit not connected',
@@ -162,7 +203,7 @@ async function fitbitSync(req, res) {
       });
     }
 
-    let { accessToken, refreshToken, expiresAt } = fitbitSnap.data();
+    let { accessToken, refreshToken, expiresAt } = fitbitData;
 
     // Auto-refresh if token is within 60 seconds of expiry
     if (Date.now() >= expiresAt - 60_000) {
@@ -235,15 +276,13 @@ async function fitbitStatus(req, res) {
   const uid = req.user.uid;
 
   try {
-    const snap = await db.collection('users').doc(uid)
-      .collection('kutzProfile').doc('fitbit')
-      .get();
+    const data = await loadFitbit(uid);
 
-    if (!snap.exists) {
+    if (!data) {
       return res.json({ success: true, data: { connected: false } });
     }
 
-    const { expiresAt, connectedAt } = snap.data();
+    const { expiresAt, connectedAt } = data;
     const tokenExpired = Date.now() >= expiresAt;
 
     return res.json({
@@ -262,9 +301,7 @@ async function fitbitDisconnect(req, res) {
   const uid = req.user.uid;
 
   try {
-    await db.collection('users').doc(uid)
-      .collection('kutzProfile').doc('fitbit')
-      .delete();
+    await Promise.all([privateRef(uid).delete(), legacyRef(uid).delete()]);
 
     return res.json({ success: true });
 
@@ -286,7 +323,7 @@ async function fitbitInitiate(req, res) {
   }
 
   const uid   = req.user.uid;
-  const state = Buffer.from(uid).toString('base64url');
+  const state = signState(uid);
 
   const params = new URLSearchParams({
     response_type: 'code',

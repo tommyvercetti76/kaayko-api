@@ -7,6 +7,7 @@
 
 const express = require('express');
 const { getClientIp, hashClientIp } = require('../kortex/clientIp');
+const rateLimit = require('../../middleware/rateLimit');
 
 /**
  * Stable, non-identifying caller key for rate limiting and abuse controls.
@@ -42,6 +43,8 @@ function callerKey(req) {
 
 const crypto = require('crypto');
 const router = express.Router();
+// 120 calls per client per 10 minutes on the whole router (scores, feedback, ratings).
+router.use(rateLimit(120, 10 * 60 * 1000));
 const admin = require('firebase-admin');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const { createInputMiddleware } = require('./inputStandardization');
@@ -247,6 +250,19 @@ router.get('/', createInputMiddleware('paddleScore'), async (req, res) => {
   }
 });
 
+/**
+ * One rating per client per spot per day. The client's fingerprint alone used
+ * to be the document id, so a script could post a thousand "clients" from one
+ * connection and drag a spot's rating wherever it liked. The key is now a hash
+ * of the caller's IP hash AND the fingerprint: the fingerprint still separates
+ * two people behind one NAT, but it can no longer be minted at will — and a
+ * per-IP-per-spot ceiling (SPOT_RATINGS_PER_IP_PER_DAY) bounds even that.
+ */
+const SPOT_RATINGS_PER_IP_PER_DAY = 2;
+function clientRatingKey(ipHash, fingerprint) {
+  return crypto.createHash('sha256').update(`${ipHash}|${fingerprint || ''}`).digest('hex').slice(0, 24);
+}
+
 // ─── POST /paddleScore/feedback ────────────────────────────────────────────
 
 /**
@@ -281,9 +297,8 @@ router.post('/feedback', async (req, res) => {
 
     // Dedup: one feedback per client per spot per day. Deterministic doc id makes
     // retries idempotent and flooding a no-op. Client fingerprint preferred, IP hash fallback.
-    const clientKey = (typeof fingerprint === 'string' && fingerprint.length > 0 && fingerprint.length <= 40)
-      ? fingerprint
-      : ipHash;   // already an HMAC of the resolved client IP — no raw IP to re-hash
+    const clientKey = clientRatingKey(ipHash,
+      (typeof fingerprint === 'string' && fingerprint.length > 0 && fingerprint.length <= 40) ? fingerprint : '');
     const docId = `fb_${clientKey}_${spotId}_${today}`;
 
     // The prediction being scored against is server-authoritative: read it from
@@ -376,9 +391,10 @@ router.post('/publicRating', async (req, res) => {
     const ratedSpot = ratedSpotDoc.data() || {};
 
     const today = new Date().toISOString().split('T')[0];
+    const ipHash = callerKey(req);   // hashed, resolved chain — never a raw IP
 
-    // Dedup: one rating per fingerprint per spot per day
-    const dedupId = `${fingerprint}_${spotId}_${today}`;
+    // Dedup: one rating per client per spot per day, keyed on caller + fingerprint
+    const dedupId = `${clientRatingKey(ipHash, fingerprint)}_${spotId}_${today}`;
     const existingDoc = await db.collection('public_paddle_ratings').doc(dedupId).get();
 
     if (existingDoc.exists) {
@@ -404,12 +420,18 @@ router.post('/publicRating', async (req, res) => {
       return res.json({ success: true, message: 'Rating updated', id: dedupId });
     }
 
-    // IP rate limit: max 5 spots per IP per day
-    const ipHash = callerKey(req);   // hashed, resolved chain — never a raw IP
+    // IP rate limit: max 5 spots per IP per day, and at most 2 clients per spot
     const ipKey = `rateLimit_${ipHash}_${today}`;
-    const ipDoc = await db.collection('rate_limits').doc(ipKey).get();
+    const spotKey = `rateLimit_spot_${ipHash}_${spotId}_${today}`;
+    const [ipDoc, spotDoc] = await Promise.all([
+      db.collection('rate_limits').doc(ipKey).get(),
+      db.collection('rate_limits').doc(spotKey).get()
+    ]);
     if (ipDoc.exists && (ipDoc.data().count || 0) >= 5) {
       return res.status(429).json({ success: false, error: 'Daily rating limit reached' });
+    }
+    if (spotDoc.exists && (spotDoc.data().count || 0) >= SPOT_RATINGS_PER_IP_PER_DAY) {
+      return res.status(429).json({ success: false, error: 'This spot has already been rated from your connection today' });
     }
 
     // GPS quality signal
@@ -447,11 +469,11 @@ router.post('/publicRating', async (req, res) => {
 
     await db.collection('public_paddle_ratings').doc(dedupId).set(doc);
 
-    // Increment IP rate limit
-    await db.collection('rate_limits').doc(ipKey).set(
-      { count: FieldValue.increment(1), date: today },
-      { merge: true }
-    );
+    // Increment the per-IP and per-IP-per-spot counters
+    await Promise.all([
+      db.collection('rate_limits').doc(ipKey).set({ count: FieldValue.increment(1), date: today }, { merge: true }),
+      db.collection('rate_limits').doc(spotKey).set({ count: FieldValue.increment(1), date: today, spotId }, { merge: true })
+    ]);
 
     return res.json({ success: true, message: 'Rating recorded. Thank you!', id: dedupId });
 

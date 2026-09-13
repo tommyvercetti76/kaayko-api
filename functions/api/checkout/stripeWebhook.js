@@ -241,7 +241,8 @@ function normalizeItem(raw) {
     gender: raw?.gender || null,
     quantity,
     unitPriceCents,
-    lineTotalCents
+    lineTotalCents,
+    kreatorId: typeof raw?.kreatorId === 'string' && raw.kreatorId ? raw.kreatorId : null
   };
 }
 

@@ -33,6 +33,10 @@ const Timestamp = admin.firestore.Timestamp;
 
 const LAKE_SUBMISSION_LIMIT_PER_DAY = 5;        // per IP hash
 const LAKE_SUBMISSION_LIMIT_PER_EMAIL = 3;      // per contact email, when one is given
+// Whole-site ceiling: a botnet cycling IPs and emails still cannot fill the
+// review queue or the bucket. Overridable without a deploy.
+const LAKE_SUBMISSION_LIMIT_GLOBAL_PER_DAY = Number(process.env.LAKE_SUBMISSION_GLOBAL_CAP) > 0
+  ? Number(process.env.LAKE_SUBMISSION_GLOBAL_CAP) : 40;
 const COMMUNITY_GO_LIVE_DELAY_MS = 48 * 60 * 60 * 1000;
 const LAKE_SUBMISSION_DEDUPE_MS = 7 * 24 * 60 * 60 * 1000;
 // A single photo is not enough to review a launch (one framed shot can hide a
@@ -356,15 +360,22 @@ async function reserveSubmissionSlot({ ipHash, dedupeKey, emailHash = null }) {
   // tight for them or too loose for one person cycling connections.
   const emailRef = emailHash ? db.collection('lake_submission_rate_limits').doc(`e_${emailHash}_${today}`) : null;
   const dedupeRef = db.collection('paddling_lake_submission_keys').doc(dedupeKey);
+  const globalRef = db.collection('lake_submission_rate_limits').doc(`g_${today}`);
   const expiresAt = Timestamp.fromMillis(Date.now() + LAKE_SUBMISSION_DEDUPE_MS);
 
   await db.runTransaction(async transaction => {
-    const [rateSnap, dedupeSnap, emailSnap] = await Promise.all([
+    const [rateSnap, dedupeSnap, emailSnap, globalSnap] = await Promise.all([
       transaction.get(rateRef),
       transaction.get(dedupeRef),
-      emailRef ? transaction.get(emailRef) : Promise.resolve(null)
+      emailRef ? transaction.get(emailRef) : Promise.resolve(null),
+      transaction.get(globalRef)
     ]);
 
+    if (globalSnap.exists && (globalSnap.data().count || 0) >= LAKE_SUBMISSION_LIMIT_GLOBAL_PER_DAY) {
+      const err = new Error('We have received a lot of lake submissions today. Please try again tomorrow.');
+      err.code = 'RATE_LIMIT';
+      throw err;
+    }
     if (rateSnap.exists && (rateSnap.data().count || 0) >= LAKE_SUBMISSION_LIMIT_PER_DAY) {
       const err = new Error('Daily lake submission limit reached. Please try again tomorrow.');
       err.code = 'RATE_LIMIT';
@@ -395,6 +406,11 @@ async function reserveSubmissionSlot({ ipHash, dedupeKey, emailHash = null }) {
         updatedAt: FieldValue.serverTimestamp()
       }, { merge: true });
     }
+    transaction.set(globalRef, {
+      count: FieldValue.increment(1),
+      date: today,
+      updatedAt: FieldValue.serverTimestamp()
+    }, { merge: true });
     transaction.set(dedupeRef, {
       ipHash,
       createdAt: FieldValue.serverTimestamp(),

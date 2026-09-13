@@ -187,10 +187,15 @@ function validatePassword(password) {
  * @param {string} uid - Kreator UID
  * @returns {string} Session token (JWT-like)
  */
-async function createSessionToken(uid) {
+async function createSessionToken(uid, sessionVersion = 1) {
   const payload = {
     uid,
     role: 'kreator',
+    // Session version: requireKreatorAuth rejects a token whose `sv` no longer
+    // matches kreators/{uid}.sessionVersion, so logout (or an admin) can revoke
+    // every outstanding session by incrementing it. Tokens used to live for
+    // their full 7 days with no way to cut them short.
+    sv: Number.isInteger(sessionVersion) && sessionVersion > 0 ? sessionVersion : 1,
     iat: Math.floor(Date.now() / 1000),
     exp: Math.floor(Date.now() / 1000) + (7 * 24 * 60 * 60) // 7 days
   };
@@ -221,7 +226,8 @@ function verifySessionToken(token) {
       .update(`${header}.${body}`)
       .digest('base64url');
     
-    if (signature !== expectedSig) {
+    const given = Buffer.from(String(signature)), expected = Buffer.from(expectedSig);
+    if (given.length !== expected.length || !crypto.timingSafeEqual(given, expected)) {
       console.error('[Kreator] Invalid token signature');
       return null;
     }

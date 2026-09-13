@@ -359,7 +359,10 @@ async function resolveCart(rawItems, opts = {}) {
       unitPriceCents: price.cents,
       lineTotalCents,
       // null when the product carries no override; ./tax.js applies the default.
-      taxCode: resolveTaxCode(product.data)
+      taxCode: resolveTaxCode(product.data),
+      // Which seller this line belongs to, frozen at purchase. Null for the
+      // house catalogue. Without it nothing linked an order to a kreator.
+      kreatorId: typeof product.data.kreatorId === 'string' && product.data.kreatorId ? product.data.kreatorId : null
     });
   }
 

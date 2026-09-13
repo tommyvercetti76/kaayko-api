@@ -9,7 +9,6 @@ admin.initializeApp();
 
 // Create Express app for JSON API
 const apiApp = express();
-apiApp.use(cors());
 
 // Strip /api/ prefix when requests come through Firebase Hosting rewrite
 // (Firebase Hosting forwards the full path, e.g. /api/kutz/parseFoods)
@@ -18,10 +17,12 @@ apiApp.use((req, _res, next) => {
   next();
 });
 
-// Privileged surfaces are same-origin only. Public routes keep the permissive
-// CORS above (they serve the catalog and forecasts to any caller), but admin
-// and account routes have no legitimate cross-origin consumer, so a browser on
-// another site must not be able to read their responses. Auth is Bearer-token
+// Privileged surfaces are same-origin only. Public routes get permissive CORS
+// from cors() below (they serve the catalog and forecasts to any caller), but
+// admin and account routes have no legitimate cross-origin consumer, so a
+// browser on another site must not be able to read their responses. This guard
+// is mounted BEFORE cors() on purpose: cors() answers every preflight itself,
+// so mounted after it the 403 below could never run. Auth is Bearer-token
 // based, so this is defence in depth rather than the primary control.
 const { isKaaykoOrigin } = require("./config/origins");
 // /createPaymentIntent is included because it creates real Stripe charges from
@@ -41,14 +42,17 @@ apiApp.use((req, res, next) => {
     res.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type");
     res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
   } else {
-    // Unknown origin: strip the permissive header set by cors() above so the
-    // browser refuses to hand the response to the calling page.
+    // Unknown origin: no Access-Control-Allow-Origin header at all, and the
+    // preflight is refused outright, so the browser never sends the request.
     res.removeHeader("Access-Control-Allow-Origin");
     if (origin && req.method === "OPTIONS") return res.status(403).end();
   }
   if (req.method === "OPTIONS") return res.status(204).end();
   next();
 });
+
+// Everything else is public and answers any origin.
+apiApp.use(cors());
 
 // ⚠️ CRITICAL: Stripe webhook needs raw body for signature verification
 // Must be defined BEFORE express.json() middleware

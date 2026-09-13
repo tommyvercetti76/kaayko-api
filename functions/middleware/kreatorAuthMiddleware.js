@@ -68,6 +68,18 @@ async function requireKreatorAuth(req, res, next) {
 
     const kreatorData = kreatorDoc.data();
 
+    // A token minted before the account's last logout (or admin revocation)
+    // carries an older session version and is dead, whatever its expiry says.
+    const currentVersion = Number.isInteger(kreatorData.sessionVersion) ? kreatorData.sessionVersion : 1;
+    if ((Number.isInteger(decoded.sv) ? decoded.sv : 1) !== currentVersion) {
+      return res.status(401).json({
+        success: false,
+        error: 'Session revoked',
+        message: 'You have been signed out. Please sign in again.',
+        code: 'SESSION_REVOKED'
+      });
+    }
+
     // Check if kreator is deleted
     if (kreatorData.deletedAt) {
       return res.status(403).json({

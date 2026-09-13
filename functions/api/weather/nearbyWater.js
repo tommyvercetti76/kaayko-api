@@ -13,8 +13,11 @@ const express  = require('express');
 const { logger } = require('firebase-functions');
 const { getFirestore } = require('firebase-admin/firestore');
 const { findNearby, distMiles } = require('../../data/lakeIndex');
+const rateLimit = require('../../middleware/rateLimit');
 
 const router = express.Router();
+// 60 searches per client per 10 minutes.
+router.use(rateLimit(60, 10 * 60 * 1000));
 
 // ── Firestore geo-grid cache ───────────────────────────────────────────────
 const COLLECTION   = 'water_body_index';

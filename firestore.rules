@@ -117,12 +117,23 @@ service cloud.firestore {
         allow read, write: if request.auth != null && request.auth.uid == userId;
       }
 
+      // Server-only secrets (Fitbit OAuth tokens). The API reads and writes
+      // these with the Admin SDK; no client may ever see them.
+      match /kutzPrivate/{document} {
+        allow read, write: if false;
+      }
+
       // Daily nutrition logs
       match /kutzDays/{dayId} {
         allow read, create: if request.auth != null && request.auth.uid == userId;
-        // Allow update only if day isn't already locked (or if unlocking it)
+        // An unlocked day is editable. A locked day accepts exactly one change:
+        // flipping `locked` to false (plus updatedAt) — the edits must come in a
+        // second write. The old rule let a client unlock and rewrite everything
+        // in one request, so the lock protected nothing.
         allow update: if request.auth != null && request.auth.uid == userId
-          && !(resource.data.locked == true && request.resource.data.locked == true);
+          && (resource.data.locked != true
+              || (request.resource.data.locked != true
+                  && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['locked', 'updatedAt'])));
 
         // Foods subcollection
         match /foods/{foodId} {
