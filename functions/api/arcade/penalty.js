@@ -9,8 +9,11 @@
  * THE TEN RULES. They are numbered because they only work together; each one plugs a leak
  * the one before it opens.
  *
- *   1  PASTE STRIKE      Pasting into the Beggathon adds +1% to the price of the order,
- *                        up to +5%, and locks every discount in the shop.
+ *   1  PASTE STRIKE      Pasting into the Beggathon locks every discount in the shop for
+ *                        this browser. It NEVER raises the price: the +1%-a-strike
+ *                        surcharge was removed on 13 Sep 2026 as a consumer-law exposure.
+ *                        The `surchargePercent` field is kept as the count of accepted
+ *                        pleas still owed before the lock lifts (max 5).
  *   2  TOTAL LOCKOUT     While locked, NO game mints a code — not the Beggathon, not the
  *                        two machines. Otherwise a paster just goes and plays Mail Run.
  *   3  VOID ON STRIKE    A strike voids any code already won and not yet spent, so the
@@ -26,8 +29,8 @@
  *                        or re-sending the same typing rhythm, is refused (see begScore).
  *   8  NO ECHO           Pleas are checked against everybody else's recent ones, so the
  *                        winning text cannot be passed around.
- *   9  CHARGED, NOT HIDDEN  The surcharge is applied server-side at checkout and shown as
- *                        its own line. Nobody is ever quietly charged more.
+ *   9  NEVER A CHARGE    computeSurcharge() answers zero, always. A strike costs the
+ *                        shopper their discounts, never money above the list price.
  *  10  TOKEN ROTATION IS NOT AN ESCAPE  A fresh token clears the lock, as promised, but the
  *                        monthly order cap is keyed to the EMAIL, so rotating storage buys
  *                        a clean slate on discounts and no extra orders at all.

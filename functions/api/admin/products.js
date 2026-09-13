@@ -124,6 +124,7 @@ const EDITABLE = Object.freeze({
   actualPrice:    price,
   isAvailable:    bool,
   soldOut:        bool,
+  gamesEnabled:   bool,        // the Beggathon on this product's page, and its lines in a won discount
   availableSizes: strArray(LIMITS.SIZES, LIMITS.SIZE, { minItems: 1 }),
   availableColors: strArray(LIMITS.SIZES, LIMITS.SIZE),
   productType:    oneOf(PRODUCT_TYPES),
@@ -173,6 +174,7 @@ async function listProducts(_req, res) {
         actualPrice: typeof d.actualPrice === 'number' ? d.actualPrice : null,
         isAvailable: d.isAvailable !== false,
         soldOut: d.soldOut === true,
+        gamesEnabled: d.gamesEnabled !== false,
         deletedAt: d.deletedAt ? true : false,
         availableSizes: Array.isArray(d.availableSizes) ? d.availableSizes : [],
         availableColors: Array.isArray(d.availableColors) ? d.availableColors : [],

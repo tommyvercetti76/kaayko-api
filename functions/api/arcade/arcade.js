@@ -28,6 +28,7 @@ const admin = require("firebase-admin");
 
 const { gradeBeg, MAX_PERCENT, BANTER } = require("./begScore");
 const { loadStanding, strike, forgive, recordAttempt, gate, MAX_SURCHARGE } = require("./penalty");
+const { gamesAllowedForProduct } = require("./eligibility");
 
 const router = express.Router();
 const db = () => admin.firestore();
@@ -140,8 +141,23 @@ router.post("/solve", (_req, res) => {
 
 /* ── The Beggathon, at the cart ────────────────────────────────────────────── */
 
+/* ── GET /arcade/games?productId= — is the game switched on for this product? ── */
+
+router.get("/games", async (req, res) => {
+  const productId = String(req.query.productId || "").trim();
+  if (!productId) return res.status(400).json({ success: false, code: "MISSING_PRODUCT" });
+  const on = await gamesAllowedForProduct(db(), productId);
+  res.set("Cache-Control", "private, max-age=60");
+  return res.json({ success: true, games: on });
+});
+
 router.post("/beg/start", async (req, res) => {
   try {
+    const productId = String(req.body?.productId || "").trim();
+    if (productId && !(await gamesAllowedForProduct(db(), productId))) {
+      return res.status(403).json({ success: false, playable: false, code: "GAMES_OFF",
+        message: "The seller of this piece does not run the game." });
+    }
     const standing = await loadStanding(db(), tokenOf(req));
     const ref = await freshChallenge({ game: "beg" });
     return res.json({
@@ -156,7 +172,7 @@ router.post("/beg/start", async (req, res) => {
       surchargePercent: standing.surchargePercent,
       mode: standing.locked ? "atonement" : "discount",
       message: standing.locked
-        ? `You are carrying +${standing.surchargePercent}% for pasting. A good plea takes one percent off that. It will not earn you a discount.`
+        ? `Discounts are locked on this browser for pasting. ${standing.surchargePercent} accepted ${standing.surchargePercent === 1 ? "plea unlocks" : "pleas unlock"} them. Nothing pays out until then.`
         : null
     });
   } catch (err) {
@@ -170,8 +186,9 @@ router.post("/beg/solve", async (req, res) => {
     const token = tokenOf(req);
     const standing = await loadStanding(db(), token);
 
-    // ── Penalty rule 1. A paste is not a refusal, it is a charge. It is handled
-    //    before every other check, because it is the one outcome that costs money.
+    // ── Penalty rule 1. A paste is not a refusal, it is a lock: every discount in the
+    //    shop is off for this browser until it is begged back, one accepted plea per
+    //    strike. It never touches the price — see computeSurcharge for why.
     if (req.body?.pasted || req.body?.dropped) {
       const why = req.body?.pasted ? "PASTED" : "DROPPED";
       const { surchargePercent, strikes } = await strike(db(), token, why);
@@ -179,8 +196,8 @@ router.post("/beg/solve", async (req, res) => {
       return res.json({
         success: true, correct: false, reason: why,
         penalty: { surchargePercent, strikes, max: MAX_SURCHARGE },
-        message: `${BANTER[why]} That is +1% on this order, now +${surchargePercent}% in total, ` +
-                 `and no game in the shop pays out until it is gone. Beg it back down, one percent at a time.`
+        message: `${BANTER[why]} Discounts are now locked on this browser — ${surchargePercent} accepted ` +
+                 `${surchargePercent === 1 ? "plea unlocks" : "pleas unlock"} them. Your price never changes.`
       });
     }
 
@@ -235,8 +252,8 @@ router.post("/beg/solve", async (req, res) => {
         axes: graded.axes, verdict: graded.verdict,
         words: graded.words, seconds: graded.seconds,
         message: cleared
-          ? "He tore up the note. You are back to the ordinary price, which is all you were asking for."
-          : `He crossed off one percent. You are still carrying +${surchargePercent}%.`
+          ? "He tore up the note. Discounts are open to you again."
+          : `He crossed one off. ${surchargePercent} more accepted ${surchargePercent === 1 ? "plea" : "pleas"} and the lock lifts.`
       });
     }
 

@@ -16,6 +16,13 @@
 const admin = require("firebase-admin");
 const { DISCOUNTABLE_TYPES, REWARDS, emailKey, REWARD_PERCENT } = require("./arcade");
 const { loadStanding } = require("./penalty");
+const { gameEligibleItems } = require("./eligibility");
+
+// The two business ceilings on a game code. A plea is worth at most a tenth of the
+// lines whose seller opted in, and never more than MAX_DISCOUNT_CENTS however large the
+// bag: the game is a small kindness on one order, not a pricing channel.
+const MAX_GAME_PERCENT = 10;
+const MAX_DISCOUNT_CENTS = 2500;
 
 const ORDER_LEDGER = "arcade_order_ledger";
 const PATRONS = "kaayko_patrons";
@@ -76,17 +83,20 @@ async function computeRewardDiscount(db, { items, rewardCode, email, token }) {
   // Scope decides the base. A Beggathon code was argued for at the cart, so it takes
   // the whole cart; a game code only ever touches the non-premium lines.
   const scope = r.scope === "cart" ? "cart" : "eligible";
+  // "cart" means every line whose seller has the game switched on (eligibility.js) —
+  // a kreator who never opted in never pays for somebody else's plea.
+  const eligible = scope === "cart" ? await gameEligibleItems(db, items) : [];
   const base = scope === "cart"
-    ? (items || []).reduce((sum, i) => sum + Math.max(0, Number.isFinite(i.lineTotalCents)
+    ? eligible.reduce((sum, i) => sum + Math.max(0, Number.isFinite(i.lineTotalCents)
         ? i.lineTotalCents
         : (Number(i.unitPriceCents) || 0) * (Number(i.quantity) || 0)), 0)
     : eligibleSubtotalCents(items);
-  if (base <= 0) return none(scope === "cart" ? "EMPTY_CART" : "NO_ELIGIBLE_ITEMS");
+  if (base <= 0) return none(scope === "cart" ? "NO_ELIGIBLE_ITEMS" : "NO_ELIGIBLE_ITEMS");
 
-  const percent = Math.min(Number(r.percent) || REWARD_PERCENT, 50);
+  const percent = Math.min(Number(r.percent) || REWARD_PERCENT, MAX_GAME_PERCENT);
   return {
     applied: true,
-    discountCents: Math.floor((base * percent) / 100),
+    discountCents: Math.min(MAX_DISCOUNT_CENTS, Math.floor((base * percent) / 100)),
     percent,
     scope,
     code,
@@ -190,15 +200,15 @@ function applyPatronPricing(patron, items) {
  *
  * @returns {Promise<{percent:number, cents:number}>}
  */
-async function computeSurcharge(db, { items, token }) {
-  if (!token) return { percent: 0, cents: 0 };
-  const standing = await loadStanding(db, token);
-  const percent = Math.max(0, Math.min(5, standing.surchargePercent || 0));
-  if (!percent) return { percent: 0, cents: 0 };
-  const base = (items || []).reduce((sum, i) => sum + Math.max(0, Number.isFinite(i.lineTotalCents)
-    ? i.lineTotalCents
-    : (Number(i.unitPriceCents) || 0) * (Number(i.quantity) || 0)), 0);
-  return { percent, cents: Math.round((base * percent) / 100) };
+/**
+ * Nobody is ever charged MORE than the list price because of a game. The paste
+ * surcharge that used to live here (+1% a strike, to +5%) was a consumer-law
+ * exposure — an undisclosed behavioural mark-up on an advertised price — and it was
+ * removed on 13 Sep 2026. A strike now costs the shopper their discounts (penalty.js),
+ * never money. The function stays so checkout's arithmetic does not change shape.
+ */
+async function computeSurcharge(_db, _opts) {
+  return { percent: 0, cents: 0 };
 }
 
 module.exports = {
@@ -211,6 +221,8 @@ module.exports = {
   loadPatron,
   applyPatronPricing,
   MAX_ORDERS_PER_MONTH,
+  MAX_GAME_PERCENT,
+  MAX_DISCOUNT_CENTS,
   ORDER_LEDGER,
   PATRONS
 };

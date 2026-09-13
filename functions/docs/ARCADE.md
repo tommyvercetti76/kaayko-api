@@ -1,6 +1,28 @@
 # The arcade, and what a win is worth
 
-Two machines and one argument. Everything that decides money happens on the server.
+One argument. Everything that decides money happens on the server.
+
+## 13 Sep 2026 — the game is a toggle, and it never costs the shopper money
+
+- **Toggle.** `kaaykoproducts/{id}.gamesEnabled` (explicit switch) and
+  `kreators/{uid}.features.games` (a kreator's default, OFF until they turn it on).
+  Kaayko's own products (no `kreatorId`) are on. Resolved in `api/arcade/eligibility.js`;
+  asked by `GET /arcade/games?productId=` (the product page shows nothing when off),
+  refused by `POST /arcade/beg/start` (`GAMES_OFF`), and — the money guard — a "cart"
+  code in `computeRewardDiscount` only discounts lines whose seller opted in.
+  Kortex Products has a "Game on / Game off" button per product.
+- **Ceilings.** `MAX_GAME_PERCENT = 10`, `MAX_DISCOUNT_CENTS = 2500` ($25 per order).
+- **No surcharge, ever.** `computeSurcharge()` answers zero. The +1%-a-strike paste
+  surcharge was an undisclosed mark-up over the advertised price — a consumer-law
+  exposure — and is gone. A strike now locks discounts on that browser; the
+  `surchargePercent` field is kept as the number of accepted pleas still owed.
+- **Rules page.** `/legal/games` states all of this to the shopper: skill not chance,
+  the caps, the hour, single use, no stacking, no cash value, what is refused, the
+  data used. Linked from the game card and the plea's own rules.
+- **UI.** Numbers moved off the canvas onto a token-coloured strip (they were
+  `--fg` on a night sky: unreadable in light mode), wind is drawn and named, the
+  answer lands on its own sheet below the street, 16px textarea, fluid widths.
+
 
 ## The machines
 
