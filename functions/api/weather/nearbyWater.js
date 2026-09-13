@@ -10,10 +10,10 @@
 // Repeat queries for the same 0.25° grid cell: ~50ms (Firestore read).
 
 const express  = require('express');
+const rateLimit = require('../../middleware/rateLimit');
 const { logger } = require('firebase-functions');
 const { getFirestore } = require('firebase-admin/firestore');
 const { findNearby, distMiles } = require('../../data/lakeIndex');
-const rateLimit = require('../../middleware/rateLimit');
 
 const router = express.Router();
 // 60 searches per client per 10 minutes.

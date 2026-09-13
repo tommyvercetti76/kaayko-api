@@ -6,6 +6,7 @@
 // Serves pre-computed or rapidly generated forecasts for frontend
 
 const express = require('express');
+const rateLimit = require('../../middleware/rateLimit');
 const router = express.Router();
 // 120 forecasts per client per 10 minutes: far above any real visitor, well below
 // what it takes to burn the paid weather quota through cache misses.
@@ -22,7 +23,6 @@ const { ALGORITHM_VERSION } = require('./scoringConstants');
 const { applyCraftAdjustment, sanitizeCraft } = require('./craftAdjustments');
 const { setPublicCache } = require('../lib/apiResponse');
 const { requireAdmin } = require('../../middleware/authMiddleware');
-const rateLimit = require('../../middleware/rateLimit');
 
 const db = admin.firestore();
 

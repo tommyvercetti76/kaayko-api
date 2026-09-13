@@ -6,8 +6,8 @@
 // GET  /paddleScore/metrics      — admin: model accuracy stats (requires x-admin-key)
 
 const express = require('express');
-const { getClientIp, hashClientIp } = require('../kortex/clientIp');
 const rateLimit = require('../../middleware/rateLimit');
+const { getClientIp, hashClientIp } = require('../kortex/clientIp');
 
 /**
  * Stable, non-identifying caller key for rate limiting and abuse controls.
