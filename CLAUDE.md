@@ -91,6 +91,7 @@ router.put("/products/:id", requireKreatorAuth, requireActiveKreator, handler);
 | `kreators` | kreators | Active creator accounts |
 | `admin_users` | admin, auth | `{uid}` → `role` + `permissions`. This, not a custom claim, is what `requireAuth` reads to authorize an admin |
 | `product_audit` | admin | Append-only log of every catalogue edit: who, when, field, from → to |
+| `counters` | checkout | `orders` → `{ next }`: the human order-number counter (`KAAY-nnnn`), advanced in a transaction by the webhook (`services/orderNumber.js`) |
 | `users/{uid}/kutz*` | kutz | All nutrition tracking data |
 | `cameras` | cameras | Camera reference data |
 | `lenses` | cameras | Lens reference data |
