@@ -26,19 +26,24 @@
  *
  * Decided 13 Sep 2026 (Rohan): magnets 5.99, t-shirts 19.99, bottles 19.99, hoodies 24.99,
  * totes 29.99; mugs 9.99 and stickers 4.99 coming soon; print, cap and poster dropped.
+ *
+ * 13 Sep 2026 (evening): the Product Owner review's price list, accepted by the owner:
+ * tee 24.99 · hoodie 49.99 (was below cost) · tote 29.99 · bottle 29.99 · magnet 9.99
+ * (carries its own postage alone) · mug 19.99. The sticker is RETIRED as a product; it
+ * comes back as the card in every parcel. Historical orders snapshot their price.
  */
 
 const CLOTHING = 'txcd_30011000';   // Stripe Tax: Clothing & Footwear
 const GOODS    = 'txcd_99999999';   // Stripe Tax: general tangible goods
 
 const PRODUCT_TYPES = Object.freeze([
-  Object.freeze({ key: 'tshirt',  label: 'T-Shirts', singular: 'T-Shirt', priceCents: 1999, sizes: ['S', 'M', 'L', 'XL'], category: 'apparel',     taxCode: CLOTHING, status: 'live' }),
-  Object.freeze({ key: 'hoodie',  label: 'Hoodies',  singular: 'Hoodie',  priceCents: 2499, sizes: ['S', 'M', 'L', 'XL'], category: 'apparel',     taxCode: CLOTHING, status: 'live' }),
+  Object.freeze({ key: 'tshirt',  label: 'T-Shirts', singular: 'T-Shirt', priceCents: 2499, sizes: ['S', 'M', 'L', 'XL'], category: 'apparel',     taxCode: CLOTHING, status: 'live' }),
+  Object.freeze({ key: 'hoodie',  label: 'Hoodies',  singular: 'Hoodie',  priceCents: 4999, sizes: ['S', 'M', 'L', 'XL'], category: 'apparel',     taxCode: CLOTHING, status: 'live' }),
   Object.freeze({ key: 'tote',    label: 'Totes',    singular: 'Tote',    priceCents: 2999, sizes: ['One Size'],          category: 'accessories', taxCode: GOODS,    status: 'live' }),
-  Object.freeze({ key: 'bottle',  label: 'Bottles',  singular: 'Bottle',  priceCents: 1999, sizes: ['20 oz'],             category: 'drinkware',   taxCode: GOODS,    status: 'live' }),
-  Object.freeze({ key: 'magnet',  label: 'Magnets',  singular: 'Magnet',  priceCents: 599,  sizes: ['One Size'],          category: 'accessories', taxCode: GOODS,    status: 'live' }),
-  Object.freeze({ key: 'mug',     label: 'Mugs',     singular: 'Mug',     priceCents: 999,  sizes: ['One Size'],          category: 'drinkware',   taxCode: GOODS,    status: 'coming_soon' }),
-  Object.freeze({ key: 'sticker', label: 'Stickers', singular: 'Sticker', priceCents: 499,  sizes: ['One Size'],          category: 'accessories', taxCode: GOODS,    status: 'coming_soon' })
+  Object.freeze({ key: 'bottle',  label: 'Bottles',  singular: 'Bottle',  priceCents: 2999, sizes: ['20 oz'],             category: 'drinkware',   taxCode: GOODS,    status: 'live' }),
+  Object.freeze({ key: 'magnet',  label: 'Magnets',  singular: 'Magnet',  priceCents: 999,  sizes: ['One Size'],          category: 'accessories', taxCode: GOODS,    status: 'live' }),
+  Object.freeze({ key: 'mug',     label: 'Mugs',     singular: 'Mug',     priceCents: 1999,  sizes: ['One Size'],          category: 'drinkware',   taxCode: GOODS,    status: 'coming_soon' }),
+  Object.freeze({ key: 'sticker', label: 'Stickers', singular: 'Sticker', priceCents: 499,  sizes: ['One Size'],          category: 'accessories', taxCode: GOODS,    status: 'retired' })
 ]);
 
 /** Closed set for `category`. 'other' is what a kreator product lands in when nothing fits. */

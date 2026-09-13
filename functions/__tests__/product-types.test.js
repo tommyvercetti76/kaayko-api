@@ -11,14 +11,14 @@ describe('productTypes registry — the decided table', () => {
   test('prices by type are the ones Rohan set', () => {
     const cents = Object.fromEntries(PRODUCT_TYPES.map((t) => [t.key, t.priceCents]));
     expect(cents).toEqual({
-      tshirt: 1999, hoodie: 2499, tote: 2999, bottle: 1999, magnet: 599,
-      mug: 999, sticker: 499
+      tshirt: 2499, hoodie: 4999, tote: 2999, bottle: 2999, magnet: 999,
+      mug: 1999, sticker: 499
     });
   });
 
-  test('mug and sticker are coming soon; everything else is live; print/cap/poster are gone', () => {
+  test('mug is coming soon, the sticker is retired (it is the parcel card); everything else is live; print/cap/poster are gone', () => {
     expect(typeFor('mug').status).toBe('coming_soon');
-    expect(typeFor('sticker').status).toBe('coming_soon');
+    expect(typeFor('sticker').status).toBe('retired');
     for (const key of ['tshirt', 'hoodie', 'tote', 'bottle', 'magnet']) expect(typeFor(key).status).toBe('live');
     for (const key of ['print', 'cap', 'poster']) expect(typeFor(key)).toBeNull();
     expect(TYPE_KEYS).toEqual(['tshirt', 'hoodie', 'tote', 'bottle', 'magnet', 'mug', 'sticker']);
@@ -54,9 +54,9 @@ describe('productTypes registry — the decided table', () => {
 
   test('publicTypes carries what the storefront draws and nothing operational', () => {
     const pub = publicTypes();
-    expect(pub.map((t) => t.key)).toEqual(TYPE_KEYS);   // nothing retired today
+    expect(pub.map((t) => t.key)).toEqual(TYPE_KEYS.filter((k) => k !== 'sticker'));   // retired rows never reach the storefront
     expect(Object.keys(pub[0]).sort()).toEqual(['category', 'key', 'label', 'priceCents', 'singular', 'sizes', 'status']);
-    expect(pub.find((t) => t.key === 'mug')).toMatchObject({ label: 'Mugs', priceCents: 999, status: 'coming_soon' });
+    expect(pub.find((t) => t.key === 'mug')).toMatchObject({ label: 'Mugs', priceCents: 1999, status: 'coming_soon' });
   });
 });
 
@@ -64,7 +64,7 @@ describe('pricing.js reads the registry', () => {
   test('actualPrice wins; the type is the fallback; nothing else is a source', () => {
     expect(resolveUnitPriceCents({ actualPrice: 12.5, productType: 'tote' })).toEqual({ cents: 1250, source: 'actualPrice' });
     expect(resolveUnitPriceCents({ productType: 'tote' })).toEqual({ cents: 2999, source: 'productType' });
-    expect(resolveUnitPriceCents({ productType: 'hoodie' })).toEqual({ cents: 2499, source: 'productType' });
+    expect(resolveUnitPriceCents({ productType: 'hoodie' })).toEqual({ cents: 4999, source: 'productType' });
     expect(resolveUnitPriceCents({ productType: 'mug' })).toBeNull();            // coming soon: no price
     expect(resolveUnitPriceCents({ price: '$$$$', productType: '' })).toBeNull(); // the symbol is dead
     expect(resolveUnitPriceCents({ price: '$24.99' })).toBeNull();               // so is the legacy string

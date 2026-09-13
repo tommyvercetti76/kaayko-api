@@ -95,7 +95,7 @@ describe('Checkout — server is the price authority', () => {
     const res = await post(app, { items: [{ productId: 'prod-typed', size: 'M' }] });
 
     expect(res.status).toBe(200);
-    expect(res.body.amount).toBe(1999);                 // config/productTypes.js: tshirt
+    expect(res.body.amount).toBe(2499);                 // config/productTypes.js: tshirt
   });
 
   test('the retired tier symbol and legacy dollar strings are never read', async () => {

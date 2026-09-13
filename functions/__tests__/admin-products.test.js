@@ -111,8 +111,8 @@ describe('Admin products — price safety', () => {
     admin._mocks.docData['kaaykoproducts/p1'] = { ...baseProduct };
     const res = await request(adminApp()).get('/admin/products');
     expect(res.status).toBe(200);
-    expect(res.body.productTypes.map((t) => t.key)).toEqual(TYPE_KEYS);
-    expect(res.body.productTypes.find((t) => t.key === 'mug')).toMatchObject({ priceCents: 999, status: 'coming_soon' });
+    expect(res.body.productTypes.map((t) => t.key)).toEqual(TYPE_KEYS);   // the admin sees every row, retired included, so old products stay editable
+    expect(res.body.productTypes.find((t) => t.key === 'mug')).toMatchObject({ priceCents: 1999, status: 'coming_soon' });
     expect(res.body.products[0].price).toBeUndefined();   // the symbol is not even listed any more
   });
 
