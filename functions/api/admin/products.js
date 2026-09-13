@@ -23,15 +23,14 @@
  */
 
 const admin = require('firebase-admin');
-const { priceSymbolFor } = require('../checkout/pricing');
+const { PRODUCT_TYPES: TYPE_ROWS, TYPE_KEYS, CATEGORIES } = require('../../config/productTypes');
 
 const COLLECTION = 'kaaykoproducts';
 const AUDIT_COLLECTION = 'product_audit';
 
-// Mirrors store_upload.py's TYPES and the kreator router's categories. Kept as
-// closed sets so a typo cannot drop a product out of its storefront section.
-const PRODUCT_TYPES = Object.freeze(['tote', 'magnet', 'tshirt', 'print', 'sticker', 'mug', 'cap', 'poster']);
-const CATEGORIES = Object.freeze(['apparel', 'accessories', 'art', 'other']);
+// The registry is the enum. A typo cannot drop a product out of its storefront
+// section, and a type the storefront does not know cannot be chosen here.
+const PRODUCT_TYPES = TYPE_KEYS;
 
 const LIMITS = Object.freeze({
   TITLE: 120,
@@ -142,7 +141,7 @@ const EDITABLE = Object.freeze({
 const REFUSED = Object.freeze({
   imgSrc: 'images are managed by the image editor, not this form',
   previewSrc: 'images are managed by the image editor, not this form',
-  price: 'derived from actualPrice — set actualPrice instead',
+  price: 'retired on 13 Sep 2026 — the tier symbol is never read; set actualPrice',
   productID: 'identity cannot change once a product exists',
   id: 'identity cannot change once a product exists',
   kreatorId: 'ownership is not editable here',
@@ -172,7 +171,6 @@ async function listProducts(_req, res) {
         title: d.title || '',
         description: d.description || '',
         actualPrice: typeof d.actualPrice === 'number' ? d.actualPrice : null,
-        price: d.price || '',
         isAvailable: d.isAvailable !== false,
         soldOut: d.soldOut === true,
         deletedAt: d.deletedAt ? true : false,
@@ -194,7 +192,9 @@ async function listProducts(_req, res) {
     });
 
     products.sort((a, b) => a.title.localeCompare(b.title));
-    return res.json({ success: true, products, count: products.length });
+    // The view builds its Type select from this, so the admin enum is the registry.
+    const productTypes = TYPE_ROWS.map(({ key, label, priceCents, status }) => ({ key, label, priceCents, status }));
+    return res.json({ success: true, products, count: products.length, productTypes, categories: CATEGORIES });
   } catch (err) {
     console.error('admin listProducts failed:', err);
     return res.status(500).json({ success: false, error: 'Failed to load products' });
@@ -240,11 +240,6 @@ async function updateProduct(req, res) {
     if (!snap.exists) return res.status(404).json({ success: false, error: 'Product not found' });
     const before = snap.data();
 
-    // Keep the legacy tier symbol in step with the real price.
-    if (Object.prototype.hasOwnProperty.call(updates, 'actualPrice')) {
-      updates.price = priceSymbolFor(updates.actualPrice);
-    }
-
     // Only record fields that actually moved, so the audit trail is signal.
     const changes = {};
     for (const [key, next] of Object.entries(updates)) {
@@ -287,4 +282,4 @@ async function updateProduct(req, res) {
   }
 }
 
-module.exports = { listProducts, updateProduct, priceSymbolFor, EDITABLE, REFUSED, PRODUCT_TYPES, CATEGORIES, LIMITS };
+module.exports = { listProducts, updateProduct, EDITABLE, REFUSED, PRODUCT_TYPES, CATEGORIES, LIMITS };

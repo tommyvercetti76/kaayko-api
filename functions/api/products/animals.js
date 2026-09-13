@@ -38,7 +38,6 @@ function shapeProduct(doc) {
     productID: d.productID || "",
     title: d.title || "",
     description: d.description || "",
-    price: d.price || "",
     actualPrice: typeof d.actualPrice === "number" ? d.actualPrice : null,
     productType: d.productType || "",
     category: d.category || "",

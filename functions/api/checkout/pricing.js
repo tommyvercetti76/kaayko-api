@@ -9,10 +9,14 @@
  * `kaayko/scripts/store_uploader/firestore_writer.py`, which is the writer, and
  * `functions/api/products/products.js`, which is the reader):
  *
- *   actualPrice      number   — the real dollar price (e.g. 29.99). Authoritative.
- *   price            string   — a TIER SYMBOL ("$", "$$", "$$$", "$$$$"), NOT a
- *                               dollar string. Only legacy/kreator docs ever hold
- *                               something like "$24.99".
+ *   actualPrice      number   — the real dollar price (e.g. 19.99). Authoritative
+ *                               when present. Absent → the product TYPE's price
+ *                               from config/productTypes.js. There is no third
+ *                               source: the tier symbol that `price` used to hold
+ *                               was retired on 13 Sep 2026 and is never read.
+ *   productType      string   — a key in config/productTypes.js. Decides the
+ *                               fallback price, the tax code, and whether the
+ *                               type may be sold at all (coming_soon / retired).
  *   isAvailable      boolean  — absent means available (products.js uses
  *                               `d.isAvailable !== false`). This is the only real
  *                               availability flag on kaaykoproducts; there is no
@@ -34,16 +38,9 @@
  */
 
 const admin = require('firebase-admin');
+const { typeFor, isSellableType } = require('../../config/productTypes');
 
 const PRODUCTS_COLLECTION = 'kaaykoproducts';
-
-/** Tier-symbol → cents. Mirrored by PRICE_SYMBOL_CENTS / priceCents() in kaayko/src/js/priceMap.js — change both. */
-const PRICE_SYMBOL_CENTS = Object.freeze({
-  '$': 1999,
-  '$$': 2999,
-  '$$$': 3999,
-  '$$$$': 4999
-});
 
 /** Gender values the store UI can produce. Anything else is rejected. */
 const ALLOWED_GENDERS = Object.freeze(['Male', 'Female', 'Teen', 'Child', 'Infant', 'Unisex']);
@@ -63,7 +60,15 @@ function fail(code, message, extra = {}) {
 
 /**
  * Resolve the authoritative unit price, in cents, from a product document.
- * Returns null when no usable price can be established.
+ *
+ *   1. `actualPrice`, when it is a finite number: its cents, or null when ≤ 0
+ *      (a zero or negative price is a refusal, never a fallback).
+ *   2. Otherwise the product type's price from the registry, when the type is live.
+ *   3. Otherwise null — the product cannot be sold.
+ *
+ * kaayko/src/js/priceMap.js shows only `actualPrice`; the migration on 13 Sep 2026
+ * wrote it onto every house product from the same registry, so shopper and server
+ * agree without the client carrying a price table.
  *
  * @param {object} data Raw Firestore product data.
  * @returns {{cents: number, source: string}|null}
@@ -76,20 +81,11 @@ function resolveUnitPriceCents(data) {
     return cents > 0 ? { cents, source: 'actualPrice' } : null;
   }
 
-  const raw = typeof data.price === 'string' ? data.price.trim() : '';
-  if (!raw) return null;
-
-  // Tier symbol ("$$$") — a run of dollar signs and nothing else.
-  if (/^\$+$/.test(raw)) {
-    const cents = PRICE_SYMBOL_CENTS[raw];
-    return cents ? { cents, source: 'priceSymbol' } : null;
+  const type = typeFor(data.productType);
+  if (type && type.status === 'live' && type.priceCents > 0) {
+    return { cents: type.priceCents, source: 'productType' };
   }
-
-  // Legacy numeric string ("$24.99", "1,299.00").
-  const parsed = parseFloat(raw.replace(/[$,\s]/g, ''));
-  if (!Number.isFinite(parsed)) return null;
-  const cents = Math.round(parsed * 100);
-  return cents > 0 ? { cents, source: 'priceString' } : null;
+  return null;
 }
 
 /**
@@ -122,76 +118,59 @@ async function loadProduct(db, id) {
   return { id: query.docs[0].id, data: query.docs[0].data() || {}, viaLegacyField: true };
 }
 
-/**
- * The legacy `price` tier symbol for a dollar amount — the highest tier at or
- * below it. Exported so every writer derives it the same way: the Python
- * uploader, the kreator router and the admin API previously used three
- * different threshold sets (>=50/35/20 vs the tier table), so the same $25
- * product got "$$" or "$" depending on who wrote it.
- * @param {number} dollars
- * @returns {string} "$" … "$$$$"
- */
-function priceSymbolFor(dollars) {
-  const cents = Math.round(Number(dollars) * 100);
-  const tiers = Object.entries(PRICE_SYMBOL_CENTS).sort((a, b) => a[1] - b[1]);
-  let symbol = tiers[0][0];
-  for (const [sym, tierCents] of tiers) if (cents >= tierCents) symbol = sym;
-  return symbol;
-}
-
 /** Stripe Tax product tax codes look like "txcd_30011000". */
 const TAX_CODE_RE = /^txcd_\d{6,12}$/;
 
 /**
- * Per-product Stripe Tax code override. Only a well-formed code is honoured —
- * anything else is treated as absent so a typo in a product document cannot
- * turn into a failed tax calculation (and therefore a blocked checkout).
+ * Stripe Tax code for a line. A well-formed `taxCode` on the document wins;
+ * otherwise the product type's code from the registry; otherwise the category;
+ * otherwise null and tax.js applies its default. Anything malformed is treated as
+ * absent so a typo in a document cannot turn into a failed tax calculation (and
+ * therefore a blocked checkout).
+ *
+ * Before the registry every line fell through to the apparel default, which filed
+ * mugs and magnets as clothing — wrong in the states that exempt clothing but not
+ * general goods (PA, MN, NJ, MA).
  *
  * @param {object} data Raw Firestore product data.
  * @returns {string|null}
  */
-/**
- * Stripe Tax codes by product type, used when a document carries no explicit
- * `taxCode`. No product ever has: nothing in the codebase writes that field, so
- * every line fell through to tax.js's DEFAULT_TAX_CODE — txcd_30011000,
- * "Clothing & Footwear". Mugs, magnets, stickers, prints and posters were all
- * being filed as apparel, which is wrong in the states that exempt clothing but
- * not general goods (PA, MN, NJ, MA).
- *
- * txcd_99999999 is Stripe's "general — tangible goods" code.
- */
-const TAX_CODE_BY_TYPE = Object.freeze({
-  tshirt:  'txcd_30011000',   // Clothing & Footwear
-  cap:     'txcd_30011000',
-  tote:    'txcd_99999999',   // general tangible goods
-  magnet:  'txcd_99999999',
-  sticker: 'txcd_99999999',
-  mug:     'txcd_99999999',
-  print:   'txcd_99999999',
-  poster:  'txcd_99999999'
-});
-
 function resolveTaxCode(data) {
   const raw = typeof data?.taxCode === 'string' ? data.taxCode.trim() : '';
   if (TAX_CODE_RE.test(raw)) return raw;
 
-  // Fall back to the product's own type, then its category. Only if neither is
-  // recognised do we let tax.js apply its default.
-  const type = String(data?.productType || '').trim().toLowerCase();
-  if (TAX_CODE_BY_TYPE[type]) return TAX_CODE_BY_TYPE[type];
+  const type = typeFor(data?.productType);
+  if (type && type.taxCode) return type.taxCode;
 
   const category = String(data?.category || '').trim().toLowerCase();
   if (category === 'apparel') return 'txcd_30011000';
-  if (category === 'accessories' || category === 'art') return 'txcd_99999999';
+  if (category === 'accessories' || category === 'drinkware') return 'txcd_99999999';
 
   return null;
 }
 
-/** A product is purchasable unless it is explicitly switched off. */
+/** The first image the storefront shows for this product, frozen onto the order line. */
+function firstImage(data) {
+  for (const list of [data?.previewSrc, data?.imgSrc]) {
+    if (Array.isArray(list)) {
+      const url = list.find((u) => typeof u === 'string' && /^https:\/\//.test(u));
+      if (url) return url.slice(0, 2000);
+    }
+  }
+  return null;
+}
+
+/**
+ * A product is purchasable unless it is explicitly switched off, or its type is
+ * not on sale (coming_soon / retired in the registry). Same rule as the public
+ * list in api/products/products.js, so nothing shown can be refused here for a
+ * reason the shopper could not see.
+ */
 function isPurchasable(data) {
   if (data.isAvailable === false) return false;
   if (data.soldOut === true) return false;
   if (data.deletedAt) return false;
+  if (!isSellableType(data.productType)) return false;
   return true;
 }
 
@@ -362,7 +341,11 @@ async function resolveCart(rawItems, opts = {}) {
       taxCode: resolveTaxCode(product.data),
       // Which seller this line belongs to, frozen at purchase. Null for the
       // house catalogue. Without it nothing linked an order to a kreator.
-      kreatorId: typeof product.data.kreatorId === 'string' && product.data.kreatorId ? product.data.kreatorId : null
+      kreatorId: typeof product.data.kreatorId === 'string' && product.data.kreatorId ? product.data.kreatorId : null,
+      // What the shopper saw, frozen too — Kortex Orders shows it, and a later
+      // image edit must not change what an old order looks like.
+      productType: String(product.data.productType || '').trim().toLowerCase() || null,
+      imgSrc: firstImage(product.data)
     });
   }
 
@@ -388,10 +371,8 @@ module.exports = {
   resolveCart,
   resolveUnitPriceCents,
   resolveTaxCode,
+  firstImage,
   TAX_CODE_RE,
-  TAX_CODE_BY_TYPE,
-  PRICE_SYMBOL_CENTS,
-  priceSymbolFor,
   ALLOWED_GENDERS,
   LIMITS,
   CURRENCY,

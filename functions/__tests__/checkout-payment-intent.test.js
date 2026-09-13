@@ -87,26 +87,41 @@ describe('Checkout — server is the price authority', () => {
     expect(mockStripeCreate.mock.calls[0][0].amount).toBe(2999);
   });
 
-  test('falls back to the price tier symbol when actualPrice is absent', async () => {
-    seedProduct('prod-tier', { actualPrice: undefined, price: '$$$' });
-    delete admin._mocks.docData['kaaykoproducts/prod-tier'].actualPrice;
+  test('falls back to the product TYPE price from the registry when actualPrice is absent', async () => {
+    seedProduct('prod-typed', { productType: 'tshirt', price: '$$$' });   // the old symbol is ignored
+    delete admin._mocks.docData['kaaykoproducts/prod-typed'].actualPrice;
     const app = buildHandlerApp();
 
-    const res = await post(app, { items: [{ productId: 'prod-tier', size: 'M' }] });
+    const res = await post(app, { items: [{ productId: 'prod-typed', size: 'M' }] });
 
     expect(res.status).toBe(200);
-    expect(res.body.amount).toBe(3999);
+    expect(res.body.amount).toBe(1999);                 // config/productTypes.js: tshirt
   });
 
-  test('legacy numeric price strings are parsed when actualPrice is absent', async () => {
+  test('the retired tier symbol and legacy dollar strings are never read', async () => {
+    seedProduct('prod-symbol', { price: '$$$$' });
+    delete admin._mocks.docData['kaaykoproducts/prod-symbol'].actualPrice;
     seedProduct('prod-legacy-price', { price: '$24.50' });
     delete admin._mocks.docData['kaaykoproducts/prod-legacy-price'].actualPrice;
     const app = buildHandlerApp();
 
-    const res = await post(app, { items: [{ productId: 'prod-legacy-price', size: 'M' }] });
+    for (const id of ['prod-symbol', 'prod-legacy-price']) {
+      const res = await post(app, { items: [{ productId: id, size: 'M' }] });
+      expect(res.status).toBe(400);
+      expect(res.body.code).toBe('PRODUCT_PRICE_UNAVAILABLE');
+    }
+    expect(mockStripeCreate).not.toHaveBeenCalled();
+  });
 
-    expect(res.status).toBe(200);
-    expect(res.body.amount).toBe(2450);
+  test('a product of a coming-soon type is refused even with a price', async () => {
+    seedProduct('prod-mug', { productType: 'mug', actualPrice: 9.99, availableSizes: [] });
+    const app = buildHandlerApp();
+
+    const res = await post(app, { items: [{ productId: 'prod-mug' }] });
+
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe('PRODUCT_UNAVAILABLE');
+    expect(mockStripeCreate).not.toHaveBeenCalled();
   });
 });
 
@@ -337,8 +352,12 @@ describe('Checkout — canonical identifier', () => {
 
 describe('Checkout — Firestore contract for the webhook', () => {
   test('payment_intents/{id} carries the full server-computed order', async () => {
-    seedProduct('contract-1', { title: 'River Tee', actualPrice: 34.99 });
-    seedProduct('contract-2', { title: 'Paddle Hat', actualPrice: 19.5, availableSizes: [] });
+    seedProduct('contract-1', {
+      title: 'River Tee', actualPrice: 34.99, productType: 'tshirt',
+      previewSrc: ['https://firebasestorage.googleapis.com/v0/b/x/o/river-tee.preview.webp'],
+      imgSrc: ['https://firebasestorage.googleapis.com/v0/b/x/o/river-tee.webp']
+    });
+    seedProduct('contract-2', { title: 'Paddle Hat', actualPrice: 19.5, availableSizes: [], kreatorId: 'kr_42' });
     const app = buildHandlerApp();
 
     const res = await post(app, {
@@ -371,10 +390,14 @@ describe('Checkout — Firestore contract for the webhook', () => {
       gender: 'Male',
       quantity: 2,
       unitPriceCents: 3499,
-      lineTotalCents: 6998
+      lineTotalCents: 6998,
+      taxCode: 'txcd_30011000',    // a t-shirt files as clothing, from the registry
+      kreatorId: null,
+      productType: 'tshirt',
+      imgSrc: 'https://firebasestorage.googleapis.com/v0/b/x/o/river-tee.preview.webp'
     });
     expect(Object.keys(doc.items[0]).sort()).toEqual([
-      'gender', 'lineTotalCents', 'productId', 'productTitle', 'quantity', 'size', 'unitPriceCents'
+      'gender', 'imgSrc', 'kreatorId', 'lineTotalCents', 'productId', 'productTitle', 'productType', 'quantity', 'size', 'taxCode', 'unitPriceCents'
     ]);
     expect(doc.items[1]).toEqual({
       productId: 'contract-2',
@@ -383,7 +406,10 @@ describe('Checkout — Firestore contract for the webhook', () => {
       gender: null,
       quantity: 1,
       unitPriceCents: 1950,
-      lineTotalCents: 1950
+      lineTotalCents: 1950,
+      kreatorId: 'kr_42',          // a kreator's line is attributed at purchase, not later
+      productType: null,
+      imgSrc: null
     });
 
     // Preserved lifecycle / status / timestamp fields

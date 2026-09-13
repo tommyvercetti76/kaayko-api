@@ -75,18 +75,10 @@ function parseStringArray(raw, field, { maxItems = 12, maxLen = 40 } = {}) {
   return { ok: true, value };
 }
 
-/** Closed set, matching api/admin/products.js. A free string here silently broke
- *  the storefront's fit picker, which tests category === 'apparel'. */
-const CATEGORIES = Object.freeze(['apparel', 'accessories', 'art', 'other']);
-const PRODUCT_TYPES = Object.freeze(['tshirt', 'tote', 'magnet', 'print', 'sticker', 'mug', 'cap', 'poster']);
-
-const { priceSymbolFor } = require('../checkout/pricing');
-
-/** Delegates to the one tier rule in pricing.js — this used to be a third,
- *  divergent threshold set (>=50/35/20). */
-function priceToSymbol(price) {
-  return priceSymbolFor(price);
-}
+/** Closed sets from the one registry (config/productTypes.js), shared with
+ *  api/admin/products.js. A free string here silently broke the storefront's fit
+ *  picker, which tests category === 'apparel'. */
+const { CATEGORIES, TYPE_KEYS: PRODUCT_TYPES } = require('../../config/productTypes');
 
 /**
  * Upload image to Firebase Storage
@@ -242,8 +234,7 @@ router.post('/', requireKreatorAuth, requireActiveKreator, upload.array('images'
       // Core fields (matching existing kaaykoproducts schema)
       title: title.trim(),
       description: description.trim(),
-      price: priceToSymbol(parsedPrice), // For display in store
-      actualPrice: parsedPrice, // Actual dollar amount
+      actualPrice: parsedPrice, // the price; pricing.js reads nothing else for money
       votes: 0,
       productID,
       tags: parsedTags.value,
@@ -388,7 +379,6 @@ router.put('/:id', requireKreatorAuth, requireActiveKreator, upload.array('image
     if (description) updates.description = description.trim();
     if (price) {
       const parsedPrice = parseFloat(price);
-      updates.price = priceToSymbol(parsedPrice);
       updates.actualPrice = parsedPrice;
     }
     if (quantity) {

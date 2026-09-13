@@ -242,7 +242,11 @@ function normalizeItem(raw) {
     quantity,
     unitPriceCents,
     lineTotalCents,
-    kreatorId: typeof raw?.kreatorId === 'string' && raw.kreatorId ? raw.kreatorId : null
+    kreatorId: typeof raw?.kreatorId === 'string' && raw.kreatorId ? raw.kreatorId : null,
+    productType: typeof raw?.productType === 'string' && raw.productType ? raw.productType : null,
+    // Snapshot of what the shopper saw; Kortex Orders renders it. Never re-read
+    // from the catalogue, so an image edit cannot change a historical order.
+    imgSrc: typeof raw?.imgSrc === 'string' && /^https:\/\//.test(raw.imgSrc) ? raw.imgSrc : null
   };
 }
 
@@ -524,7 +528,14 @@ async function handlePaymentSuccess(paymentIntent, event) {
       // Per-item money ONLY — safe to SUM(lineTotalCents) for revenue.
       quantity: item.quantity,
       unitPriceCents: item.unitPriceCents,
-      lineTotalCents: item.lineTotalCents
+      lineTotalCents: item.lineTotalCents,
+
+      // Frozen at purchase alongside the price: the seller (null = house), the
+      // kind of thing, and the image the shopper saw. Kortex Orders renders
+      // imgSrc; a later catalogue edit never changes a historical order.
+      kreatorId: item.kreatorId || null,
+      productType: item.productType || null,
+      imgSrc: item.imgSrc || null
     });
   });
   await batch.commit();

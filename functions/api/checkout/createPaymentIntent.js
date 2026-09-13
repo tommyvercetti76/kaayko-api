@@ -271,7 +271,13 @@ async function createPaymentIntent(req, res) {
         lineTotalCents: item.lineTotalCents,
         // Only present when the product document carries an override; the
         // tax route applies the apparel default otherwise (see ./tax.js).
-        ...(item.taxCode ? { taxCode: item.taxCode } : {})
+        ...(item.taxCode ? { taxCode: item.taxCode } : {}),
+        // Frozen with the price: which seller the line belongs to (null for the
+        // house catalogue), what kind of thing it is, and the image the shopper
+        // saw. The webhook copies these onto orders/{pi}_item{n} unchanged.
+        kreatorId: item.kreatorId || null,
+        productType: item.productType || null,
+        imgSrc: item.imgSrc || null
       })),
       subtotalCents,
       discountCents,

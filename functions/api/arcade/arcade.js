@@ -26,7 +26,6 @@ const express = require("express");
 const crypto = require("crypto");
 const admin = require("firebase-admin");
 
-const { FRANK, FLY } = require("./gameRules");
 const { gradeBeg, MAX_PERCENT, BANTER } = require("./begScore");
 const { loadStanding, strike, forgive, recordAttempt, gate, MAX_SURCHARGE } = require("./penalty");
 
@@ -44,7 +43,6 @@ const GAME_PERCENT = 2;
 const REWARD_TTL_MS = 60 * 60 * 1000;      // one hour, claimed or not
 const CHALLENGE_TTL_MIN = 20;
 const MAX_ATTEMPTS = 5;
-const GAMES = new Set(["franking", "mailrun"]);
 
 const SECRET = process.env.ARCADE_SECRET || "kaayko-arcade-dev-secret";
 
@@ -120,92 +118,24 @@ async function openChallenge(res, challengeId) {
 const tokenOf = (req) => String(req.query?.token || req.body?.token || "").trim().slice(0, 64) || null;
 
 router.get("/challenge", async (req, res) => {
-  try {
-    const productId = String(req.query.productId || "").trim();
-    if (!productId) return res.status(400).json({ success: false, code: "MISSING_PRODUCT" });
-
-    const product = await loadProduct(productId);
-    if (!product) return res.status(404).json({ success: false, code: "NO_PRODUCT" });
-
-    if (!DISCOUNTABLE_TYPES.has(String(product.productType || "").toLowerCase())) {
-      return res.json({
-        success: true, playable: false, reason: "PREMIUM",
-        message: "This one is premium. No games, no discounts, no negotiation."
-      });
-    }
-
-    // Penalty rule 2: a locked token is told so before it is handed a game to play.
-    const standing = await loadStanding(db(), tokenOf(req));
-    const ok = gate(standing);
-
-    const game = GAMES.has(String(req.query.game)) ? String(req.query.game) : "franking";
-    const seed = crypto.randomBytes(4).readUInt32LE(0);
-    const ref = await freshChallenge({ productId: product.id, productTitle: product.title || "", game, seed });
-
-    return res.json({
-      success: true, playable: true,
-      locked: !ok.allowed, lockCode: ok.code || null, lockMessage: ok.message || null,
-      surchargePercent: standing.surchargePercent,
-      challengeId: ref.id, game, seed,
-      target: game === "mailrun" ? FLY.TARGET : FRANK.TARGET,
-      rewardPercent: GAME_PERCENT,
-      rewardScope: "eligible",
-      rewardExpiresInMinutes: Math.round(REWARD_TTL_MS / 60000),
-      attemptsAllowed: MAX_ATTEMPTS
-    });
-  } catch (err) {
-    console.error("[arcade] challenge failed:", err);
-    return res.status(500).json({ success: false, code: "SERVER_ERROR" });
-  }
+  // The two machines (Franking Rush, Mail Run) were retired on 13 Sep 2026: one game
+  // in the shop, the Beggathon. An old tab asking for a machine is told so and
+  // cannot mint a machine code. /arcade/beg/* below is unchanged.
+  const productId = String(req.query.productId || "").trim();
+  if (!productId) return res.status(400).json({ success: false, code: "MISSING_PRODUCT" });
+  return res.json({
+    success: true, playable: false, reason: "RETIRED",
+    message: "The machines have been retired. The Beggathon is the game now."
+  });
 });
 
 /* ── POST /arcade/solve ────────────────────────────────────────────────────── */
 
-router.post("/solve", async (req, res) => {
-  try {
-    const token = tokenOf(req);
-    const standing = await loadStanding(db(), token);
-    const ok = gate(standing);
-    if (!ok.allowed) return res.status(403).json({ success: false, correct: false, code: ok.code, message: ok.message });
-
-    const opened = await openChallenge(res, req.body?.challengeId);
-    if (!opened) return;
-    const { ref, ch } = opened;
-    const attempts = (ch.attempts || 0) + 1;
-
-    const verdict = ch.game === "mailrun"
-      ? FLY.replay(ch.seed, req.body?.events)
-      : FRANK.replay(ch.seed, req.body?.taps);
-
-    if (!verdict.cleared) {
-      await ref.update({ attempts, lastReason: verdict.reason || "SHORT" });
-      return res.json({
-        success: true, correct: false,
-        reason: verdict.reason || "SHORT",
-        progress: ch.game === "mailrun" ? verdict.passed : verdict.franked,
-        target: ch.game === "mailrun" ? FLY.TARGET : FRANK.TARGET,
-        attemptsLeft: Math.max(0, MAX_ATTEMPTS - attempts),
-        message: "Not this time."
-      });
-    }
-
-    const { code, expiresInMinutes } = await mintReward({
-      percent: GAME_PERCENT, scope: "eligible", game: ch.game,
-      productId: ch.productId, email: req.body?.email, token,
-      meta: { seed: ch.seed, result: verdict }
-    });
-    await ref.update({ attempts, solved: true, rewardCode: code });
-    await recordAttempt(db(), token, { won: true });
-
-    return res.json({
-      success: true, correct: true, code,
-      percent: GAME_PERCENT, scope: "eligible", expiresInMinutes,
-      message: `${GAME_PERCENT}% off the magnets and bottles in this order. Expires in ${expiresInMinutes} minutes.`
-    });
-  } catch (err) {
-    console.error("[arcade] solve failed:", err);
-    return res.status(500).json({ success: false, code: "SERVER_ERROR" });
-  }
+router.post("/solve", (_req, res) => {
+  return res.status(410).json({
+    success: false, correct: false, code: "RETIRED",
+    message: "The machines have been retired. The Beggathon is the game now."
+  });
 });
 
 /* ── The Beggathon, at the cart ────────────────────────────────────────────── */

@@ -90,12 +90,11 @@ async function enrichProductMetadata(linkId) {
  */
 function formatProductMetadata(data, linkId) {
   return {
-    title: `${data.title || linkId} - $${data.price || '??'}`,
+    title: typeof data.actualPrice === 'number' ? `${data.title || linkId} - $${data.actualPrice.toFixed(2)}` : (data.title || linkId),
     description: data.description || 'Unique Kaayko apparel - Vote now, pay later',
     imageUrl: (data.imgSrc && data.imgSrc[0]) || null,
-    // `price` is a tier symbol ("$".."$$$$"), NOT a number — `$${data.price}`
-    // rendered "$$$$". actualPrice is the real dollar amount when present.
-    price: typeof data.actualPrice === 'number' ? `$${data.actualPrice.toFixed(2)}` : (data.price || null),
+    // actualPrice is the price; the old `price` tier symbol was retired 13 Sep 2026.
+    price: typeof data.actualPrice === 'number' ? `$${data.actualPrice.toFixed(2)}` : null,
     votes: data.votes || 0,
     type: 'store_product',
     enriched: true

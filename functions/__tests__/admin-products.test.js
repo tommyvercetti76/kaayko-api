@@ -3,7 +3,8 @@ const request = require('supertest');
 const express = require('express');
 const admin = require('firebase-admin');
 
-const { listProducts, updateProduct, priceSymbolFor } = require('../api/admin/products');
+const { listProducts, updateProduct, PRODUCT_TYPES } = require('../api/admin/products');
+const { TYPE_KEYS } = require('../config/productTypes');
 const { resolveCart } = require('../api/checkout/pricing');
 
 /** The admin routes run behind requireAuth/requireAdmin in production; here we
@@ -64,7 +65,7 @@ describe('Admin products — the write whitelist', () => {
   test('refuses a checkout-critical field with the reason', async () => {
     const res = await request(adminApp()).patch('/admin/products/p1').send({ price: '$' });
     expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/price: derived from actualPrice/);
+    expect(res.body.error).toMatch(/price: retired .* set actualPrice/);
   });
 
   test('refuses images — those belong to the image editor', async () => {
@@ -94,20 +95,32 @@ describe('Admin products — price safety', () => {
     expect(res.body.error).toMatch(/actualPrice/);
   });
 
-  test('accepts a valid price and keeps the legacy tier symbol in step', async () => {
+  test('accepts a valid price and writes no tier symbol (retired 13 Sep 2026)', async () => {
     const res = await request(adminApp()).patch('/admin/products/p1').send({ actualPrice: 29.99 });
     expect(res.status).toBe(200);
     const saved = admin._mocks.docData['kaaykoproducts/p1'];
     expect(saved.actualPrice).toBe(29.99);
-    expect(saved.price).toBe('$$');           // 2999 tier — never left pointing at $$$
+    expect(saved.price).toBe('$$$');          // untouched: nothing reads it, nothing writes it
   });
 
-  test('the tier symbol comes from the same table checkout prices from', () => {
-    expect(priceSymbolFor(19.99)).toBe('$');
-    expect(priceSymbolFor(29.99)).toBe('$$');
-    expect(priceSymbolFor(39.99)).toBe('$$$');
-    expect(priceSymbolFor(49.99)).toBe('$$$$');
-    expect(priceSymbolFor(5)).toBe('$');       // below every tier, still the cheapest
+  test('the type enum is the registry, and the listing hands it to the view', async () => {
+    expect(PRODUCT_TYPES).toEqual(TYPE_KEYS);
+    expect(PRODUCT_TYPES).not.toContain('print');
+    expect(PRODUCT_TYPES).toContain('hoodie');
+
+    admin._mocks.docData['kaaykoproducts/p1'] = { ...baseProduct };
+    const res = await request(adminApp()).get('/admin/products');
+    expect(res.status).toBe(200);
+    expect(res.body.productTypes.map((t) => t.key)).toEqual(TYPE_KEYS);
+    expect(res.body.productTypes.find((t) => t.key === 'mug')).toMatchObject({ priceCents: 999, status: 'coming_soon' });
+    expect(res.body.products[0].price).toBeUndefined();   // the symbol is not even listed any more
+  });
+
+  test('a type outside the registry is refused', async () => {
+    admin._mocks.docData['kaaykoproducts/p1'] = { ...baseProduct };
+    const res = await request(adminApp()).patch('/admin/products/p1').send({ productType: 'poster' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/productType/);
   });
 });
 

@@ -88,7 +88,9 @@ function seedPaymentIntentDoc(extra = {}) {
       {
         productId: 'prod-1', productTitle: 'Straight Outta Sabarmati',
         size: 'S', gender: 'Male', quantity: 2,
-        unitPriceCents: 3499, lineTotalCents: 6998
+        unitPriceCents: 3499, lineTotalCents: 6998,
+        kreatorId: null, productType: 'tshirt',
+        imgSrc: 'https://firebasestorage.googleapis.com/v0/b/x/o/sabarmati.webp'
       },
       {
         productId: 'prod-2', productTitle: 'Stay Hydrated',
@@ -183,6 +185,11 @@ describe('Checkout Webhook — order documents', () => {
     expect(item1.size).toBe('S');
     expect(item1.gender).toBe('Male');
     expect(item1.quantity).toBe(2);
+    // Frozen with the price, straight from payment_intents — never the catalogue.
+    expect(item1.productType).toBe('tshirt');
+    expect(item1.imgSrc).toBe('https://firebasestorage.googleapis.com/v0/b/x/o/sabarmati.webp');
+    expect(item1.kreatorId).toBeNull();
+    expect(item2.imgSrc).toBeNull();          // the PI line carried none; nothing is looked up
     expect(item1.unitPriceCents).toBe(3499);
     expect(item1.lineTotalCents).toBe(6998);
 

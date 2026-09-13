@@ -8,6 +8,7 @@
 const express = require("express");
 const router = express.Router();
 const admin  = require("firebase-admin");
+const { publicTypes, isSellableType, CATEGORIES } = require("../../config/productTypes");
 
 const db     = admin.firestore();
 const bucket = admin.storage().bucket();
@@ -72,7 +73,9 @@ router.get("/", async (_req, res) => {
     // inside the public JSON payload.
     const visible = snap.docs.filter(doc => {
       const d = doc.data();
-      return d.isAvailable !== false && !d.deletedAt;
+      // Coming-soon and retired types never leave the server either: the grid
+      // names them, but nothing of that type is listed until the registry says live.
+      return d.isAvailable !== false && !d.deletedAt && isSellableType(d.productType);
     });
     const products = await Promise.all(
       visible.map(async docSnap => {
@@ -81,7 +84,6 @@ router.get("/", async (_req, res) => {
           id:              docSnap.id,
           title:           d.title           || "",
           description:     d.description     || "",
-          price:           d.price           || "",
           actualPrice:     typeof d.actualPrice === "number" ? d.actualPrice : null,
           votes:           d.votes           || 0,
           productID:       d.productID       || "",
@@ -120,11 +122,26 @@ router.get("/", async (_req, res) => {
       })
     );
 
-    return res.json({ success: true, products });
+    // The type registry rides along so the storefront draws its sections, labels
+    // and the coming-soon line from the same table checkout prices from.
+    return res.json({ success: true, products, productTypes: publicTypes() });
   } catch (err) {
     console.error("Error listing products:", err);
     return res.status(500).json({ success: false, error: "Server error", message: "Failed to list products", code: "SERVER_ERROR" });
   }
+});
+
+/**
+ * GET /products/types
+ *
+ * The product-type registry (config/productTypes.js), minus retired rows. Read by
+ * the storefront and by scripts/store_uploader, so a type added there is known to
+ * the uploader without touching Python. Declared before /:id so "types" is not
+ * looked up as a document.
+ */
+router.get("/types", (_req, res) => {
+  res.set("Cache-Control", "public, max-age=300");
+  return res.json({ success: true, productTypes: publicTypes(), categories: CATEGORIES });
 });
 
 /**
@@ -141,14 +158,13 @@ router.get("/:id", async (req, res) => {
     if (!docSnap.exists) return res.status(404).json({ success: false, error: "Not found", message: "Product not found", code: "NOT_FOUND" });
 
     const d = docSnap.data();
-    if (d.isAvailable === false || d.deletedAt) {
+    if (d.isAvailable === false || d.deletedAt || !isSellableType(d.productType)) {
       return res.status(404).json({ success: false, error: "Not found", message: "Product not found", code: "NOT_FOUND" });
     }
     const product = {
       id,
       title:           d.title           || "",
       description:     d.description     || "",
-      price:           d.price           || "",
       actualPrice:     typeof d.actualPrice === "number" ? d.actualPrice : null,
       votes:           d.votes           || 0,
       productID:       d.productID       || "",
