@@ -183,7 +183,10 @@ apiApp.use("/", require("./api/kortex/deeplinkRoutes"));
 //   firebase functions:secrets:set STRIPE_WEBHOOK_SECRET
 // (Firebase-managed secrets arrive with a trailing newline; consumers .trim().)
 exports.api = onRequest({
-  cors: true,
+  // CORS is decided inside Express (the privileged-origin guard, then cors()).
+  // With `cors: true` the functions framework reflected ANY origin and answered
+  // every preflight with 204 before Express ran, so the guard's 403 never fired.
+  cors: false,
   invoker: "public",
   timeoutSeconds: 300,
   memory: "512MiB",
