@@ -17,6 +17,20 @@ function generateShortCode() {
 }
 
 /**
+ * Code for a no-account (guest) link on kaay.link: 8 characters from the
+ * unambiguous charset (no 0/o/1/l/i), ~8.5e11 possibilities, so a code is
+ * not guessable from a 404 oracle and never leaks a workspace id. Replaces
+ * the `kx-xxxxxx` form used while links lived on kaayko.com/l/.
+ */
+const UNAMBIGUOUS = 'abcdefghjkmnpqrstuvwxyz23456789';
+function generateGuestCode(length = 8) {
+  const bytes = require('crypto').randomBytes(length);
+  let code = '';
+  for (let i = 0; i < length; i++) code += UNAMBIGUOUS[bytes[i] % UNAMBIGUOUS.length];
+  return code;
+}
+
+/**
  * Validate link ID format
  * @param {string} id - Link identifier
  * @returns {boolean} True if valid
@@ -75,6 +89,7 @@ function normalizeUTMs(query) {
 
 module.exports = {
   generateShortCode,
+  generateGuestCode,
   isValidLinkId,
   isValidShortCode,
   isValidSpace,

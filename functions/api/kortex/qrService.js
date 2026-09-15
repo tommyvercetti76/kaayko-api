@@ -130,7 +130,7 @@ async function serveLinkQr(req, res) {
 
   const size = Math.max(128, Math.min(1024, Number(req.query.size) || 512));
   // Every QR Kortex renders carries the scan marker, so scans count separately from taps.
-  const target = scanUrl(link.shortUrl || `https://kaayko.com/l/${code}`);
+  const target = scanUrl(link.shortUrl || require('./linkHosts').shortUrlFor(code));
   res.set('Cache-Control', 'public, max-age=86400');
   res.set('X-Content-Type-Options', 'nosniff');
 

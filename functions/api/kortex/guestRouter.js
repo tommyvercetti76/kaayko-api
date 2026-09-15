@@ -52,7 +52,8 @@ const db = admin.firestore();
 
 const ANALYTICS_WINDOW_DAYS = PLAN_LIMITS.starter.analytics_range_days;
 const DESTINATION_MAX = 2048;
-const QR_BASE = 'https://kaayko.com/qr';
+const linkHosts = require('./linkHosts');
+const QR_BASE = linkHosts.QR_BASE;
 
 function cleanUrl(value) {
   return typeof value === 'string' ? value.trim().slice(0, DESTINATION_MAX) : '';
@@ -94,7 +95,7 @@ function publicLink(link) {
   const code = link.code || link.id;
   return {
     code,
-    shortUrl: link.shortUrl || `https://kaayko.com/l/${code}`,
+    shortUrl: link.shortUrl || linkHosts.shortUrlFor(code),
     qrUrl: `${QR_BASE}/${code}.png`,
     title: link.title || '',
     destinations: link.destinations || {},
@@ -206,8 +207,8 @@ router.post('/links', rateLimiter('guestCreate'), async (req, res) => {
       createdBy: 'guest',
       tenantId: workspace.tenantId,
       tenantName: 'Free workspace',
-      domain: 'kaayko.com',
-      pathPrefix: '/l',
+      domain: linkHosts.SHORT_HOST,
+      pathPrefix: '',
       source: 'qr',
       metadata: { createdVia: 'guest' },
       schedule: body.schedule !== undefined ? body.schedule : undefined,

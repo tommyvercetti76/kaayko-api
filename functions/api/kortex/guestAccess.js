@@ -1,7 +1,7 @@
 /**
  * Guest access — the free tier without an account.
  *
- * A visitor makes a QR / dynamic link on kaayko.com/kortex and receives an
+ * A visitor makes a QR / dynamic link on kaayko.com/kortex (served at kaay.link/<code>) and receives an
  * ACCESS CODE. The code is the only credential for that guest workspace: it
  * unlocks the stats, lets the destination be changed, and renews the links.
  * No Firebase user is ever created for a free user.
@@ -205,8 +205,8 @@ async function createGuestWorkspace({ email = null, req = null } = {}) {
     slug: tenantId,
     kind: GUEST_KIND,
     name: 'Free workspace',
-    domain: 'kaayko.com',
-    pathPrefix: '/l',
+    domain: 'kaay.link',
+    pathPrefix: '',
     linkNamespace: 'kaayko',
     plan: 'starter',
     enabled: true,

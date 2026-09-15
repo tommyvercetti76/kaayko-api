@@ -19,7 +19,7 @@ const { placementDisplay } = require('./linkFields');
 const MIN_OBSERVED = 10;
 const MIN_CATEGORY = 5;
 const DAY_MS = 86400000;
-const QR_BASE = 'https://kaayko.com/qr';
+const QR_BASE = require('./linkHosts').QR_BASE;
 const OTHER = 'other';
 const PUBLIC_FINDING_KEYS = new Set(['qrSplit', 'trend', 'bestWindow', 'placement', 'campaignLift', 'qualityScore', 'missed']);
 

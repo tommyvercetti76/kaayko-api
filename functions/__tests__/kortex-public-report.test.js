@@ -81,7 +81,8 @@ describe('PublicReportDTO', () => {
 
   test('carries identity, the window and the token dates; the placement is the owner label when there is one', () => {
     const report = build();
-    expect(report.link).toEqual({ code: 'kx-test', title: 'Lobby', shortUrl: 'https://kaayko.com/l/kx-test', qrUrl: 'https://kaayko.com/qr/kx-test.png', placement: 'Lobby poster' });
+    // shortUrl is whatever the doc stores (legacy links keep kaayko.com/l); the QR address is the short host.
+    expect(report.link).toEqual({ code: 'kx-test', title: 'Lobby', shortUrl: 'https://kaayko.com/l/kx-test', qrUrl: 'https://kaay.link/qr/kx-test.png', placement: 'Lobby poster' });
     expect(report.window).toEqual({ days: 7, timeZone: 'Asia/Kolkata', from: new Date(NOW - 7 * DAY_MS).toISOString(), to: new Date(NOW).toISOString() });
     expect(report.sharedAtMs).toBe(grant.createdAtMs);
     expect(report.expiresAtMs).toBe(grant.expiresAtMs);

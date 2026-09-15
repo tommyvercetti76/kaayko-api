@@ -16,6 +16,7 @@
  * - GET    /api/smartlinks/health           → Health check
  */
 
+const linkHosts = require('./linkHosts');
 const express = require('express');
 const router = express.Router();
 const admin = require('firebase-admin');
@@ -135,8 +136,8 @@ async function getTenantConfig(tenantId) {
     return {
       id: DEFAULT_TENANT_ID,
       name: 'Kaayko',
-      domain: 'kaayko.com',
-      pathPrefix: '/l'
+      domain: linkHosts.SHORT_HOST,
+      pathPrefix: ''
     };
   }
 
@@ -157,8 +158,8 @@ async function getTenantConfig(tenantId) {
   return {
     id: tenantDoc.id,
     name: tenant.name || tenantDoc.id,
-    domain: tenant.domain || 'kaayko.com',
-    pathPrefix: tenant.pathPrefix || '/l'
+    domain: tenant.domain || linkHosts.SHORT_HOST,
+    pathPrefix: tenant.pathPrefix == null ? '' : tenant.pathPrefix
   };
 }
 
@@ -677,7 +678,7 @@ router.get('/tenants', requireAuth, rateLimiter('tenants'), async (req, res) => 
         .get();
 
       const tenants = [
-        { id: 'kaayko-default', name: 'Kaayko (All Links)', domain: 'kaayko.com', pathPrefix: '/l' },
+        { id: 'kaayko-default', name: 'Kaayko (All Links)', domain: linkHosts.SHORT_HOST, pathPrefix: '' },
         ...tenantsSnapshot.docs.map(doc => ({
           id: doc.id,
           name: doc.data().name,
@@ -711,7 +712,7 @@ router.get('/tenants', requireAuth, rateLimiter('tenants'), async (req, res) => 
         success: true,
         profile: profileView,
         tenants: [
-          { id: 'kaayko-default', name: 'Kaayko (Default)', domain: 'kaayko.com', pathPrefix: '/l' }
+          { id: 'kaayko-default', name: 'Kaayko (Default)', domain: linkHosts.SHORT_HOST, pathPrefix: '' }
         ]
       });
     }

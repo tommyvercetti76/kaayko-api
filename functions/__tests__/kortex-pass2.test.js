@@ -205,7 +205,7 @@ describe('CSV export', () => {
 
     const list = await request(app).get('/kortex/guest/workspace/export.csv').set(...UA).set(...session);
     expect(list.status).toBe(200);
-    expect(list.text).toMatch(new RegExp(`${code},https://kaayko.com/l/${code},Poster,active,live,`));
+    expect(list.text).toMatch(new RegExp(`${code},https://kaay.link/${code},Poster,active,live,`));
 
     const other = await createGuest({}, '203.0.113.99');
     const denied = await request(app).get(`/kortex/guest/links/${code}/analytics.csv`).set(...UA).set('X-Kortex-Guest-Session', other.body.session);

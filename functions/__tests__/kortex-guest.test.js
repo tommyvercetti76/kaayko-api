@@ -39,14 +39,14 @@ async function createFirst(extra = {}) {
 }
 
 describe('Creating a free link', () => {
-  test('mints a workspace, an access code, a session and a kaayko.com/l/ link', async () => {
+  test('mints a workspace, an access code, a session and a kaay.link/<code> link', async () => {
     const res = await createFirst();
     expect(res.status).toBe(201);
     expect(res.body.isNewWorkspace).toBe(true);
     expect(res.body.accessCode).toMatch(CODE_SHAPE);
     expect(res.body.session).toMatch(/^kxs\./);
-    expect(res.body.link.shortUrl).toMatch(/^https:\/\/kaayko\.com\/l\/kx-[a-z0-9]{6}$/);
-    expect(res.body.link.qrUrl).toBe(`https://kaayko.com/qr/${res.body.link.code}.png`);
+    expect(res.body.link.shortUrl).toMatch(/^https:\/\/kaay\.link\/[abcdefghjkmnpqrstuvwxyz23456789]{8}$/);
+    expect(res.body.link.qrUrl).toBe(`https://kaay.link/qr/${res.body.link.code}.png`);
     expect(res.body.qr.png).toMatch(/^data:image\/png;base64,/);
     expect(res.body.workspace).toMatchObject({ plan: 'free', links: 1, linkLimit: 25, analyticsDays: 7, hasEmail: false });
 

@@ -2,7 +2,7 @@
  * Smart Link Service Layer
  * SIMPLIFIED: Only short codes - no structured paths!
  * 
- * Every link is just: kaayko.com/l/lkXXXX
+ * Every link is just: kaay.link/<code> (legacy kaayko.com/l/<code> resolves forever)
  * Points to any destination: paddlingout, store, products, custom URLs
  * 
  * Simple, clean, effective.
@@ -10,7 +10,8 @@
 
 const admin = require('firebase-admin');
 const { FieldValue } = require('firebase-admin/firestore');
-const { generateShortCode, isValidShortCode } = require('./smartLinkValidation');
+const { generateShortCode, generateGuestCode, isValidShortCode } = require('./smartLinkValidation');
+const linkHosts = require('./linkHosts');
 const { DEFAULT_TENANT_ID } = require('./tenantContext');
 const { assertDestinationAllowed } = require('./domainPolicy');
 const { PLAN_LIMITS } = require('../billing/planLimits');
@@ -210,8 +211,8 @@ async function createShortLink(data) {
     // NEW: Multi-tenant fields
     tenantId = DEFAULT_TENANT_ID,
     tenantName = 'Kaayko',
-    domain = 'kaayko.com',
-    pathPrefix = '/l',
+    domain = linkHosts.SHORT_HOST,
+    pathPrefix = '',
     apiKeyId = null,
     destinationType = metadata.destinationType || 'external_url',
     campaignId = metadata.campaignId || null,
@@ -333,12 +334,13 @@ async function createShortLink(data) {
   if (!shortCode) {
     const { generateSecureCode } = require('./tenantLinkResolver');
     const useSecureCode = tenantId !== DEFAULT_TENANT_ID;
-    // Guest (no-account) links live on kaayko.com/l/ with an unguessable
-    // `kx-` code so a workspace id never leaks into the public URL.
+    // Guest (no-account) links get an unguessable 8-char code so a workspace
+    // id never leaks into the public URL (kaay.link/<code>).
     const isGuestTenant = tenantDocData?.kind === 'guest';
     let attempts = 0;
     do {
-      shortCode = isGuestTenant ? generateSecureCode('kx') : useSecureCode ? generateSecureCode(tenantId) : generateShortCode();
+      shortCode = isGuestTenant ? generateGuestCode() : useSecureCode ? generateSecureCode(tenantId) : generateShortCode();
+      if (linkHosts.isReservedSlug(shortCode)) { attempts++; continue; }
       const existingLink = await db.collection('short_links').doc(shortCode).get();
       if (!existingLink.exists) break;
       attempts++;
@@ -361,10 +363,21 @@ async function createShortLink(data) {
     shortUrl = `https://alumni.kaayko.com/${tenantSlug}/${publicCode || shortCode}`;
     qrCodeUrl = `https://alumni.kaayko.com/${tenantSlug}/qr/${shortCode}.png`;
   } else {
-    // Default Kaayko links: kaayko.com/l/<code>. The QR image is served by
-    // GET /qr/<code>.png (hosting rewrite → api) for any live link.
-    const shortDomain = domain.startsWith('http') ? domain : `https://${domain}`;
-    shortUrl = `${shortDomain}${pathPrefix}/${publicCode || shortCode}`;
+    // Default links: kaay.link/<code>. A tenant doc that still says
+    // kaayko.com + /l (every workspace made before 15 Sep 2026) is treated
+    // as the short host too; the legacy form keeps resolving regardless.
+    const bare = String(domain).replace(/^https?:\/\//, '');
+    const kaaykoHost = bare === linkHosts.LEGACY_HOST || bare === linkHosts.SHORT_HOST;
+    const plainLink = pathPrefix === '/l' || !pathPrefix;
+    let host = domain;
+    let prefix = pathPrefix;
+    if (kaaykoHost && plainLink) {            // kaayko.com/l/<code> or kaay.link/<code> → kaay.link/<code>
+      host = linkHosts.SHORT_HOST; prefix = '';
+    } else if (kaaykoHost) {                  // namespaces like /a/<code> (tenant portal) exist only on kaayko.com
+      host = linkHosts.LEGACY_HOST;
+    }
+    const shortDomain = host.startsWith('http') ? host : `https://${host}`;
+    shortUrl = `${shortDomain}${prefix}/${publicCode || shortCode}`;
     qrCodeUrl = `${shortDomain}/qr/${shortCode}.png`;
   }
 

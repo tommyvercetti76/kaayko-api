@@ -126,8 +126,8 @@ async function ensureDemoTenant(nowMs) {
     slug: DEMO_TENANT_ID,
     kind: guest.GUEST_KIND,
     name: 'Sample workspace',
-    domain: 'kaayko.com',
-    pathPrefix: '/l',
+    domain: 'kaay.link',
+    pathPrefix: '',
     linkNamespace: 'kaayko',
     plan: 'starter',
     enabled: true,
@@ -181,8 +181,8 @@ async function ensureLink(spec, nowMs) {
       createdBy: 'demo-seed',
       tenantId: DEMO_TENANT_ID,
       tenantName: 'Sample workspace',
-      domain: 'kaayko.com',
-      pathPrefix: '/l',
+      domain: 'kaay.link',
+      pathPrefix: '',
       source: 'qr',
       metadata: { createdVia: 'demo', demo: true }
     });
@@ -196,6 +196,12 @@ async function ensureLink(spec, nowMs) {
       expiresAt: fields.expiresAt,
       enabled: true
     });
+    // Sample links made before 15 Sep 2026 carry the legacy kaayko.com/l
+    // address; the samples page should show the short domain.
+    const { shortUrlFor, qrUrlFor, SHORT_HOST } = require('./linkHosts');
+    if ((existing.data() || {}).shortUrl !== shortUrlFor(spec.code)) {
+      await db().collection('short_links').doc(spec.code).update({ shortUrl: shortUrlFor(spec.code), qrCodeUrl: qrUrlFor(spec.code), domain: SHORT_HOST, pathPrefix: '' });
+    }
   }
   if (spec.reviewed) {
     // A destination that was held on first sight and approved by a person.
@@ -387,7 +393,7 @@ async function sampleSummaries({ windowDays = 7, nowMs = Date.now(), full = fals
       title: link.title || link.code,
       variation: variationName(link),
       shortUrl: link.shortUrl,
-      qrUrl: `https://kaayko.com/qr/${link.code}.png`,
+      qrUrl: require('./linkHosts').qrUrlFor(link.code),
       destination: (link.destinations && link.destinations.web) || null,
       events: a.totals.events,
       lifetime: link.clickCount || 0,

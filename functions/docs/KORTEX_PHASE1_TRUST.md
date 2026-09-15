@@ -121,7 +121,7 @@ Added after the first review: a free user never creates a Firebase user.
   workspace, fail-closed per-IP limits (12 creates/h, 15 code tries/15 min,
   5 recoveries/h), honeypot field, destination safety on every create/edit,
   session tokens HMAC-bound to the code version. Guest links use `kx-` codes
-  on kaayko.com/l/; the workspace id never appears in a public URL.
+  on kaay.link/<code> (since 15 Sep 2026; kaayko.com/l/<code> still resolves); the workspace id never appears in a public URL.
 - **Secrets**: `KORTEX_ACCESS_PEPPER` and `KORTEX_GUEST_SESSION_SECRET` are
   preferred; without them both derive from `KORTEX_LINK_SIGNING_SECRET`, then
   `ADMIN_PASSPHRASE` (set in prod). Rotating the underlying secret invalidates
@@ -141,7 +141,7 @@ Any link can carry `schedule: { timezone, windows: [{ label, start, end, url }] 
   correct forever without a data file. The first matching window's URL is
   used for every platform; no match → normal destinations. Nothing from the
   request (headers, query, cookies) is consulted, so it cannot be spoofed.
-- Applied in `redirectHandler.js` (kaayko.com/l/), `tenantLinkResolver.js`
+- Applied in `redirectHandler.js` (kaay.link/<code> and kaayko.com/l/<code>), `tenantLinkResolver.js`
   (alumni host) and the API resolver for plain external links. The matched
   window label is stored on the click event (`metadata.scheduleWindow`).
 - Window URLs run through the destination safety engine on create and edit,

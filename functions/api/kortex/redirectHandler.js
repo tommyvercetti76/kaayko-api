@@ -217,7 +217,7 @@ function buildAlumniPollDescription(votingDeadline) {
 }
 
 function renderSocialPreviewPage({ code, title, description, imageUrl }) {
-  const canonicalUrl = `https://kaayko.com/l/${encodeURIComponent(code)}`;
+  const canonicalUrl = require('./linkHosts').shortUrlFor(code);
   const safeTitle = escapeHtml(title);
   const safeDescription = escapeHtml(description);
   const safeImageUrl = escapeHtml(imageUrl);

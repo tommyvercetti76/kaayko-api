@@ -145,7 +145,7 @@ describe('Read-only sessions', () => {
     expect(l.events).toBeLessThanOrEqual(m.events);
     expect(m.events).toBeLessThanOrEqual(h.events);
     expect(h.timeline).toHaveLength(7);
-    expect(h.qrUrl).toMatch(/^https:\/\/kaayko\.com\/qr\/kx-/);
+    expect(h.qrUrl).toMatch(/^https:\/\/kaay\.link\/qr\/kx-/);
     expect(typeof h.variation).toBe('string');
     expect(res.headers['cache-control']).toMatch(/max-age/);
     const full = await request(app).get('/kortex/guest/demo/samples?full=1').set(...UA);

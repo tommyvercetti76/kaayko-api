@@ -17,6 +17,8 @@ const SHORT_HOST = 'kaay.link';
 const LEGACY_HOST = 'kaayko.com';
 const SHORT_BASE = `https://${SHORT_HOST}`;
 const LEGACY_LINK_BASE = `https://${LEGACY_HOST}/l`;
+/** QR images are served on both hosts; the short one is the canonical address. */
+const QR_BASE = `${SHORT_BASE}/qr`;
 
 /** Hosts that mean "this request is a kaay.link resolve". */
 const LINK_HOSTS = Object.freeze([
@@ -69,11 +71,17 @@ function shortUrlFor(code) {
   return `${SHORT_BASE}/${encodeURIComponent(code)}`;
 }
 
+/** The QR image URL for a code. */
+function qrUrlFor(code) {
+  return `${QR_BASE}/${encodeURIComponent(code)}.png`;
+}
+
 module.exports = {
   SHORT_HOST,
   LEGACY_HOST,
   SHORT_BASE,
   LEGACY_LINK_BASE,
+  QR_BASE,
   LINK_HOSTS,
   ROOT_REDIRECT,
   RESERVED_SLUGS,
@@ -81,5 +89,6 @@ module.exports = {
   isLinkHost,
   isValidSlug,
   isReservedSlug,
-  shortUrlFor
+  shortUrlFor,
+  qrUrlFor
 };
