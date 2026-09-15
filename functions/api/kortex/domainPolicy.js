@@ -51,9 +51,29 @@ function isWhitelistedDomain(url) {
  * @param {boolean} [opts.bypass] - Super-admin custom-destination bypass.
  * @throws {Error} code DOMAIN_NOT_WHITELISTED | DOMAIN_NOT_ALLOWED | INVALID_URL
  */
+/**
+ * A short link that points at another short link is a loop waiting to happen
+ * (and hides the real destination from the safety engine). Refused on every
+ * path, super-admin included.
+ */
+function assertNotSelfLink(url) {
+  let u;
+  try { u = new URL(url); } catch { return; }
+  const host = u.hostname.replace(/^www\./, '').toLowerCase();
+  const { SHORT_HOST, LEGACY_HOST } = require('./linkHosts');
+  const isShortHost = host === SHORT_HOST;
+  const isLegacyShortPath = host === LEGACY_HOST && /^\/l(\/|$)/.test(u.pathname);
+  if (isShortHost || isLegacyShortPath) {
+    const err = new Error('A link cannot point at another short link. Use the final destination instead.');
+    err.code = 'SELF_LINK';
+    throw err;
+  }
+}
+
 function assertDestinationAllowed({ webDestination, tenantId, allowedDomains, bypass }) {
-  if (bypass) return;
   if (!webDestination) return;
+  assertNotSelfLink(webDestination);
+  if (bypass) return;
 
   let host;
   try {

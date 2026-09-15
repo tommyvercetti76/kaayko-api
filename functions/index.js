@@ -10,6 +10,13 @@ admin.initializeApp();
 // Create Express app for JSON API
 const apiApp = express();
 
+// kaay.link: the short-link host. Hosting site `kaay-link` rewrites every
+// path here; this router claims requests to that host (root, /qr/<code>,
+// /<slug>) and 404s everything else there, so the rest of the API is never
+// reachable through kaay.link. Other hosts pass straight through. Mounted
+// before the /api/ strip so `kaay.link/api/...` is a 404, not the API.
+apiApp.use(require("./api/kortex/kaayLinkRouter"));
+
 // Strip /api/ prefix when requests come through Firebase Hosting rewrite
 // (Firebase Hosting forwards the full path, e.g. /api/kutz/parseFoods)
 apiApp.use((req, _res, next) => {

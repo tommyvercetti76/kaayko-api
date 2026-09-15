@@ -429,6 +429,7 @@ function errorPage(code, title, message, showAppButton = true) {
  * @param {string} code - Short code (e.g., lk1ngp)
  * @param {Object} options - Optional configuration
  * @param {boolean} options.trackAnalytics - Enable detailed analytics tracking
+ * @param {string} [options.host] - Host the link was scanned on (kaay.link vs kaayko.com); recorded on the event
  * @returns {Promise<void>} Redirects or sends error page
  */
 async function handleRedirect(req, res, code, options = {}) {
@@ -481,7 +482,7 @@ async function handleRedirect(req, res, code, options = {}) {
     // A scan that ends here is still a finding: recorded as an outcome, never as a visit.
     const miss = (outcome, extra = {}) => {
       if (isCrawler || options.trackAnalytics === false) return;
-      trackOutcome({ linkCode: code, tenantId: linkData.tenantId || DEFAULT_TENANT_ID, outcome, ...extra, platform, userAgent, ip: getClientIp(req), referrer: req.get('referer') || null, scanned }).catch(() => {});
+      trackOutcome({ linkCode: code, tenantId: linkData.tenantId || DEFAULT_TENANT_ID, outcome, ...extra, platform, userAgent, ip: getClientIp(req), referrer: req.get('referer') || null, scanned, host: options.host || null }).catch(() => {});
     };
 
     // Tenant kill switch: a workspace switched off by a reviewer stops every
@@ -614,7 +615,7 @@ async function handleRedirect(req, res, code, options = {}) {
           ip: getClientIp(req),
           referrer: req.get('referer') || null,
           utm: trackingContext.utm,
-          metadata: { source: scanned ? 'qr' : 'link' },
+          metadata: { source: scanned ? 'qr' : 'link', host: options.host || null },
           destinationKey: 'web'
         }).catch(err => console.error('[Alumni] click tracking failed:', err));
       }
@@ -715,7 +716,7 @@ async function handleRedirect(req, res, code, options = {}) {
           ip: getClientIp(req),
           referrer: req.get('referer') || null,
           utm: trackingContext.utm,
-          metadata: { source: scanned ? 'qr' : 'link', scheduleWindow },
+          metadata: { source: scanned ? 'qr' : 'link', scheduleWindow, host: options.host || null },
           destinationKey: destinationKeyOf({ platform, destinations, scheduleWindow })
         });
         clickId = clickData.clickId;
@@ -884,6 +885,7 @@ async function checkLinkExists(code) {
 // Export functions
 module.exports = { 
   handleRedirect, 
+  errorPage,
   detectPlatform,
   checkLinkExists,
   selectDestinationVariant,

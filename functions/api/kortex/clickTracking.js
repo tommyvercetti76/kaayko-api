@@ -204,7 +204,7 @@ function buildEventRecord(p) {
     destinationKey: p.destinationKey || null,
     redirectedTo: normalizeDestination(p.redirectedTo),
     utm: boundedUtm(p.utm),
-    metadata: { source: p.source === 'qr' ? 'qr' : 'link', scheduleWindow: p.scheduleWindow || null },
+    metadata: { source: p.source === 'qr' ? 'qr' : 'link', scheduleWindow: p.scheduleWindow || null, host: p.host || null },
     installAttributed: false,
     expiresAt: admin.firestore.Timestamp.fromMillis(p.timestampMs + EVENT_TTL_MS)
   };
@@ -233,6 +233,7 @@ async function trackClick(params) {
   const { linkCode, tenantId, platform, userAgent, ip, referrer, utm = {}, metadata = {}, destinationKey = null } = params;
   const timestamp = new Date();
   const scheduleWindow = metadata.scheduleWindow || null;
+  const host = metadata.host || null;
 
   const record = buildEventRecord({
     linkCode,
@@ -247,6 +248,7 @@ async function trackClick(params) {
     referrer,
     utm,
     source: metadata.source,
+    host,
     scheduleWindow,
     destinationKey: destinationKey || (scheduleWindow ? `schedule:${scheduleWindow}` : null),
     redirectedTo: null
@@ -273,7 +275,7 @@ async function trackClick(params) {
  * as a visit; a fallback is delivered, with its reason.
  */
 async function trackOutcome(params) {
-  const { linkCode, tenantId, outcome, reason = null, delivered = false, redirectedTo = null, platform = null, userAgent = '', ip = null, referrer = null, scanned = false } = params;
+  const { linkCode, tenantId, outcome, reason = null, delivered = false, redirectedTo = null, platform = null, userAgent = '', ip = null, referrer = null, scanned = false, host = null } = params;
   if (!linkCode || !outcome) return null;
 
   const record = buildEventRecord({
@@ -289,6 +291,7 @@ async function trackOutcome(params) {
     referrer,
     utm: {},
     source: scanned ? 'qr' : 'link',
+    host,
     scheduleWindow: null,
     destinationKey: outcome === 'fallback' ? 'fallback' : null,
     redirectedTo
