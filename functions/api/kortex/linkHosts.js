@@ -37,7 +37,7 @@ const RESERVED_SLUGS = Object.freeze([
   'support', 'report', 'appeal', 'terms', 'privacy', 'about', 'legal', 'help', 'status',
   'store', 'shop', 'cart', 'paddlingout', 'kutz', 'karma', 'roots', 'alumni', 'forge', 'reads',
   'kaayko', 'kaay', 'www', 'mail', 'app', 'apps', 'static', 'assets', 'fonts', 'img', 'images', 'js', 'css',
-  'robots.txt', 'sitemap.xml', 'favicon.ico', 'manifest.json', '.well-known',
+  'index', 'index.html', 'robots.txt', 'sitemap.xml', 'favicon.ico', 'manifest.json', 'site.webmanifest', '.well-known',
   'apple-app-site-association', 'assetlinks.json'
 ]);
 const RESERVED = new Set(RESERVED_SLUGS);
