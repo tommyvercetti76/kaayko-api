@@ -20,7 +20,9 @@ const db = admin.firestore();
 
 const SENDGRID_ENDPOINT = 'https://api.sendgrid.com/v3/mail/send';
 const SEND_TIMEOUT_MS = 8000;
-const MANAGE_URL = 'https://kaayko.com/kortex#manage';
+const linkHosts = require('../api/kortex/linkHosts');
+const MANAGE_URL = `${linkHosts.SHORT_BASE}/#manage`;
+const MANAGE_LABEL = linkHosts.SHORT_HOST;
 
 function fromAddress() {
   return process.env.KORTEX_EMAIL_FROM || 'kortex@kaayko.com';
@@ -140,12 +142,12 @@ function shell(title, bodyHtml) {
   return `<!DOCTYPE html><html><body style="margin:0;padding:24px;background:#f6f5f2;font-family:Georgia,'Times New Roman',serif;color:#1b1a17">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center">
   <table role="presentation" width="520" cellpadding="0" cellspacing="0" style="max-width:520px;background:#ffffff;border:1px solid #e6e1d6">
-    <tr><td style="padding:22px 28px;border-bottom:1px solid #e6e1d6;font-size:13px;letter-spacing:.2em;text-transform:uppercase;color:#8a6f3a">Kortex · by Kaayko</td></tr>
+    <tr><td style="padding:22px 28px;border-bottom:1px solid #e6e1d6;background:#0a1129;color:#ede8df"><span style="font-size:20px;letter-spacing:.18em;font-weight:700">KORTEX</span> <span style="font-size:11px;letter-spacing:.24em;text-transform:uppercase;color:#d9bd7b;margin-left:10px">by KAAYKO</span><span style="float:right;font-family:Menlo,Consolas,monospace;font-size:12px;color:#d9bd7b;padding-top:6px">kaay.link</span></td></tr>
     <tr><td style="padding:28px">
       <h1 style="margin:0 0 12px;font-size:22px;font-weight:600">${escapeHtml(title)}</h1>
       ${bodyHtml}
     </td></tr>
-    <tr><td style="padding:16px 28px;border-top:1px solid #e6e1d6;font-size:12px;color:#8a8579">You are receiving this because an email address was added to a Kortex workspace. If that was not you, ignore this message; nothing changes without the access code.</td></tr>
+    <tr><td style="padding:16px 28px;border-top:1px solid #e6e1d6;font-size:12px;color:#8a8579">You are receiving this because an email address was added to a Kortex workspace. If that was not you, ignore this message; nothing changes without the access code.<br>Kortex is a KAAYKO product · <a href="https://kaayko.com" style="color:#8a6f3a">kaayko.com</a></td></tr>
   </table></td></tr></table></body></html>`;
 }
 
@@ -154,14 +156,28 @@ function codeBlock(accessCode) {
   <p style="margin:0 0 18px;font-family:Menlo,Consolas,monospace;font-size:20px;letter-spacing:.08em;background:#f6f5f2;border:1px solid #e6e1d6;padding:14px 16px">${escapeHtml(accessCode)}</p>`;
 }
 
+function qrBlock(link) {
+  const code = link?.code;
+  if (!code) return '';
+  const qr = linkHosts.qrUrlFor(code);
+  const shortUrl = link.shortUrl || linkHosts.shortUrlFor(code);
+  return `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:18px auto 6px"><tr>
+    <td align="center" style="background:#ffffff;border:1px solid #e6e1d6;padding:10px"><img src="${escapeHtml(qr)}?size=360" width="180" height="180" alt="QR code for ${escapeHtml(shortUrl)}" style="display:block;width:180px;height:180px"></td></tr>
+    <tr><td align="center" style="padding-top:8px;font-family:Menlo,Consolas,monospace;font-size:15px"><a href="${escapeHtml(shortUrl)}" style="color:#8a6f3a;text-decoration:none">${escapeHtml(shortUrl.replace(/^https?:\/\//, ''))}</a></td></tr></table>`;
+}
+function buttonBlock(href, label) {
+  return `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:20px auto 4px"><tr><td align="center" style="background:#b5935a;padding:13px 26px"><a href="${escapeHtml(href)}" style="color:#080808;text-decoration:none;font-size:13px;letter-spacing:.16em;text-transform:uppercase;font-weight:600">${escapeHtml(label)}</a></td></tr></table>`;
+}
+
 function guestAccessCodeMessage({ to, accessCode, link, lifetimeDays = 365, analyticsDays = 7 }) {
-  const shortUrl = link?.shortUrl || '';
-  const subject = 'Your Kortex access code';
+  const shortUrl = link?.shortUrl || (link?.code ? linkHosts.shortUrlFor(link.code) : '');
+  const subject = shortUrl ? `Your Kortex access code for ${shortUrl.replace(/^https?:\/\//, '')}` : 'Your Kortex access code';
   const text = [
     'Your Kortex access code',
     '',
     `Access code: ${accessCode}`,
     shortUrl ? `Your link: ${shortUrl}` : '',
+    link?.code ? `Your QR image: ${linkHosts.qrUrlFor(link.code)}` : '',
     '',
     `Enter the code at ${MANAGE_URL} to see scans, change the destination, or download the QR again.`,
     `Free links stay live for ${lifetimeDays} days and renew every time you check in. Stats show the last ${analyticsDays} days.`,
@@ -169,11 +185,12 @@ function guestAccessCodeMessage({ to, accessCode, link, lifetimeDays = 365, anal
     'Keep this code private: anyone who has it can manage the link.'
   ].filter(Boolean).join('\n');
   const html = shell('Your Kortex access code', `
-    <p style="margin:0 0 8px;line-height:1.6">This code is the key to your free workspace. Enter it at
-      <a href="${MANAGE_URL}" style="color:#8a6f3a">kaayko.com/kortex</a> to see scans, change where the QR points, or download it again.</p>
+    <p style="margin:0 0 8px;line-height:1.6">Your QR is live. Print it anywhere; the code below is the key to its scans and settings, and it is shown only here.</p>
+    ${qrBlock(link)}
     ${codeBlock(accessCode)}
-    ${shortUrl ? `<p style="margin:0 0 8px;font-size:14px;color:#6b665c">Your link: <a href="${escapeHtml(shortUrl)}" style="color:#8a6f3a">${escapeHtml(shortUrl)}</a></p>` : ''}
-    <p style="margin:14px 0 0;font-size:14px;line-height:1.6;color:#6b665c">Free links stay live for ${lifetimeDays} days and renew every time you check in. Stats show the last ${analyticsDays} days. Keep the code private: anyone who has it can manage the link.</p>`);
+    ${buttonBlock(MANAGE_URL, 'Open my dashboard')}
+    <p style="margin:6px 0 0;font-size:13px;color:#8a8579;text-align:center">${escapeHtml(MANAGE_LABEL)}, then <i>already have a code</i></p>
+    <p style="margin:14px 0 0;font-size:14px;line-height:1.6;color:#6b665c">Scans by day, device and country. Change where the QR points at any time without reprinting. Free links stay live for ${lifetimeDays} days and renew every time you check in; stats show the last ${analyticsDays} days. Keep the code private: anyone who has it can manage the link.</p>`);
   return { to, subject, text, html, template: 'guest_access_code', meta: { code: link?.code || null } };
 }
 
@@ -190,7 +207,8 @@ function guestCodeRotatedMessage({ to, accessCode, lifetimeDays = 365 }) {
   const html = shell('Your new Kortex access code', `
     <p style="margin:0 0 8px;line-height:1.6">A new access code was issued for your workspace. Your previous code no longer works.</p>
     ${codeBlock(accessCode)}
-    <p style="margin:0;font-size:14px;line-height:1.6;color:#6b665c">Enter it at <a href="${MANAGE_URL}" style="color:#8a6f3a">kaayko.com/kortex</a> to manage your links.</p>`);
+    ${buttonBlock(MANAGE_URL, 'Open my dashboard')}
+    <p style="margin:6px 0 0;font-size:13px;color:#8a8579;text-align:center">${escapeHtml(MANAGE_LABEL)}, then <i>already have a code</i></p>`);
   return { to, subject, text, html, template: 'guest_code_rotated', meta: null };
 }
 

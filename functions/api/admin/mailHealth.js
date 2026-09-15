@@ -75,4 +75,40 @@ async function mailHealth(_req, res) {
   }
 }
 
-module.exports = { mailHealth, STALE_RETRY_MS };
+/**
+ * POST /admin/mail/redrive   { ids?: string[], all?: boolean, maxAgeDays?: number }
+ * Re-runs delivery, with force, on ERROR documents: the ones the scheduled
+ * redrive deliberately leaves alone. Used once after the SMTP secret is set
+ * (every message queued before it failed permanently) and for hand fixes.
+ * Ids only in the response, never recipients or bodies.
+ */
+async function mailRedrive(req, res) {
+  try {
+    const { deliverMailDocument } = require('../../triggers/mailSender');
+    const db = admin.firestore();
+    const body = req.body || {};
+    const maxAgeDays = Math.max(1, Math.min(90, Number(body.maxAgeDays) || 30));
+    let ids = Array.isArray(body.ids) ? body.ids.filter(id => typeof id === 'string' && /^[A-Za-z0-9_-]{1,200}$/.test(id)).slice(0, 50) : [];
+    if (!ids.length && body.all === true) {
+      const cutoff = Date.now() - maxAgeDays * 86400000;
+      const snap = await db.collection('mail').where('delivery.state', '==', 'ERROR').limit(50).get();
+      ids = snap.docs.filter(d => (toMillis(d.data().createdAt) ?? Date.now()) >= cutoff).map(d => d.id);
+    }
+    if (!ids.length) return res.json({ success: true, attempted: 0, results: [] });
+    const results = [];
+    for (const id of ids) {
+      try {
+        const r = await deliverMailDocument(id, { force: true });
+        results.push({ id, sent: !!r.sent, state: r.state || null, error: r.error ? String(r.error).slice(0, 160) : null });
+      } catch (e) {
+        results.push({ id, sent: false, state: 'ERROR', error: String(e.message || e).slice(0, 160) });
+      }
+    }
+    return res.json({ success: true, attempted: results.length, sent: results.filter(r => r.sent).length, results });
+  } catch (err) {
+    console.error('admin mailRedrive failed:', err);
+    return res.status(500).json({ success: false, error: 'Failed to redrive mail' });
+  }
+}
+
+module.exports = { mailHealth, mailRedrive, STALE_RETRY_MS };

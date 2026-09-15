@@ -155,6 +155,10 @@ apiApp.get("/admin/products", requireAuth, requirePlatformAdmin, listProducts);
 
 // Mail queue health. Counts and ids only — mail documents hold buyer PII.
 apiApp.get("/admin/mailHealth", requireAuth, requirePlatformAdmin, require("./api/admin/mailHealth").mailHealth);
+// Force a delivery attempt on mail that ended in ERROR (e.g. every message queued
+// before the SMTP secret was set). Ids only, or every ERROR document at most
+// `maxAgeDays` old. Platform admin, never self-serve.
+apiApp.post("/admin/mail/redrive", requireAuth, requirePlatformAdmin, require("./api/admin/mailHealth").mailRedrive);
 apiApp.patch("/admin/products/:id", requireAuth, requirePlatformAdmin, updateProduct);
 
 // Kaayko property cards. The copy printed on the business cards and shown at
@@ -203,7 +207,10 @@ exports.api = onRequest({
   invoker: "public",
   timeoutSeconds: 300,
   memory: "512MiB",
-  secrets: ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET"]
+  // MAIL_SMTP_URL is read (never sent from) here: emailDelivery.isConfigured()
+  // decides whether an access code may be queued, and /kortex/guest/capabilities
+  // tells the page whether to offer email at all. Delivery stays in mailSender.
+  secrets: ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET", "MAIL_SMTP_URL"]
 }, apiApp);
 
 // ===========================
