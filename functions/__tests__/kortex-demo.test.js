@@ -40,15 +40,15 @@ describe('Seeding', () => {
     expect(wrongKey.status).toBe(403);
     const seeded = await request(app).post('/kortex/demo/seed').set(...UA).set('X-Kortex-Sync-Key', 'sync-test-key').send({});
     expect(seeded.status).toBe(200);
-    expect(seeded.body.links).toHaveLength(8);
+    expect(seeded.body.links).toHaveLength(11);
     expect(seeded.body.events).toBeGreaterThan(2000);
     const tenant = admin._mocks.docData['tenants/' + demo.DEMO_TENANT_ID];
     expect(tenant.demo).toBe(true);
     expect(tenant.kind).toBe('guest');
     const links = docs('short_links/');
-    expect(links).toHaveLength(8);
+    expect(links).toHaveLength(11);
     expect(links.every(l => l.tenantId === demo.DEMO_TENANT_ID)).toBe(true);
-    expect(links.every(l => /^https:\/\/kaayko\.com\//.test(l.destinations.web))).toBe(true);
+    expect(links.every(l => /^https:\/\/(kaayko\.com|kaay\.store)\//.test(l.destinations.web))).toBe(true);
     const events = docs('click_events/');
     expect(events.length).toBe(seeded.body.events);
     expect(events.some(e => e.metadata.source === 'qr')).toBe(true);
@@ -66,7 +66,7 @@ describe('Seeding', () => {
     expect(second.status).toBe(200);
     expect(docs('click_events/').length).toBe(second.body.events);
     expect(second.body.links[0].removed).toBe(first.body.links[0].events);
-    expect(docs('short_links/')).toHaveLength(8);
+    expect(docs('short_links/')).toHaveLength(11);
   }, 60000);
 });
 
@@ -84,7 +84,7 @@ describe('Read-only sessions', () => {
     expect(ws.status).toBe(200);
     expect(ws.body.readOnly).toBe(true);
     expect(ws.body.workspace.demo).toBe(true);
-    expect(ws.body.links).toHaveLength(8);
+    expect(ws.body.links).toHaveLength(11);
 
     const code = ws.body.links[0].code;
     const analytics = await request(app).get(`/kortex/guest/links/${code}/analytics`).set(...UA).set(...session);
@@ -95,7 +95,7 @@ describe('Read-only sessions', () => {
 
     const overview = await request(app).get('/kortex/guest/workspace/analytics').set(...UA).set(...session);
     expect(overview.status).toBe(200);
-    expect(overview.body.links).toHaveLength(8);
+    expect(overview.body.links).toHaveLength(11);
     expect(overview.body.points.length).toBeGreaterThan(100);
 
     const csv = await request(app).get(`/kortex/guest/links/${code}/analytics.csv`).set(...UA).set(...session);
@@ -150,7 +150,7 @@ describe('Read-only sessions', () => {
     expect(res.headers['cache-control']).toMatch(/max-age/);
     const full = await request(app).get('/kortex/guest/demo/samples?full=1').set(...UA);
     expect(full.status).toBe(200);
-    expect(full.body.reports).toHaveLength(8);
+    expect(full.body.reports).toHaveLength(11);
     expect(full.body.reports.every(r => r.points.length > 0 && r.link && r.link.destinations)).toBe(true);
     expect(full.body.reports.every(r => r.insights.qualityScore && r.timeZone === 'Asia/Kolkata')).toBe(true);
     expect(full.body.reports.find(r => r.code === 'kx-store').link.schedule.windows[0].label).toBe('night');

@@ -105,6 +105,32 @@ const DEMO_LINKS = [
     profile: { total: 880, lifetimeFactor: 2.4, weekend: 1.35, hours: hourWeights([{ h: 12.5, w: 1.6, spread: 1.3 }, { h: 19.5, w: 1.4, spread: 1.6 }]),
       platform: { ios: 55, android: 41, web: 4 }, country: { IN: 90, US: 5, GB: 2, AE: 2, SG: 1 }, qr: 0.985, repeat: 0.48 }
   },
+  // The three cards on kaayko.com/kortex and kaay.link. Each is a story the
+  // page tells with real product pages behind the codes: a poster code that
+  // has been up all summer, a shelf card on a quiet stall, and a gathering
+  // card that went up this week with a night window.
+  {
+    code: 'kx-lakecard', title: 'Lake McDonald · postcard',
+    web: 'https://kaayko.com/paddlingout/forecast?id=mcdonald',
+    placement: { key: 'poster', label: 'trailhead board' },
+    profile: { total: 1420, lifetimeFactor: 2.6, weekend: 1.8, hours: hourWeights([{ h: 7, w: 1.4, spread: 1.6 }, { h: 17, w: 1.1, spread: 2.2 }]),
+      platform: { ios: 58, android: 34, web: 8 }, country: { US: 68, CA: 12, IN: 8, GB: 5, DE: 3, AU: 2, FR: 2 }, qr: 0.96, repeat: 0.2 }
+  },
+  {
+    code: 'kx-shelf', title: "Mom's Shop · shelf card",
+    web: 'https://kaay.store/s/moms-shop',
+    placement: { key: 'business_card', label: 'stall counter' },
+    profile: { total: 230, lifetimeFactor: 1.5, weekend: 1.6, hours: hourWeights([{ h: 11, w: 1, spread: 2 }, { h: 18, w: 1.2, spread: 2 }]),
+      platform: { ios: 46, android: 46, web: 8 }, country: { IN: 72, US: 16, AE: 5, GB: 4, SG: 3 }, qr: 0.86, repeat: 0.34 }
+  },
+  {
+    code: 'kx-baithak', title: 'An evening of music · card',
+    web: 'https://kaayko.com/kortex',
+    schedule: { timezone: 'Asia/Kolkata', windows: [{ label: 'night', start: '18:00', end: '06:00', url: 'https://kaayko.com/kortex?after=hours' }] },
+    placement: { key: 'flyer', label: 'grocery board' },
+    profile: { total: 96, lifetimeFactor: 1, weekend: 1.3, startedDaysAgo: 4, hours: hourWeights([{ h: 10, w: 0.6, spread: 2 }, { h: 19.5, w: 1.6, spread: 1.8 }]),
+      platform: { ios: 40, android: 52, web: 8 }, country: { IN: 94, US: 3, AE: 3 }, qr: 0.92, repeat: 0.15 }
+  },
   {
     code: 'kx-forge', title: 'Forge gallery · print',
     web: 'https://kaayko.com/forge-gallery',
@@ -178,6 +204,7 @@ async function ensureLink(spec, nowMs) {
     await LinkService.createShortLink({
       ...fields,
       code: spec.code,
+      placement: spec.placement || undefined,
       createdBy: 'demo-seed',
       tenantId: DEMO_TENANT_ID,
       tenantName: 'Sample workspace',
@@ -243,12 +270,15 @@ function generateEvents(spec, link, nowMs) {
     let w = (dow === 0 || dow === 6) ? p.weekend : 1;
     if (d < 7) w *= 1.55;
     if (p.burstStart && d > 20) w *= 2.2;
+    if (p.startedDaysAgo != null && d >= p.startedDaysAgo) w = 0;   // the code went up this week
     dayWeights.push(w);
   }
   const dayTotal = dayWeights.reduce((s, w) => s + w, 0);
   const visitors = Math.max(20, Math.round(p.total * (1 - p.repeat)));
   const referrerWeights = p.referrers || { null: 100 };
   const nightWin = spec.schedule && spec.schedule.windows && spec.schedule.windows[0];
+  const winHour = t => Number(String(t || '0').split(':')[0]);
+  const inWindow = (h, w) => { const a = winHour(w.start), b = winHour(w.end); return a < b ? (h >= a && h < b) : (h >= a || h < b); };
   const events = [];
   for (let d = 0; d < days; d++) {
     const n = Math.round(p.total * dayWeights[d] / dayTotal);
@@ -266,7 +296,7 @@ function generateEvents(spec, link, nowMs) {
       const deviceType = platform === 'web' ? (rnd() < 0.82 ? 'desktop' : 'tablet') : 'mobile';
       const os = platform === 'ios' ? 'iOS' : platform === 'android' ? 'Android' : (rnd() < 0.55 ? 'macOS' : 'Windows');
       const browser = platform === 'ios' ? 'Safari' : platform === 'android' ? 'Chrome' : (rnd() < 0.7 ? 'Chrome' : 'Safari');
-      const isNight = nightWin && (hour >= 20 || hour < 8);
+      const isNight = !!nightWin && inWindow(hour, nightWin);
       let redirectedTo = (link.destinations && link.destinations.web) || spec.web;
       if (platform === 'ios' && spec.ios) redirectedTo = spec.ios;
       if (platform === 'android' && spec.android) redirectedTo = spec.android;
