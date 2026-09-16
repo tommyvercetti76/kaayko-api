@@ -52,6 +52,13 @@ describe('Seeding', () => {
     const events = docs('click_events/');
     expect(events.length).toBe(seeded.body.events);
     expect(events.some(e => e.metadata.source === 'qr')).toBe(true);
+    // The poster asks who is coming; a share of its visitors answered.
+    const baithak = seeded.body.links.find(l => l.code === 'kx-baithak');
+    expect(baithak.answers).toBeGreaterThan(10);
+    const answers = docs('link_answers/');
+    expect(answers).toHaveLength(seeded.body.links.reduce((s, l) => s + (l.answers || 0), 0));
+    expect(answers.every(a => a.code === 'kx-baithak' && ['yes', 'maybe', 'no'].includes(a.choice))).toBe(true);
+    expect(admin._mocks.docData['short_links/kx-baithak'].ask.question).toBe('Are you coming?');
     expect(events.some(e => e.metadata.scheduleWindow === 'night')).toBe(true);
     // Event record v2: destinations carry no query or fragment, and the record
     // carries only the two metadata keys the shape allows.

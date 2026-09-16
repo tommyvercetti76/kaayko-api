@@ -769,6 +769,17 @@ async function handleRedirect(req, res, code, options = {}) {
       console.log('[Kortex] Added auth bypass for store link:', code);
     }
 
+    // A code that asks a question shows it here: every guard above has passed
+    // and the scan is already recorded. The answer page leads on to `destination`.
+    if (options.askPage && linkData.ask && !isCrawler && !req.query.go) {
+      const { askPage } = require('./linkAnswers');
+      res.setHeader('Cache-Control', 'no-store');
+      res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'");
+      return res.status(200).set('Content-Type', 'text/html; charset=utf-8').send(
+        askPage({ code, link: linkData, destination, host: options.host || null })
+      );
+    }
+
     // "Powered by Kortex" interstitial for Starter-tier links (PLG viral loop)
     const tenantId = linkData.tenantId || 'kaayko-default';
     const isStarterTier = await isStarterLink(tenantId);

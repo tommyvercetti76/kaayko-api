@@ -124,8 +124,10 @@ const DEMO_LINKS = [
       platform: { ios: 46, android: 46, web: 8 }, country: { IN: 72, US: 16, AE: 5, GB: 4, SG: 3 }, qr: 0.86, repeat: 0.34 }
   },
   {
-    code: 'kx-baithak', title: 'An evening of music · card',
+    code: 'kx-baithak', title: 'Baithak · poster',
     web: 'https://kaayko.com/kortex',
+    ask: { question: 'Are you coming?', options: ['Yes', 'Maybe', 'No'], guests: true, thanks: 'Lovely. Bring a cushion.' },
+    answers: { rate: 0.34, weights: { yes: 58, maybe: 24, no: 18 }, party: [1, 1, 2, 2, 3, 4] },
     schedule: { timezone: 'Asia/Kolkata', windows: [{ label: 'night', start: '18:00', end: '06:00', url: 'https://kaayko.com/kortex?after=hours' }] },
     placement: { key: 'flyer', label: 'grocery board' },
     profile: { total: 96, lifetimeFactor: 1, weekend: 1.3, startedDaysAgo: 4, hours: hourWeights([{ h: 10, w: 0.6, spread: 2 }, { h: 19.5, w: 1.6, spread: 1.8 }]),
@@ -198,7 +200,8 @@ async function ensureLink(spec, nowMs) {
     schedule: spec.schedule || null,
     limits: spec.limits || null,
     utm: spec.utm || {},
-    expiresAt: spec.expiresInDays ? new Date(nowMs + spec.expiresInDays * DAY).toISOString() : null
+    expiresAt: spec.expiresInDays ? new Date(nowMs + spec.expiresInDays * DAY).toISOString() : null,
+    ask: spec.ask || null
   };
   if (!existing.exists) {
     await LinkService.createShortLink({
@@ -211,7 +214,8 @@ async function ensureLink(spec, nowMs) {
       domain: 'kaay.link',
       pathPrefix: '',
       source: 'qr',
-      metadata: { createdVia: 'demo', demo: true }
+      metadata: { createdVia: 'demo', demo: true },
+      ask: fields.ask
     });
   } else {
     await LinkService.updateShortLink(spec.code, {
@@ -221,6 +225,7 @@ async function ensureLink(spec, nowMs) {
       limits: fields.limits,
       utm: fields.utm,
       expiresAt: fields.expiresAt,
+      ask: fields.ask,
       enabled: true
     });
     // Sample links made before 15 Sep 2026 carry the legacy kaayko.com/l
@@ -332,6 +337,40 @@ function generateEvents(spec, link, nowMs) {
   return { events, visitors };
 }
 
+/**
+ * Who answered the poster's question. A share of the visitors, weighted the
+ * way a neighbourhood answers: mostly yes, a few maybes, some regrets.
+ */
+function generateAnswers(spec, link, events) {
+  const a = spec.answers;
+  if (!a || !spec.ask) return [];
+  const rnd = mulberry32(parseInt(crypto.createHash('md5').update(spec.code + ':answers').digest('hex').slice(0, 8), 16));
+  const seen = new Map();
+  for (const e of events) {
+    if (seen.has(e.visitorKey)) continue;
+    if (rnd() > a.rate) { seen.set(e.visitorKey, null); continue; }
+    const choice = pick(rnd, a.weights);
+    const party = a.party || [1];
+    const guests = choice === 'no' ? 1 : party[Math.floor(rnd() * party.length)];
+    seen.set(e.visitorKey, {
+      code: spec.code, tenantId: DEMO_TENANT_ID, choice, guests,
+      atMs: e.timestampMs + 40000, at: admin.firestore.Timestamp.fromMillis(e.timestampMs + 40000), firstAtMs: e.timestampMs + 40000,
+      changed: 0, host: 'kaay.link', platform: e.platform,
+      expiresAt: admin.firestore.Timestamp.fromMillis(e.timestampMs + 400 * DAY),
+      _id: `${spec.code}_${e.visitorKey.slice(0, 20)}`
+    });
+  }
+  return [...seen.values()].filter(Boolean);
+}
+
+async function writeAnswers(rows) {
+  for (let i = 0; i < rows.length; i += 400) {
+    const batch = db().batch();
+    rows.slice(i, i + 400).forEach(({ _id, ...r }) => batch.set(db().collection('link_answers').doc(_id), r));
+    await batch.commit();
+  }
+}
+
 async function writeEvents(events) {
   for (let i = 0; i < events.length; i += 400) {
     const batch = db().batch();
@@ -360,6 +399,9 @@ async function seedDemo({ nowMs = Date.now() } = {}) {
     const removed = await deleteEvents(spec.code);
     const { events, visitors } = generateEvents(spec, link, nowMs);
     await writeEvents(events);
+    await require('./linkAnswers').deleteAnswers(spec.code);
+    const answers = generateAnswers(spec, link, events);
+    await writeAnswers(answers);
     const lifetime = Math.round(events.length * spec.profile.lifetimeFactor);
     const last = events.length ? events[events.length - 1].timestampMs : nowMs;
     await db().collection('short_links').doc(spec.code).update({
@@ -368,7 +410,7 @@ async function seedDemo({ nowMs = Date.now() } = {}) {
       lastClickedAt: admin.firestore.Timestamp.fromMillis(last),
       updatedAt: FieldValue.serverTimestamp()
     });
-    summary.links.push({ code: spec.code, title: spec.title, events: events.length, removed, lifetime });
+    summary.links.push({ code: spec.code, title: spec.title, events: events.length, removed, lifetime, answers: answers.length });
     summary.events += events.length;
   }
   resetSamplesCache();

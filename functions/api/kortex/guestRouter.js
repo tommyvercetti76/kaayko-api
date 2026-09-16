@@ -40,6 +40,7 @@ const { buildWorkspaceAnalytics } = require('./workspaceAnalytics');
 const { mountGuestActions } = require('./actionRoutes');
 const { issueReportToken, revokeReportToken, shareState } = require('./reportTokens');
 const { getLinkAnalytics } = require('./linkAnalytics');
+const { tallyAnswers } = require('./linkAnswers');
 const { recordAudit } = require('./auditLog');
 const { rateLimiter } = require('../../middleware/securityMiddleware');
 const { requireAuth } = require('../../middleware/authMiddleware');
@@ -112,6 +113,7 @@ function publicLink(link) {
     placementLabel: link.placementLabel || null,
     economics: link.economics || null,
     campaignWindow: link.campaignWindow || null,
+    ask: link.ask || null,
     ...shareState(link),
     expiresAt: expiryDate(link) ? expiryDate(link).toISOString() : null
   };
@@ -217,7 +219,8 @@ router.post('/links', rateLimiter('guestCreate'), async (req, res) => {
       utm: cleanUtm(body.utm),
       placement: body.placement !== undefined ? body.placement : undefined,
       economics: body.economics !== undefined ? body.economics : undefined,
-      campaignWindow: body.campaignWindow !== undefined ? body.campaignWindow : undefined
+      campaignWindow: body.campaignWindow !== undefined ? body.campaignWindow : undefined,
+      ask: body.ask !== undefined ? body.ask : undefined
     });
 
     recordAudit({
@@ -335,10 +338,14 @@ router.get('/links/:code/analytics', guest.requireGuestSession, async (req, res)
   if (!link) return;
   try {
     const analytics = await getLinkAnalytics(link.code || req.params.code, link, { windowDays: windowDaysFor(req.guest.tenant), timeZone: timeZoneFrom(req.query.tz) });
+    // What people answered at the scan, if the code asks. Lifetime, not windowed:
+    // an RSVP list is a list, not a trend.
+    const answers = link.ask ? await tallyAnswers(link.code || req.params.code, link.ask) : null;
     return res.json({
       success: true,
       link: publicLink(link),
       analytics,
+      answers,
       lifetime: {
         clicks: link.clickCount || 0,
         lastClickedAt: publicLink(link).lastClickedAt
@@ -482,6 +489,7 @@ router.patch('/links/:code', guest.requireGuestSession, requireWritable, async (
     if (body.placement !== undefined) updates.placement = body.placement;
     if (body.economics !== undefined) updates.economics = body.economics;
     if (body.campaignWindow !== undefined) updates.campaignWindow = body.campaignWindow;
+    if (body.ask !== undefined) updates.ask = body.ask; // object sets, null clears
     if (body.expiresAt !== undefined) updates.expiresAt = parseExpiry(body.expiresAt);
     if (updates.enabled === true && link.disabledReason === 'guest_expired') updates.disabledReason = null;
     if (!Object.keys(updates).length) {

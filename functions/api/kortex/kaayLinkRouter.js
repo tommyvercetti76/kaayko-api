@@ -20,6 +20,7 @@ const { createRateLimitMiddleware, securityHeadersMiddleware } = require('../wea
 const { handleRedirect, errorPage } = require('./redirectHandler');
 const { serveLinkQr } = require('./qrService');
 const hosts = require('./linkHosts');
+const answers = require('./linkAnswers');
 
 const router = express.Router();
 const db = admin.firestore();
@@ -75,10 +76,37 @@ router.get('/:slug', async (req, res) => {
   try {
     const code = await resolveSlug(slug);
     if (!code) return notFound(res, `The link "${slug}" doesn't exist or has been removed.`);
-    return handleRedirect(req, res, code, { trackAnalytics: true, host: req.linkHost });
+    return handleRedirect(req, res, code, { trackAnalytics: true, host: req.linkHost, askPage: true });
   } catch (err) {
     console.error('[kaay.link] resolve failed:', err);
     if (!res.headersSent) return res.status(500).send(errorPage(500, 'Something went wrong', 'Please try again in a moment.', false));
+  }
+});
+
+/**
+ * The answer to a code's question. A plain form POST from the ask page;
+ * the body is urlencoded and parsed here only, so the API's JSON parser
+ * (mounted after this router) is not involved.
+ */
+router.post('/:slug/answer', express.urlencoded({ extended: false, limit: '2kb' }), async (req, res) => {
+  const { slug } = req.params;
+  res.setHeader('Cache-Control', 'no-store');
+  if (!hosts.isValidSlug(slug) || hosts.isReservedSlug(slug)) return notFound(res);
+  try {
+    const code = await resolveSlug(slug);
+    const snap = code ? await db.collection('short_links').doc(code).get() : null;
+    const link = snap && snap.exists ? { code, ...snap.data() } : null;
+    if (!link || !link.ask || link.enabled === false || (link.status && link.status !== 'active')) return notFound(res, 'This code is not asking anything right now.');
+    const result = await answers.recordAnswer({ req, code, link, host: req.linkHost, body: req.body || {} });
+    if (!result.ok) return res.status(400).send(errorPage(400, 'Pick one', 'Choose one of the answers and send again.', false));
+    // Only the link's own destination may be continued to; the form's `go` is a hint, never trusted.
+    const web = (link.destinations && link.destinations.web) || link.webDestination || null;
+    const go = req.body && typeof req.body.go === 'string' && web && req.body.go.startsWith(web.split('?')[0]) ? req.body.go : web;
+    res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'");
+    return res.status(200).set('Content-Type', 'text/html; charset=utf-8').send(answers.thanksPage({ link, choice: result.choice, destination: go }));
+  } catch (err) {
+    console.error('[kaay.link] answer failed:', err);
+    if (!res.headersSent) return res.status(500).send(errorPage(500, 'Something went wrong', 'Please scan again in a moment.', false));
   }
 });
 

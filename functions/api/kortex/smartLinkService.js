@@ -19,7 +19,7 @@ const safety = require('./destinationSafety');
 const { LINK_STATUS, effectiveStatus } = require('./safetyPages');
 const { normalizeSchedule, scheduleUrls } = require('./linkSchedule');
 const { normalizeLimits, limitUrls } = require('./linkRules');
-const { normalizePlacement, normalizeEconomics, normalizeCampaignWindow } = require('./linkFields');
+const { normalizePlacement, normalizeEconomics, normalizeCampaignWindow, normalizeAsk } = require('./linkFields');
 
 const db = admin.firestore();
 
@@ -321,6 +321,7 @@ async function createShortLink(data) {
   const { placement, placementLabel } = placementFields(data.placement);
   const economics = normalizeEconomics(data.economics);
   const campaignWindow = normalizeCampaignWindow(data.campaignWindow);
+  const ask = normalizeAsk(data.ask); // one question at the scan, or null
 
   // Destination safety — private hosts, blocklists, Safe Browsing, domain
   // reputation. Blocks throw; unknown domains for new tenants come back 'held'.
@@ -441,6 +442,7 @@ async function createShortLink(data) {
     placementLabel, // the owner's own name for that surface, or null
     economics, // print cost + value per visit, or null
     campaignWindow, // { startAt, endAt } or null
+    ask, // { question, options, guests, thanks } asked at the scan, or null
     createdBy, // Audit trail: who created this
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp()
@@ -469,6 +471,7 @@ async function createShortLink(data) {
     placementLabel,
     economics,
     campaignWindow,
+    ask,
     destinationType,
     campaignId,
     requiresAuth,
@@ -600,7 +603,8 @@ async function updateShortLink(code, updates) {
     limits,
     placement,
     economics,
-    campaignWindow
+    campaignWindow,
+    ask
   } = updates;
 
   const linkRef = db.collection('short_links').doc(code);
@@ -699,6 +703,7 @@ async function updateShortLink(code, updates) {
   if (placement !== undefined) Object.assign(updateData, placementFields(placement));
   if (economics !== undefined) updateData.economics = normalizeEconomics(economics);
   if (campaignWindow !== undefined) updateData.campaignWindow = normalizeCampaignWindow(campaignWindow);
+  if (ask !== undefined) updateData.ask = normalizeAsk(ask); // object sets, null clears
 
   if (metadata !== undefined) {
     const currentDestinations = currentData.destinations || {};

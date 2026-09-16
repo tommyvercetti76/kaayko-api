@@ -149,3 +149,79 @@ describe('self-link guard', () => {
     expect(() => assertDestinationAllowed({ webDestination: 'https://kaayko.com/lakes/x', tenantId: 'kaayko-default' })).not.toThrow();
   });
 });
+
+describe('A code that asks a question', () => {
+  const asking = (code) => houseLink(code, { ask: { question: 'Are you coming?', options: [{ key: 'yes', label: 'Yes' }, { key: 'maybe', label: 'Maybe' }, { key: 'no', label: 'No' }], guests: true, thanks: 'See you there.' } });
+  const answers = () => Object.keys(admin._mocks.docData).filter(k => k.startsWith('link_answers/')).map(k => admin._mocks.docData[k]);
+
+  test('the scan shows the question instead of redirecting, and is still counted', async () => {
+    asking('kx-ask1');
+    const r = await request(app).get('/kx-ask1').set('Host', 'kaay.link').set(...BROWSER).set(...LANG);
+    await settle();
+    expect(r.status).toBe(200);
+    expect(r.text).toContain('Are you coming?');
+    expect(r.text).toContain('action="/kx-ask1/answer"');
+    expect(r.text).toContain('Skip, just take me there');
+    expect(r.headers['content-security-policy']).toContain("form-action 'self'");
+    expect(clickEvents()).toHaveLength(1);
+  });
+
+  test('?go=1 skips the question and redirects as usual', async () => {
+    asking('kx-ask2');
+    const r = await request(app).get('/kx-ask2?go=1').set('Host', 'kaay.link').set(...BROWSER).set(...LANG);
+    expect([200, 302]).toContain(r.status);
+    expect(r.text).not.toContain('action="/kx-ask2/answer"');
+  });
+
+  test('an answer is stored once per person and replaced on a second answer', async () => {
+    asking('kx-ask3');
+    const first = await request(app).post('/kx-ask3/answer').set('Host', 'kaay.link').set(...BROWSER).type('form').send({ choice: 'yes', guests: '3', go: 'https://kaayko.com/paddlingout' });
+    expect(first.status).toBe(200);
+    expect(first.text).toContain('See you there.');
+    expect(first.text).toContain('href="https://kaayko.com/paddlingout"');
+    expect(answers()).toHaveLength(1);
+    expect(answers()[0]).toMatchObject({ code: 'kx-ask3', choice: 'yes', guests: 3, tenantId: 'kaayko-default', host: 'kaay.link' });
+    const second = await request(app).post('/kx-ask3/answer').set('Host', 'kaay.link').set(...BROWSER).type('form').send({ choice: 'no', guests: '99' });
+    expect(second.status).toBe(200);
+    expect(answers()).toHaveLength(1);
+    expect(answers()[0].choice).toBe('no');
+    expect(answers()[0].guests).toBe(20);   // clamped, never 99
+  });
+
+  test('a bad choice, a code that does not ask, and a foreign continue address are refused', async () => {
+    asking('kx-ask4');
+    const bad = await request(app).post('/kx-ask4/answer').set('Host', 'kaay.link').set(...BROWSER).type('form').send({ choice: 'perhaps' });
+    expect(bad.status).toBe(400);
+    houseLink('kx-plain');
+    const none = await request(app).post('/kx-plain/answer').set('Host', 'kaay.link').set(...BROWSER).type('form').send({ choice: 'yes' });
+    expect(none.status).toBe(404);
+    const foreign = await request(app).post('/kx-ask4/answer').set('Host', 'kaay.link').set(...BROWSER).type('form').send({ choice: 'yes', go: 'https://evil.example/x' });
+    expect(foreign.status).toBe(200);
+    expect(foreign.text).not.toContain('evil.example');
+    expect(foreign.text).toContain('href="https://kaayko.com/paddlingout"');
+  });
+
+  test('the tally counts people and heads per option', async () => {
+    const { tallyAnswers } = require('../api/kortex/linkAnswers');
+    admin._mocks.docData['link_answers/kx-t_a'] = { code: 'kx-t', choice: 'yes', guests: 2, atMs: 2 };
+    admin._mocks.docData['link_answers/kx-t_b'] = { code: 'kx-t', choice: 'yes', guests: 1, atMs: 3, changed: 1 };
+    admin._mocks.docData['link_answers/kx-t_c'] = { code: 'kx-t', choice: 'maybe', guests: 4, atMs: 1 };
+    admin._mocks.docData['link_answers/other_x'] = { code: 'other', choice: 'yes', guests: 9, atMs: 9 };
+    const t = await tallyAnswers('kx-t', { question: 'Are you coming?', options: [{ key: 'yes', label: 'Yes' }, { key: 'maybe', label: 'Maybe' }, { key: 'no', label: 'No' }], guests: true });
+    expect(t).toMatchObject({ answered: 3, guests: 7, changed: 1 });
+    expect(t.options).toEqual([{ key: 'yes', label: 'Yes', count: 2, guests: 3 }, { key: 'maybe', label: 'Maybe', count: 1, guests: 4 }, { key: 'no', label: 'No', count: 0, guests: 0 }]);
+    expect(t.latest[0].choice).toBe('yes');
+  });
+});
+
+describe('normalizeAsk', () => {
+  const { normalizeAsk } = require('../api/kortex/linkFields');
+  test('true gives the RSVP default; null clears; shapes are checked', () => {
+    expect(normalizeAsk(null)).toBeNull();
+    expect(normalizeAsk(true)).toMatchObject({ question: 'Are you coming?', guests: true });
+    expect(normalizeAsk({ question: ' Coming to  the baithak? ', options: ['Yes', 'Maybe', 'No'], guests: false }).options.map(o => o.key)).toEqual(['yes', 'maybe', 'no']);
+    expect(() => normalizeAsk({ options: ['Only one'] })).toThrow(/two to four/);
+    expect(() => normalizeAsk({ options: ['Yes', 'yes'] })).toThrow(/different/);
+    expect(() => normalizeAsk({ question: 'x'.repeat(121) })).toThrow(/120/);
+  });
+});

@@ -155,4 +155,53 @@ function normalizeCampaignWindow(input) {
   return { startAt, endAt };
 }
 
-module.exports = { PLACEMENTS, normalizePlacement, placementKey, placementDisplay, normalizeEconomics, normalizeCampaignWindow };
+/* ── ask: one question at the scan ──────────────────────────────────────────
+   A code may ask the person who scanned it one question before it sends them
+   on: "Are you coming?" with Yes / Maybe / No, and optionally how many they
+   are bringing. Stored on the link as
+     ask: { question, options: [{ key, label }], guests, thanks }
+   or null. Two to four options; keys are slugs of the labels and must be
+   distinct. Free workspaces get one question per code; per-guest invitations
+   are a campaign feature on paid plans (each invitee their own code, so an
+   answer is a name, not a count). */
+const ASK_QUESTION_MAX = 120;
+const ASK_OPTION_MAX = 24;
+const ASK_THANKS_MAX = 160;
+const ASK_DEFAULT = Object.freeze({
+  question: 'Are you coming?',
+  options: Object.freeze([{ key: 'yes', label: 'Yes' }, { key: 'maybe', label: 'Maybe' }, { key: 'no', label: 'No' }]),
+  guests: true,
+  thanks: 'Thank you. See you there.'
+});
+
+function askError(detail) {
+  const err = new Error(detail);
+  err.code = 'INVALID_ASK';
+  err.status = 400;
+  return err;
+}
+
+const slugOf = (label) => String(label).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 24);
+
+function normalizeAsk(input) {
+  if (input === undefined || input === null || input === false) return null;
+  if (input === true) return { ...ASK_DEFAULT, options: ASK_DEFAULT.options.map(o => ({ ...o })) };
+  if (typeof input !== 'object' || Array.isArray(input)) throw askError('The question must be an object, true, or null.');
+  const question = String(input.question ?? ASK_DEFAULT.question).trim().replace(/\s+/g, ' ');
+  if (!question) throw askError('The question cannot be empty.');
+  if (question.length > ASK_QUESTION_MAX) throw askError(`The question must be ${ASK_QUESTION_MAX} characters or fewer.`);
+  const raw = Array.isArray(input.options) && input.options.length ? input.options : ASK_DEFAULT.options;
+  const options = raw.map((o) => {
+    const label = String(typeof o === 'object' && o ? (o.label ?? o.key ?? '') : o).trim().replace(/\s+/g, ' ');
+    if (!label) throw askError('Every answer needs a label.');
+    if (label.length > ASK_OPTION_MAX) throw askError(`Answers must be ${ASK_OPTION_MAX} characters or fewer.`);
+    const key = slugOf(label) || 'option';
+    return { key, label };
+  });
+  if (options.length < 2 || options.length > 4) throw askError('Give two to four answers.');
+  if (new Set(options.map(o => o.key)).size !== options.length) throw askError('Answers must be different from each other.');
+  const thanks = String(input.thanks ?? ASK_DEFAULT.thanks).trim().replace(/\s+/g, ' ').slice(0, ASK_THANKS_MAX) || ASK_DEFAULT.thanks;
+  return { question, options, guests: input.guests !== false, thanks };
+}
+
+module.exports = { PLACEMENTS, normalizePlacement, placementKey, placementDisplay, normalizeEconomics, normalizeCampaignWindow, normalizeAsk, ASK_DEFAULT };
