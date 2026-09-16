@@ -345,6 +345,9 @@ async function resolveCart(rawItems, opts = {}) {
       // What the shopper saw, frozen too — Kortex Orders shows it, and a later
       // image edit must not change what an old order looks like.
       productType: String(product.data.productType || '').trim().toLowerCase() || null,
+      // The maker's shelf this line sits on (kaay.store/s/<slug>), so a promo
+      // the maker hands out can be scoped to their own pieces and nobody else's.
+      storeSlug: typeof product.data.storeSlug === 'string' && product.data.storeSlug.trim() ? product.data.storeSlug.trim() : null,
       imgSrc: firstImage(product.data)
     });
   }

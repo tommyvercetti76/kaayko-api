@@ -117,8 +117,8 @@ const DEMO_LINKS = [
       platform: { ios: 58, android: 34, web: 8 }, country: { US: 68, CA: 12, IN: 8, GB: 5, DE: 3, AU: 2, FR: 2 }, qr: 0.96, repeat: 0.2 }
   },
   {
-    code: 'kx-shelf', title: "Mom's Shop · shelf card",
-    web: 'https://kaay.store/s/moms-shop',
+    code: 'mum-shop-20', title: "Mom's Shop · friends' card, 20% off",
+    web: 'https://kaay.store/s/moms-shop?promo=MUM-SHOP-20',
     placement: { key: 'business_card', label: 'stall counter' },
     profile: { total: 230, lifetimeFactor: 1.5, weekend: 1.6, hours: hourWeights([{ h: 11, w: 1, spread: 2 }, { h: 18, w: 1.2, spread: 2 }]),
       platform: { ios: 46, android: 46, web: 8 }, country: { IN: 72, US: 16, AE: 5, GB: 4, SG: 3 }, qr: 0.86, repeat: 0.34 }
@@ -343,9 +343,18 @@ async function writeEvents(events) {
 /**
  * Create or refresh the sample workspace. Idempotent.
  */
+// Sample codes that were renamed. Their link and events go, so the workspace
+// never shows a card that is no longer printed.
+const RETIRED_CODES = ['kx-shelf'];
+
 async function seedDemo({ nowMs = Date.now() } = {}) {
   const tenant = await ensureDemoTenant(nowMs);
   const summary = { tenantId: DEMO_TENANT_ID, links: [], events: 0, ranAt: new Date(nowMs).toISOString() };
+  for (const code of RETIRED_CODES) {
+    const ref = db().collection('short_links').doc(code);
+    const snap = await ref.get();
+    if (snap.exists && (snap.data() || {}).tenantId === DEMO_TENANT_ID) { await deleteEvents(code); await ref.delete(); }
+  }
   for (const spec of DEMO_LINKS) {
     const link = await ensureLink(spec, nowMs);
     const removed = await deleteEvents(spec.code);

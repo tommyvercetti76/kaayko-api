@@ -21,7 +21,7 @@
 
 const crypto = require('crypto');
 const admin = require('firebase-admin');
-const { computeRewardDiscount, computeSurcharge, redeemReward, monthlyOrderStatus, recordOrder, loadPatron, applyPatronPricing } = require('../arcade/rewards');
+const { computeRewardDiscount, computeSurcharge, redeemReward, countPromoUse, monthlyOrderStatus, recordOrder, loadPatron, applyPatronPricing } = require('../arcade/rewards');
 const { resolveCart } = require('./pricing');
 const { resolveNotifyEmail } = require('../email/notifyAddress');
 
@@ -196,7 +196,8 @@ async function createPaymentIntent(req, res) {
       Math.max(0, useReward ? reward.discountCents : patronDeal.discountCents),
       Math.max(0, totalCents - 50)          // never take the charge below Stripe's floor
     );
-    const discountSource = discountCents <= 0 ? null : (useReward ? 'arcade' : 'patron');
+    // 'promo' is a handed-out code (a maker's friends' rate); 'arcade' a code won at a game.
+    const discountSource = discountCents <= 0 ? null : (useReward ? (reward.kind === 'promo' ? 'promo' : 'arcade') : 'patron');
     totalCents = totalCents - discountCents;
 
     // Penalty rules 1 and 9. Pasting into the Beggathon adds a percent to the order,
@@ -337,6 +338,9 @@ async function createPaymentIntent(req, res) {
     if (discountSource === 'arcade' && reward.code) {
       await redeemReward(store, reward.code, paymentIntent.id).catch(
         (e) => console.error('[checkout] reward redeem failed:', e.message));
+    } else if (discountSource === 'promo' && reward.code) {
+      await countPromoUse(store, reward.code, paymentIntent.id).catch(
+        (e) => console.error('[checkout] promo count failed:', e.message));
     }
     if (buyerEmail) {
       await recordOrder(store, buyerEmail, paymentIntent.id).catch(

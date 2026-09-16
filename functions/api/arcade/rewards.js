@@ -24,6 +24,15 @@ const { gameEligibleItems } = require("./eligibility");
 const MAX_GAME_PERCENT = 10;
 const MAX_DISCOUNT_CENTS = 2500;
 
+// A promo is the fourth thing: a code the owner (or a maker, for their own shelf)
+// hands out on purpose — printed on a card, sent to friends. It is not won, so it
+// is not single-use, not an hour long and not tied to an email or a browser token.
+// It IS still worth only what its document says, decided here. Doc shape, keyed by
+// the uppercase code in `arcade_rewards`:
+//   { kind: 'promo', percent, scope: 'store' | 'cart', storeSlug?, label?, active,
+//     expiresAt?, maxDiscountCents?, uses }
+const MAX_PROMO_PERCENT = 50;
+
 const ORDER_LEDGER = "arcade_order_ledger";
 const PATRONS = "kaayko_patrons";
 
@@ -64,6 +73,7 @@ async function computeRewardDiscount(db, { items, rewardCode, email, token }) {
   if (!snap.exists) return none("NO_SUCH_CODE");
 
   const r = snap.data();
+  if (r.kind === "promo") return promoDiscount(r, code, items);
   if (r.redeemed) return none("ALREADY_REDEEMED");
 
   // Penalty rules 2 and 3. A locked token buys nothing, and a code minted before the
@@ -104,6 +114,32 @@ async function computeRewardDiscount(db, { items, rewardCode, email, token }) {
   };
 }
 
+/**
+ * A promo against a priced cart. `scope: 'store'` takes the lines on the named
+ * shelf (pricing.js stamps `storeSlug` on every line); `scope: 'cart'` takes every
+ * line. Premium types are NOT excluded here: a maker discounting her own totes is
+ * the point, and only the owner can write these documents.
+ */
+function promoDiscount(r, code, items) {
+  const none = (reason) => ({ applied: false, discountCents: 0, percent: 0, scope: null, code: null, kind: "promo", reason });
+  if (r.active === false) return none("PROMO_INACTIVE");
+  if (r.expiresAt && typeof r.expiresAt.toMillis === "function" && r.expiresAt.toMillis() < Date.now()) return none("EXPIRED");
+  const scope = r.scope === "cart" ? "cart" : "store";
+  const slug = String(r.storeSlug || "").trim();
+  if (scope === "store" && !slug) return none("PROMO_INACTIVE");
+  const base = (items || []).reduce((sum, i) => {
+    if (scope === "store" && String(i.storeSlug || "") !== slug) return sum;
+    const line = Number.isFinite(i.lineTotalCents) ? i.lineTotalCents : (Number(i.unitPriceCents) || 0) * (Number(i.quantity) || 0);
+    return sum + Math.max(0, line);
+  }, 0);
+  if (base <= 0) return none("NO_ELIGIBLE_ITEMS");
+  const percent = Math.max(0, Math.min(Number(r.percent) || 0, MAX_PROMO_PERCENT));
+  if (percent <= 0) return none("PROMO_INACTIVE");
+  let discountCents = Math.floor((base * percent) / 100);
+  if (Number.isFinite(Number(r.maxDiscountCents)) && Number(r.maxDiscountCents) > 0) discountCents = Math.min(discountCents, Number(r.maxDiscountCents));
+  return { applied: true, discountCents, percent, scope, code, kind: "promo", label: r.label || null, reason: null };
+}
+
 /** Burn the code. Called only once the payment intent for `orderId` exists. */
 async function redeemReward(db, code, orderId) {
   if (!code) return;
@@ -111,6 +147,16 @@ async function redeemReward(db, code, orderId) {
     redeemed: true,
     orderId: orderId || null,
     redeemedAt: admin.firestore.FieldValue.serverTimestamp()
+  }, { merge: true });
+}
+
+/** A promo is never burned; it counts. */
+async function countPromoUse(db, code, orderId) {
+  if (!code) return;
+  await db.collection(REWARDS).doc(String(code).toUpperCase()).set({
+    uses: admin.firestore.FieldValue.increment(1),
+    lastOrderId: orderId || null,
+    lastUsedAt: admin.firestore.FieldValue.serverTimestamp()
   }, { merge: true });
 }
 
@@ -215,6 +261,8 @@ module.exports = {
   computeRewardDiscount,
   computeSurcharge,
   redeemReward,
+  countPromoUse,
+  promoDiscount,
   eligibleSubtotalCents,
   monthlyOrderStatus,
   recordOrder,
@@ -223,6 +271,7 @@ module.exports = {
   MAX_ORDERS_PER_MONTH,
   MAX_GAME_PERCENT,
   MAX_DISCOUNT_CENTS,
+  MAX_PROMO_PERCENT,
   ORDER_LEDGER,
   PATRONS
 };

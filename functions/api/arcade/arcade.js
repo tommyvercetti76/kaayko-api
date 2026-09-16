@@ -288,6 +288,19 @@ router.get("/reward/:code", async (req, res) => {
     const r = snap.data();
     const expired = r.expiresAt && r.expiresAt.toMillis() < Date.now();
 
+    // A handed-out promo (rewards.js promoDiscount): no owner, no hour, no burn.
+    if (r.kind === "promo") {
+      return res.json({
+        success: true, kind: "promo",
+        valid: r.active !== false && !expired,
+        percent: Number(r.percent) || 0,
+        scope: r.scope === "cart" ? "cart" : "store",
+        storeSlug: r.storeSlug || null,
+        label: r.label || null,
+        redeemed: false, expired: !!expired, locked: false, voided: false, minutesLeft: 0
+      });
+    }
+
     // Penalty rules 2 and 3, asked here as well as at checkout. This route is what the
     // cart's Apply button calls, and it must not promise a discount that the payment
     // intent will then refuse — that would read as the shop losing the code.
