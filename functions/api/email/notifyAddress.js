@@ -17,7 +17,9 @@
  * through to the next candidate rather than sending mail into a black hole.
  */
 
-const DEFAULT_ORDER_NOTIFY_EMAIL = 'rohanramekar17@gmail.com';
+// admin@ is an alias of the owner's mailbox (config/mailIdentity.js), so
+// alerts land in the inbox that is read without naming a private address.
+const DEFAULT_ORDER_NOTIFY_EMAIL = 'admin@kaayko.com';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 

@@ -38,10 +38,9 @@
 const admin = require('firebase-admin');
 const crypto = require('crypto');
 const { renderEmail, queueMailOnce } = require('../api/email/render');
-const { resolveNotifyEmail } = require('../api/email/notifyAddress');
 
 /** Products allowed to send. A closed set so a typo'd tag is caught, not filed. */
-const PRODUCTS = Object.freeze(['store', 'paddling', 'alumni', 'kreator', 'kortex', 'contact', 'system']);
+const { PRODUCTS, identity } = require('../config/mailIdentity');
 
 const MAX_SUBJECT = 200;
 
@@ -83,7 +82,8 @@ function derivedKey(product, kind, to, subject, day) {
  * @param {string} [args.text]
  * @param {string} [args.template] a name under api/email/templates
  * @param {object} [args.data]     template variables
- * @param {string} [args.replyTo]  defaults to the owner address
+ * @param {string} [args.from]     defaults to the product's family address (config/mailIdentity.js)
+ * @param {string} [args.replyTo]  defaults to the product's reply address
  * @param {string} [args.dedupeKey] STRONGLY preferred — makes retries idempotent
  * @param {FirebaseFirestore.Firestore} [args.db]
  * @returns {Promise<{queued: boolean, mailId: string|null, reason?: string}>}
@@ -98,6 +98,7 @@ async function notify({
   text,
   template,
   data,
+  from,
   replyTo,
   dedupeKey,
   db = admin.firestore(),
@@ -141,9 +142,11 @@ async function notify({
     .slice(0, 400);
 
   try {
+    const id = identity(product);
     const queued = await queueMailOnce(db, mailId, {
       to: recipients,
-      replyTo: replyTo || resolveNotifyEmail(),
+      from: from || id.from,
+      replyTo: replyTo || id.replyTo,
       message: {
         subject: cleanSubject,
         ...(body.html ? { html: body.html } : {}),

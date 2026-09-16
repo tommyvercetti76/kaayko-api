@@ -1255,6 +1255,7 @@ async function sendOrderConfirmationEmails(db, paymentIntent, ctx, customerEmail
   });
 
   sent.admin = await queueMailOnce(db, `${paymentIntent.id}_admin`, {
+    product: 'system',
     to: adminEmail,
     message: {
       subject: `🔔 New order ${orderNumber} - Kaayko Store`,

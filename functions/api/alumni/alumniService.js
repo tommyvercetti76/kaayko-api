@@ -261,6 +261,8 @@ async function sendEmailOtp(editToken) {
     const { sendRawEmail } = require('../../services/emailNotificationService');
     if (sendRawEmail) {
       await sendRawEmail({
+        product: 'alumni',
+        kind: 'verify-otp',
         to: lead.email,
         subject: 'Verify your interest — Alumni Network',
         html: `

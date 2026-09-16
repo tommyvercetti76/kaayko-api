@@ -159,6 +159,7 @@ apiApp.get("/admin/mailHealth", requireAuth, requirePlatformAdmin, require("./ap
 // before the SMTP secret was set). Ids only, or every ERROR document at most
 // `maxAgeDays` old. Platform admin, never self-serve.
 apiApp.post("/admin/mail/redrive", requireAuth, requirePlatformAdmin, require("./api/admin/mailHealth").mailRedrive);
+apiApp.post("/admin/mail/identity-test", requireAuth, requirePlatformAdmin, require("./api/admin/mailHealth").mailIdentityTest);
 apiApp.patch("/admin/products/:id", requireAuth, requirePlatformAdmin, updateProduct);
 
 // Kaayko property cards. The copy printed on the business cards and shown at

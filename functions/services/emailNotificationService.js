@@ -10,8 +10,9 @@ const admin = require('firebase-admin');
 const { defineString } = require('firebase-functions/params');
 
 // Email configuration
-const ADMIN_EMAIL = 'rohan@kaayko.com';
-const FROM_EMAIL = 'noreply@kaayko.com';
+const { identity } = require('../config/mailIdentity');
+const ADMIN_EMAIL = identity('system').inbox;      // admin@: internal alerts
+const FROM_EMAIL = identity('kortex').from;        // Kortex notices leave as kortex@
 const APP_NAME = 'Kaayko Smart Links';
 
 // SendGrid API key (optional for production) - LAZY LOAD
@@ -168,7 +169,7 @@ async function sendLinkCreatedNotification(link, creator) {
       <p>Enterprise Link Management System</p>
       <p style="margin-top: 10px;">This is an automated notification. Please do not reply to this email.</p>
       <p style="color: #999; margin-top: 15px;">
-        Questions? Contact support at <a href="mailto:rohan@kaayko.com" style="color: #d4af37;">rohan@kaayko.com</a>
+        Questions? Write to <a href="mailto:${identity('kortex').address}" style="color: #d4af37;">${identity('kortex').address}</a>
       </p>
     </div>
   </div>
@@ -208,6 +209,8 @@ This is an automated notification.
     const result = await sendEmail({
       to: ADMIN_EMAIL,
       from: FROM_EMAIL,
+      product: 'kortex',
+      kind: 'link-created',
       subject,
       htmlBody,
       textBody
@@ -228,7 +231,7 @@ This is an automated notification.
  * Send email using available service (SendGrid, SMTP, or console log for dev)
  * @private
  */
-async function sendEmail({ to, from, subject, htmlBody, textBody }) {
+async function sendEmail({ to, from, subject, htmlBody, textBody, product = 'system', kind = 'legacy' }) {
   // REWRITTEN 6 Sep 2026. This used to try SendGrid — a package that is not
   // installed, behind a key that is not set — and then fall through to a
   // console.log that returned `{success: true, provider: 'console-log'}`.
@@ -242,9 +245,10 @@ async function sendEmail({ to, from, subject, htmlBody, textBody }) {
   const { notify } = require('./notify');
 
   const result = await notify({
-    product: 'system',          // legacy callers are untagged; see notify() docs
-    kind: 'legacy',
+    product,                    // untagged legacy callers are internal mail
+    kind,
     to,
+    from,
     subject,
     html: htmlBody,
     text: textBody,
@@ -266,10 +270,12 @@ async function sendEmail({ to, from, subject, htmlBody, textBody }) {
   };
 }
 
-async function sendRawEmail({ to, subject, html, text, from = FROM_EMAIL }) {
+async function sendRawEmail({ to, subject, html, text, from, product = 'system', kind = 'legacy' }) {
   return sendEmail({
     to,
     from,
+    product,
+    kind,
     subject,
     htmlBody: html || '',
     textBody: text || ''
@@ -374,7 +380,7 @@ async function sendMagicLinkEmail({ email, firstName, magicLinkUrl, expiresAt, i
       <p style="word-break:break-all;font-size:13px;color:#666;">${url}</p>
     </div>
     <div class="footer">
-      <p>Kaayko · noreply@kaayko.com</p>
+      <p>Kaayko Kreators · ${identity('kreator').address}</p>
       <p>If you did not apply to be a seller, please ignore this email.</p>
     </div>
   </div>
@@ -398,7 +404,9 @@ async function sendMagicLinkEmail({ email, firstName, magicLinkUrl, expiresAt, i
 
   return sendEmail({
     to: email,
-    from: FROM_EMAIL,
+    from: identity('kreator').from,
+    product: 'kreator',
+    kind: 'magic-link',
     subject,
     htmlBody,
     textBody

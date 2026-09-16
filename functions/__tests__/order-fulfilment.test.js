@@ -145,9 +145,9 @@ describe('Owner notification address', () => {
     require('../api/email/notifyAddress');
 
   test('defaults to the owner address when nothing is configured', () => {
-    expect(DEFAULT_ORDER_NOTIFY_EMAIL).toBe('rohanramekar17@gmail.com');
-    expect(resolveNotifyEmail()).toBe('rohanramekar17@gmail.com');
-    expect(resolveNotifyEmail({ metadata: {} })).toBe('rohanramekar17@gmail.com');
+    expect(DEFAULT_ORDER_NOTIFY_EMAIL).toBe('admin@kaayko.com');
+    expect(resolveNotifyEmail()).toBe('admin@kaayko.com');
+    expect(resolveNotifyEmail({ metadata: {} })).toBe('admin@kaayko.com');
   });
 
   test('ORDER_NOTIFY_EMAIL overrides the address stamped on an in-flight intent', () => {
@@ -158,7 +158,7 @@ describe('Owner notification address', () => {
   test('a malformed env value falls through instead of black-holing the mail', () => {
     process.env.ORDER_NOTIFY_EMAIL = 'not-an-email';
     expect(resolveNotifyEmail({ metadata: { notifyEmail: 'stamped@kaayko.com' } })).toBe('stamped@kaayko.com');
-    expect(resolveNotifyEmail({ metadata: {} })).toBe('rohanramekar17@gmail.com');
+    expect(resolveNotifyEmail({ metadata: {} })).toBe('admin@kaayko.com');
   });
 
   test('a successful order mails the configured owner address, not the hardcoded one', async () => {

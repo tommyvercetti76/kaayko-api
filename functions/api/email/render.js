@@ -110,8 +110,11 @@ async function queueMailOnce(db, docId, payload) {
     console.log(`↩️  Mail ${docId} already queued — skipping duplicate send`);
     return false;
   }
+  // Untagged callers are the store (this module is the store's renderer);
+  // the product tag decides From and Reply-To (config/mailIdentity.js).
+  const { stampIdentity } = require('../../config/mailIdentity');
   await ref.set({
-    ...payload,
+    ...stampIdentity({ product: 'store', ...payload }),
     createdAt: payload.createdAt || admin.firestore.FieldValue.serverTimestamp()
   });
   return true;

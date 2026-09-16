@@ -134,3 +134,50 @@ sending is worse than one that throws.** One product's broken email is a bug;
 four products each trusting their own private stack is a system nobody can
 observe. Hence one queue, one sender, one health view — and `notify()` never
 returning success for a message it did not queue.
+
+
+## The address family (16 Sep 2026)
+
+Every mail is sent AS the product that wrote it and replies land where a person
+reads them. One module decides: `config/mailIdentity.js`.
+
+| product  | From                                   | Reply-To            | used for |
+|----------|----------------------------------------|---------------------|----------|
+| store    | "Kaayko Store" <orders@kaayko.com>     | orders@kaayko.com   | receipts, shipping, delay notices, refunds |
+| kortex   | "Kortex by Kaayko" <kortex@kaayko.com> | kortex@kaayko.com   | access codes, reports, link notices, support requests |
+| alumni   | "Kaayko Alumni" <alumni@kaayko.com>    | alumni@kaayko.com   | interest-form verification |
+| kreator  | "Kaayko Kreators" <kreators@kaayko.com>| kreators@kaayko.com | creator programme, magic links |
+| paddling | "Paddling Out" <paddling@kaayko.com>   | paddling@kaayko.com | lake submissions, spot reviews |
+| contact  | "Kaayko" <help@kaayko.com>             | help@kaayko.com     | general help; untagged mail; the human address on pages |
+| system   | "Kaayko" <admin@kaayko.com>            | help@kaayko.com     | internal alerts to the owner (new order, new link) |
+| security | "Kaayko Security" <security@kaayko.com>| security@kaayko.com | disclosure (security.txt), abuse reports |
+
+- `notify({ product })` stamps From/Reply-To from the product. `queueMailOnce()`
+  (the store's renderer) tags untagged documents `store`. The trigger fills any
+  document that still lacks them from its `product`, or `contact` if none.
+- `ORDER_NOTIFY_EMAIL` (or the default `admin@kaayko.com`) is where owner alerts
+  GO. It never changes what mail is sent AS.
+- Overrides: `MAIL_DOMAIN`, `MAIL_MAILBOX`, `MAIL_FROM_<PRODUCT>`, and the
+  trigger's global `MAIL_FROM`.
+
+### Zoho: what must be true before any of this sends
+
+Zoho Mail lets an account send only as itself or as one of its **aliases**. So:
+
+1. Zoho Mail admin → Users → `rohan@kaayko.com` → Mail Accounts → **Email
+   Aliases**: add `orders`, `kortex`, `alumni`, `kreators`, `paddling`, `help`,
+   `admin`, `security` (all @kaayko.com). Aliases are free; they all deliver to
+   the one inbox, and Zoho lets you pick any of them as the From when replying.
+2. Zoho Mail → Settings → Mail Accounts → **Send mail as**: confirm each alias.
+3. Zoho → Security → **App passwords**: make one for "Kaayko mail".
+4. Set the secret, once:
+   `firebase functions:secrets:set MAIL_SMTP_URL` with the value
+   `smtps://rohan%40kaayko.com:<app password>@smtp.zoho.com:465`
+   (the `@` in the user is `%40`; other Zoho regions use smtp.zoho.in / .eu).
+5. Redeploy `mailSender`, `mailRedrive` and `api`, then
+   `POST /admin/mail/identity-test` (platform admin) and watch
+   `GET /admin/mailHealth`: a member that ends in `ERROR 553` is an alias Zoho
+   does not know yet. `POST /admin/mail/redrive` re-sends the stuck mail.
+6. DNS at Squarespace: SPF (`v=spf1 include:zohomail.com ~all`) and MX are in
+   place; **DKIM is not** — add the `zmail._domainkey` TXT from Zoho admin →
+   Email Authentication, or receipts will land in spam.

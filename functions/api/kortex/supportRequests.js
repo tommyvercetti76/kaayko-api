@@ -80,7 +80,7 @@ async function createRequest({ body, requester, ip, userAgent, email, recordAudi
   const ref = await db.collection(COLLECTION).add(doc);
 
   let delivery = 'not_configured';
-  const inbox = process.env.KORTEX_SUPPORT_EMAIL;
+  const inbox = process.env.KORTEX_SUPPORT_EMAIL || require('../../config/mailIdentity').identity('system').inbox;
   if (email && inbox) {
     try {
       const result = await email.deliver({

@@ -111,4 +111,30 @@ async function mailRedrive(req, res) {
   }
 }
 
-module.exports = { mailHealth, mailRedrive, STALE_RETRY_MS };
+/**
+ * POST /admin/mail/identity-test — queue one small mail per family member to
+ * the owner. Zoho refuses a From that is not an alias of the mailbox, so the
+ * mails that end in ERROR name the aliases still to be created. Body may carry
+ * { to } to send elsewhere. Platform admin only (mounted in index.js).
+ */
+async function mailIdentityTest(req, res) {
+  const { family, EMAIL_RE } = require('../../config/mailIdentity');
+  const { notify } = require('../../services/notify');
+  const to = typeof req.body?.to === 'string' && EMAIL_RE.test(req.body.to.trim()) ? req.body.to.trim() : require('../email/notifyAddress').resolveNotifyEmail();
+  const stamp = new Date().toISOString();
+  const results = [];
+  for (const m of family()) {
+    const r = await notify({
+      product: m.product,
+      kind: 'identity-test',
+      to,
+      subject: `[${m.product}] identity test from ${m.address}`,
+      text: `This is the ${m.product} sender (${m.from}), reply-to ${m.replyTo}. Sent ${stamp}. If this arrived, Zoho accepts the alias.`,
+      dedupeKey: `identity_test_${m.product}_${stamp.slice(0, 16).replace(/[:T]/g, '-')}`
+    });
+    results.push({ product: m.product, from: m.from, replyTo: m.replyTo, queued: r.queued, mailId: r.mailId, reason: r.reason || null });
+  }
+  return res.json({ success: true, to, results, next: 'Watch GET /admin/mailHealth: a member that ends in ERROR 553 is an alias Zoho does not know yet.' });
+}
+
+module.exports = { mailHealth, mailRedrive, mailIdentityTest, STALE_RETRY_MS };

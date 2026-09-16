@@ -340,7 +340,7 @@ describe('charge.dispute.created', () => {
 
     const alert = admin._mocks.docData[`mail/${PI_ID}_dispute_dp_1`];
     expect(alert).toBeDefined();
-    expect(alert.to).toBe('rohanramekar17@gmail.com'); // disputes carry no metadata → owner default
+    expect(alert.to).toBe('admin@kaayko.com'); // disputes carry no metadata → the family's internal address
     expect(alert.message.subject).toContain('Chargeback');
     expect(alert.message.html).toContain('dp_1');
     expect(alert.message.html).toContain('fraudulent');

@@ -112,9 +112,10 @@ describe('mailSender — delivery', () => {
     expect(message.to).toEqual(['buyer@example.com']);
     expect(message.subject).toBe('Order Confirmation');
     expect(message.html).toBe('<p>Thanks</p>');
-    // From and Reply-To default to the owner address from notifyAddress.js.
-    expect(message.from).toBe('rohanramekar17@gmail.com');
-    expect(message.replyTo).toBe('rohanramekar17@gmail.com');
+    // From and Reply-To default to the family address for the document's product
+    // (config/mailIdentity.js); an untagged document is general mail from help@.
+    expect(message.from).toBe('"Kaayko" <help@kaayko.com>');
+    expect(message.replyTo).toBe('help@kaayko.com');
 
     const d = delivery('pi_1_customer');
     expect(d.state).toBe('SUCCESS');
@@ -140,7 +141,7 @@ describe('mailSender — delivery', () => {
     seedMail('m_from');
     await deliverMailDocument('m_from');
     expect(mockSendMail.mock.calls[0][0].from).toBe('"Kaayko Orders" <orders@kaayko.com>');
-    expect(mockSendMail.mock.calls[0][0].replyTo).toBe('rohanramekar17@gmail.com');
+    expect(mockSendMail.mock.calls[0][0].replyTo).toBe('help@kaayko.com');
 
     seedMail('m_from2', { from: 'custom@kaayko.com', replyTo: 'support@kaayko.com', cc: 'copy@kaayko.com' });
     await deliverMailDocument('m_from2');
@@ -150,12 +151,22 @@ describe('mailSender — delivery', () => {
     expect(msg.cc).toEqual(['copy@kaayko.com']);
   });
 
-  test('ORDER_NOTIFY_EMAIL changes the default From / Reply-To without a code change', async () => {
+  test('ORDER_NOTIFY_EMAIL moves where alerts GO, never what mail is sent AS', async () => {
     process.env.ORDER_NOTIFY_EMAIL = 'ops@kaayko.com';
     seedMail('m_owner');
     await deliverMailDocument('m_owner');
-    expect(mockSendMail.mock.calls[0][0].from).toBe('ops@kaayko.com');
-    expect(mockSendMail.mock.calls[0][0].replyTo).toBe('ops@kaayko.com');
+    expect(mockSendMail.mock.calls[0][0].from).toBe('"Kaayko" <help@kaayko.com>');
+    expect(mockSendMail.mock.calls[0][0].replyTo).toBe('help@kaayko.com');
+  });
+
+  test('the product tag on a document picks its family sender', async () => {
+    seedMail('m_store', { product: 'store' });
+    await deliverMailDocument('m_store');
+    expect(mockSendMail.mock.calls[0][0].from).toBe('"Kaayko Store" <orders@kaayko.com>');
+    expect(mockSendMail.mock.calls[0][0].replyTo).toBe('orders@kaayko.com');
+    seedMail('m_kx', { product: 'kortex' });
+    await deliverMailDocument('m_kx');
+    expect(mockSendMail.mock.calls[1][0].from).toBe('"Kortex by Kaayko" <kortex@kaayko.com>');
   });
 
   test('a document that no longer exists is skipped without sending', async () => {

@@ -16,12 +16,12 @@
  *                  (the @ in the username MUST be written %40). Set it with
  *                  `firebase functions:secrets:set MAIL_SMTP_URL`. Firebase
  *                  delivers secrets with a trailing newline — trimmed here.
- *   MAIL_FROM      env (functions/.env), optional. Default: the owner address
- *                  from api/email/notifyAddress.js. Gmail rewrites From to the
- *                  authenticated account unless it is a verified "Send mail as"
- *                  alias, so leave this unset when sending through Gmail.
- *   Reply-To defaults to the owner address so customer replies land in the
- *   inbox that is actually read.
+ *   MAIL_FROM      env (functions/.env), optional global From override.
+ *                  Default: the product's address from config/mailIdentity.js
+ *                  (orders@ for the store, kortex@ for Kortex, admin@ for
+ *                  internal alerts, help@ for anything untagged). Zoho accepts
+ *                  a From only if it is the account or one of its aliases.
+ *   Reply-To defaults to the product's reply address (the same family).
  *
  * Delivery guarantees:
  *   • Firestore triggers are at-least-once. Before sending, the document is
@@ -45,7 +45,7 @@
 const { onDocumentCreated } = require('firebase-functions/v2/firestore');
 const admin = require('firebase-admin');
 const nodemailer = require('nodemailer');
-const { resolveNotifyEmail } = require('../api/email/notifyAddress');
+const { identity } = require('../config/mailIdentity');
 
 const SECRET_NAME = 'MAIL_SMTP_URL';
 // Placeholder the secret holds until a provider is chosen. It exists so the
@@ -248,10 +248,10 @@ async function deliverMailDocument(docId, { force = false, now = Date.now(), env
 
   // 3. Build and send.
   try {
-    const owner = resolveNotifyEmail();
+    const id = identity(doc.product);
     const message = buildMessage(doc, {
-      from: nonEmptyString(env.MAIL_FROM) || owner,
-      replyTo: owner
+      from: nonEmptyString(env.MAIL_FROM) || id.from,
+      replyTo: id.replyTo
     });
     const info = await getTransport(smtp.url).sendMail(message);
     const summary = {
