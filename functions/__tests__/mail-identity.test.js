@@ -3,7 +3,7 @@ const path = require('path');
 
 describe('config/mailIdentity', () => {
   const fresh = () => { jest.resetModules(); return require('../config/mailIdentity'); };
-  afterEach(() => { delete process.env.MAIL_DOMAIN; delete process.env.MAIL_FROM_STORE; delete process.env.MAIL_MAILBOX; });
+  afterEach(() => { delete process.env.MAIL_DOMAIN; delete process.env.MAIL_FROM_STORE; delete process.env.MAIL_MAILBOX; delete process.env.MAIL_ALIASES; });
 
   test('each product has its own address and reply address on kaayko.com', () => {
     const m = fresh();
@@ -38,6 +38,16 @@ describe('config/mailIdentity', () => {
     expect(m.mailbox()).toBe('ops@example.org');
     process.env.MAIL_DOMAIN = 'not a domain';
     expect(fresh().domain()).toBe('kaayko.com');
+  });
+
+  test('MAIL_ALIASES names what exists in Zoho; anything else sends from the mailbox, keeping its name', () => {
+    process.env.MAIL_ALIASES = 'admin, orders,security';
+    const m = fresh();
+    expect(m.identity('store')).toMatchObject({ address: 'orders@kaayko.com', from: '"Kaayko Store" <orders@kaayko.com>', replyTo: 'orders@kaayko.com', aliasLive: true });
+    expect(m.identity('kortex')).toMatchObject({ address: 'rohan@kaayko.com', from: '"Kortex by Kaayko" <rohan@kaayko.com>', replyTo: 'rohan@kaayko.com', aliasLive: false });
+    expect(m.identity('system')).toMatchObject({ address: 'admin@kaayko.com', replyTo: 'rohan@kaayko.com' });   // help@ is not live yet
+    delete process.env.MAIL_ALIASES;
+    expect(fresh().identity('kortex').address).toBe('kortex@kaayko.com');
   });
 
   test('the family lists every product once, with a purpose', () => {

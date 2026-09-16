@@ -25,6 +25,8 @@
  *   MAIL_MAILBOX           the authenticated account (default rohan@<domain>)
  *   MAIL_FROM_<PRODUCT>    a full address for one member, e.g. MAIL_FROM_STORE
  *   MAIL_FROM              the trigger's global From override (mailSender.js)
+ *   MAIL_ALIASES           comma list of the aliases that exist in Zoho today;
+ *                          members outside it send from the mailbox itself
  */
 'use strict';
 
@@ -58,12 +60,30 @@ function memberOf(product) {
   return FAMILY[product] ? product : 'contact';
 }
 
+/**
+ * Which aliases exist in Zoho right now. MAIL_ALIASES is a comma list of local
+ * parts (e.g. "admin,orders,security"). Unset means "all of them". A member
+ * whose alias is not live sends from the mailbox itself, keeping its display
+ * name, rather than being refused by Zoho (553) and stuck in the queue.
+ */
+function liveAliases() {
+  const raw = String(process.env.MAIL_ALIASES || '').trim();
+  if (!raw) return null;
+  return new Set(raw.split(',').map(s => s.trim().toLowerCase()).filter(Boolean));
+}
+
+function aliasIsLive(local) {
+  const live = liveAliases();
+  return !live || live.has(String(local).toLowerCase());
+}
+
 /** Bare address for a product, e.g. orders@kaayko.com. */
 function address(product) {
   const key = memberOf(product);
   const env = String(process.env[`MAIL_FROM_${key.toUpperCase()}`] || '').trim().toLowerCase();
   if (EMAIL_RE.test(env)) return env;
-  return `${FAMILY[key].local}@${domain()}`;
+  const local = FAMILY[key].local;
+  return aliasIsLive(local) ? `${local}@${domain()}` : mailbox();
 }
 
 /** RFC 5322 display form: "Kaayko Store" <orders@kaayko.com>. */
@@ -80,7 +100,7 @@ function formatted(product) {
 function identity(product) {
   const key = memberOf(product);
   const reply = address(FAMILY[key].replyTo);
-  return { product: key, name: FAMILY[key].name, address: address(key), from: formatted(key), replyTo: reply, inbox: reply };
+  return { product: key, name: FAMILY[key].name, address: address(key), from: formatted(key), replyTo: reply, inbox: reply, aliasLive: aliasIsLive(FAMILY[key].local) };
 }
 
 /**
@@ -101,4 +121,4 @@ function family() {
   return PRODUCTS.map(p => ({ ...identity(p), purpose: FAMILY[p].purpose }));
 }
 
-module.exports = { FAMILY, PRODUCTS, domain, mailbox, address, formatted, identity, stampIdentity, family, EMAIL_RE };
+module.exports = { FAMILY, PRODUCTS, domain, mailbox, address, formatted, identity, stampIdentity, family, liveAliases, aliasIsLive, EMAIL_RE };
