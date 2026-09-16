@@ -225,3 +225,29 @@ describe('normalizeAsk', () => {
     expect(() => normalizeAsk({ question: 'x'.repeat(121) })).toThrow(/120/);
   });
 });
+
+describe('Automation and the pages a buyer looks for', () => {
+  test('a bare script gets the redirect, no scan, no question, no badge', async () => {
+    houseLink('kx-quiet', { ask: { question: 'Are you coming?', options: [{ key: 'yes', label: 'Yes' }, { key: 'no', label: 'No' }], guests: false, thanks: 'x' } });
+    const r = await request(app).get('/kx-quiet').set('Host', 'kaay.link').set('User-Agent', 'curl/8.4.0');
+    await settle();
+    expect(r.status).toBe(302);
+    expect(r.headers.location).toContain('https://kaayko.com/paddlingout');
+    expect(clickEvents()).toHaveLength(0);
+  });
+
+  test('a headless browser still gets nothing', async () => {
+    houseLink('kx-head');
+    const r = await request(app).get('/kx-head').set('Host', 'kaay.link').set('User-Agent', 'Mozilla/5.0 HeadlessChrome/120.0');
+    expect(r.status).toBe(404);
+  });
+
+  test('security, status and pricing on the short host go to kaayko.com', async () => {
+    for (const [p, to] of [['security', 'https://kaayko.com/kortex/security'], ['status', 'https://kaayko.com/kortex/security#status'], ['pricing', 'https://kaayko.com/kortex#pricing']]) {
+      const r = await request(app).get('/' + p).set('Host', 'kaay.link').set(...BROWSER);
+      expect(r.status).toBe(302);
+      expect(r.headers.location).toBe(to);
+    }
+    expect(hosts.isReservedSlug('security')).toBe(true);
+  });
+});

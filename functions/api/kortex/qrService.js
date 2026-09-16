@@ -129,16 +129,19 @@ async function serveLinkQr(req, res) {
   }
 
   const size = Math.max(128, Math.min(1024, Number(req.query.size) || 512));
+  // Ink and paper: six-hex-digit colours only; anything else keeps the defaults.
+  const hex = (v) => /^#?[0-9a-fA-F]{6}$/.test(String(v || '')) ? '#' + String(v).replace('#', '').toLowerCase() : undefined;
+  const foreground = hex(req.query.fg), background = hex(req.query.bg);
   // Every QR Kortex renders carries the scan marker, so scans count separately from taps.
   const target = scanUrl(link.shortUrl || require('./linkHosts').shortUrlFor(code));
   res.set('Cache-Control', 'public, max-age=86400');
   res.set('X-Content-Type-Options', 'nosniff');
 
   if (format === 'svg') {
-    const svg = await generateQRSvg(target, { size, margin: 2 });
+    const svg = await generateQRSvg(target, { size, margin: 2, foreground, background });
     return res.type('image/svg+xml').send(svg);
   }
-  const dataUrl = await generateQR(target, { size, margin: 2 });
+  const dataUrl = await generateQR(target, { size, margin: 2, foreground, background });
   const png = Buffer.from(dataUrl.split(',')[1], 'base64');
   return res.type('image/png').send(png);
 }

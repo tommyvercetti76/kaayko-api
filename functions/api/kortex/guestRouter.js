@@ -40,7 +40,9 @@ const { buildWorkspaceAnalytics } = require('./workspaceAnalytics');
 const { mountGuestActions } = require('./actionRoutes');
 const { issueReportToken, revokeReportToken, shareState } = require('./reportTokens');
 const { getLinkAnalytics } = require('./linkAnalytics');
-const { tallyAnswers } = require('./linkAnswers');
+const { tallyAnswers, deleteAnswers } = require('./linkAnswers');
+const { simulate } = require('./linkSimulate');
+const { getTenantGate } = require('./tenantGate');
 const { recordAudit } = require('./auditLog');
 const { rateLimiter } = require('../../middleware/securityMiddleware');
 const { requireAuth } = require('../../middleware/authMiddleware');
@@ -351,6 +353,82 @@ router.get('/links/:code/analytics', guest.requireGuestSession, async (req, res)
         lastClickedAt: publicLink(link).lastClickedAt
       },
       window: { days: windowDaysFor(req.guest.tenant), timeZone: timeZoneFrom(req.query.tz), upgradeFor: 'Longer history, exports and team access are on paid plans.' }
+    });
+  } catch (error) {
+    return guestError(res, error);
+  }
+});
+
+/**
+ * GET /kortex/guest/links/:code/preview?platform=ios&at=<ISO or ms>
+ * What the code would do for that phone at that moment, and why. Pure.
+ */
+router.get('/links/:code/preview', guest.requireGuestSession, async (req, res) => {
+  const link = await ownedLink(req, res);
+  if (!link) return;
+  try {
+    const gate = await getTenantGate(req.guest.tenantId);
+    const at = req.query.at ? (Number.isFinite(Number(req.query.at)) ? Number(req.query.at) : Date.parse(String(req.query.at))) : Date.now();
+    if (!Number.isFinite(at)) return res.status(400).json({ success: false, error: 'Give the moment as an ISO date or milliseconds', code: 'VALIDATION_ERROR' });
+    return res.json({ success: true, preview: simulate({ code: link.code || req.params.code, ...link }, { platform: String(req.query.platform || 'web').toLowerCase(), at, gate }) });
+  } catch (error) {
+    return guestError(res, error);
+  }
+});
+
+/**
+ * DELETE /kortex/guest/workspace — the owner ends the workspace: every link,
+ * every scan record, every answer, every report token, then the workspace
+ * itself. Needs the access code in the body as proof, on top of the session.
+ * Irreversible; printed codes stop resolving at once.
+ */
+router.delete('/workspace', guest.requireGuestSession, requireWritable, rateLimiter('guestRecover'), async (req, res) => {
+  try {
+    const code = String((req.body && req.body.accessCode) || '').trim();
+    if (!code) return res.status(400).json({ success: false, error: 'Enter the access code to delete the workspace', code: 'VALIDATION_ERROR' });
+    const owned = await guest.verifyAccessCode(code);
+    if (!owned || owned.tenantId !== req.guest.tenantId) return res.status(403).json({ success: false, error: 'That access code does not open this workspace', code: 'ACCESS_DENIED' });
+    const tenantId = req.guest.tenantId;
+    const { links } = await LinkService.listLinks({ tenantId, limit: 100 });
+    let events = 0, answers = 0;
+    for (const link of links) {
+      const c = link.code || link.id;
+      answers += await deleteAnswers(c);
+      const snap = await db.collection('click_events').where('linkCode', '==', c).limit(5000).get();
+      for (let i = 0; i < snap.docs.length; i += 400) {
+        const batch = db.batch(); snap.docs.slice(i, i + 400).forEach(d => batch.delete(d.ref)); await batch.commit();
+      }
+      events += snap.size;
+      await LinkService.deleteShortLink(c).catch(() => {});
+    }
+    const tokens = await db.collection('kortex_report_tokens').where('tenantId', '==', tenantId).limit(500).get().catch(() => ({ docs: [] }));
+    for (const d of tokens.docs) await d.ref.delete().catch(() => {});
+    recordAudit({ req, actor: { type: 'guest', workspace: tenantId }, action: 'workspace.deleted', tenantId, extra: { links: links.length, events, answers } });
+    await db.collection('tenants').doc(tenantId).delete();
+    return res.json({ success: true, deleted: { links: links.length, events, answers } });
+  } catch (error) {
+    return guestError(res, error);
+  }
+});
+
+/**
+ * GET /kortex/guest/status — public. What the last redirect probes saw
+ * (index.js kortexRedirectProbe writes them). Nothing else; no tenant data.
+ */
+router.get('/status', async (req, res) => {
+  try {
+    res.setHeader('Cache-Control', 'public, max-age=60');
+    const snap = await db.collection('kortex_status').doc('probe').get();
+    if (!snap.exists) return res.json({ success: true, known: false, message: 'No probe has run yet.' });
+    const d = snap.data();
+    const recent = Array.isArray(d.recent) ? d.recent : [];
+    const dayAgo = Date.now() - 86400000;
+    const last24 = recent.filter(r => r.atMs >= dayAgo);
+    return res.json({
+      success: true, known: true,
+      ok: d.ok === true, atMs: d.atMs || null, checks: d.checks || [],
+      last24h: { runs: last24.length, ok: last24.filter(r => r.ok).length, ratio: last24.length ? Math.round(100 * last24.filter(r => r.ok).length / last24.length) / 100 : null },
+      region: 'us-central1'
     });
   } catch (error) {
     return guestError(res, error);

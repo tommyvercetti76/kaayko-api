@@ -360,6 +360,48 @@ router.post('/tenant-links', requireAuth, requireAdmin, requireVerifiedEmail, us
 });
 
 /**
+ * POST /kortex/tenant-links/bulk — up to 200 links in one call, one row each,
+ * for a signed-in tenant. Every row goes through the same service as a single
+ * create (domain policy, plan quota, safety), so a bad row fails alone and the
+ * good ones are made. The response says what happened to each row, in order.
+ */
+const BULK_MAX = 200;
+router.post('/tenant-links/bulk', requireAuth, requireAdmin, requireVerifiedEmail, userRateLimit({ maxRequests: 10, windowSeconds: 3600 }), async (req, res) => {
+  const rows = Array.isArray(req.body && req.body.rows) ? req.body.rows : null;
+  if (!rows || !rows.length) return res.status(400).json({ success: false, error: 'Send rows: an array of links to make', code: 'VALIDATION_ERROR' });
+  if (rows.length > BULK_MAX) return res.status(400).json({ success: false, error: `At most ${BULK_MAX} links per call`, code: 'VALIDATION_ERROR' });
+  try {
+    const tenantContext = await getTenantFromRequest(req);
+    const tenantConfig = await getTenantConfig(tenantContext.tenantId);
+    const results = [];
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i] && typeof rows[i] === 'object' ? rows[i] : {};
+      try {
+        const input = pickCreateInput(row);
+        const link = await KortexV2.createTenantLink({
+          tenant: { id: tenantConfig.id, name: tenantConfig.name, domain: tenantConfig.domain, pathPrefix: tenantConfig.pathPrefix, slug: input.tenantSlug || tenantConfig.id, alumniDomain: input.alumniDomain },
+          actor: req.user,
+          data: { ...input, actorIsSuperAdmin: tenantContext.isSuperAdmin }
+        });
+        recordAudit({ req, action: 'link.created', code: link.code, tenantId: tenantConfig.id, after: link, extra: { path: 'tenant-links/bulk', row: i } });
+        results.push({ row: i, ok: true, code: link.code, shortUrl: link.shortUrl, status: link.status });
+      } catch (error) {
+        results.push({ row: i, ok: false, error: error.message || 'Could not create this link', code: error.code || 'LINK_CREATE_FAILED' });
+        if (error.code === 'PLAN_LIMIT_EXCEEDED' || error.code === 'LINK_LIMIT_REACHED') {
+          for (let j = i + 1; j < rows.length; j++) results.push({ row: j, ok: false, error: 'Plan limit reached before this row', code: error.code });
+          break;
+        }
+      }
+    }
+    const made = results.filter(r => r.ok).length;
+    return res.status(made ? 201 : 400).json({ success: made > 0, made, failed: results.length - made, results });
+  } catch (error) {
+    console.error('[KortexV2] Bulk create error:', error);
+    return linkWriteError(res, error) || res.status(500).json({ success: false, error: 'Bulk create failed', code: 'BULK_CREATE_FAILED' });
+  }
+});
+
+/**
  * GET /kortex/analytics/portfolio
  * Portfolio-wide analytics aggregated from the real click_events stream (not the
  * shallow per-link clickCount counters). Super-admins see all tenants; tenant
@@ -414,9 +456,14 @@ router.get('/links/:code/analytics', requireAuth, requireAdmin, async (req, res)
     const { getLinkAnalytics } = require('./linkAnalytics');
     const gateForWindow = await getTenantGate(linkData.tenantId || DEFAULT_TENANT_ID);
     const analytics = await getLinkAnalytics(code, linkData, { windowDays: windowDaysFor({ plan: gateForWindow.plan, kind: gateForWindow.kind }, { superAdmin: tenantContext.isSuperAdmin }), timeZone: timeZoneFrom(req.query.tz) });
+    // Paid plans: daily totals for up to a year, from the counts-only rollups
+    // that outlive the 30-day events. Free plans get none (the table says 0).
+    const historyDays = require('./analyticsPolicy').historyDaysFor({ plan: gateForWindow.plan, kind: gateForWindow.kind });
+    const history = historyDays > 0 ? await require('./linkHistory').linkHistory(linkData.tenantId || DEFAULT_TENANT_ID, code, historyDays) : null;
 
     return res.json({
       success: true,
+      history,
       link: {
         code,
         title: linkData.title || null,

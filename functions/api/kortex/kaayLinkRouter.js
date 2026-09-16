@@ -49,6 +49,13 @@ router.get('/', (req, res) => {
   return res.redirect(302, hosts.ROOT_REDIRECT);
 });
 
+// The pages a buyer looks for on the short host live on kaayko.com.
+const PAGES = { security: 'https://kaayko.com/kortex/security', status: 'https://kaayko.com/kortex/security#status', pricing: 'https://kaayko.com/kortex#pricing', terms: 'https://kaayko.com/legal/kortex-terms', privacy: 'https://kaayko.com/legal/kortex-terms#privacy', help: 'https://kaayko.com/kortex/support', support: 'https://kaayko.com/kortex/support' };
+router.get('/:page(security|status|pricing|terms|privacy|help|support)', (req, res) => {
+  res.setHeader('Cache-Control', 'public, max-age=3600');
+  return res.redirect(302, PAGES[req.params.page]);
+});
+
 router.get('/qr/:file', (req, res) => serveLinkQr(req, res).catch(err => {
   console.error('[kaay.link] QR failed:', err);
   if (!res.headersSent) res.status(500).json({ success: false, error: 'QR generation failed' });

@@ -35,7 +35,7 @@ const ROOT_REDIRECT = 'https://kaayko.com/kortex';
 const RESERVED_SLUGS = Object.freeze([
   'api', 'qr', 'l', 'r', 'a', 'kortex', 'admin', 'login', 'logout', 'resolve', 'health',
   'support', 'report', 'appeal', 'terms', 'privacy', 'about', 'legal', 'help', 'status',
-  'store', 'shop', 'cart', 'paddlingout', 'kutz', 'karma', 'roots', 'alumni', 'forge', 'reads',
+  'store', 'shop', 'cart', 'paddlingout', 'kutz', 'karma', 'roots', 'alumni', 'forge', 'reads', 'security', 'pricing', 'docs',
   'kaayko', 'kaay', 'www', 'mail', 'app', 'apps', 'static', 'assets', 'fonts', 'img', 'images', 'js', 'css',
   'index', 'index.html', 'robots.txt', 'sitemap.xml', 'favicon.ico', 'manifest.json', 'site.webmanifest', '.well-known',
   'apple-app-site-association', 'assetlinks.json'

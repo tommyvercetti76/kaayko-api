@@ -21,6 +21,25 @@ const PRICE_IDS = {
   pro: process.env.STRIPE_PRICE_PRO || 'price_pro_monthly',
   business: process.env.STRIPE_PRICE_BUSINESS || 'price_business_monthly'
 };
+// What the plans cost, in cents, the same numbers the pricing page shows.
+// When no Stripe Price id is configured (STRIPE_PRICE_*), Checkout is given the
+// price inline, so a plan can be bought before anyone sets up the Stripe
+// catalogue. A configured id, when present, always wins.
+const PLAN_PRICE_CENTS = { pro: 2900, business: 9900 };
+const PLAN_NAMES = { pro: 'Kortex Pro', business: 'Kortex Business' };
+const looksLikeStripePrice = (id) => /^price_[A-Za-z0-9]{8,}$/.test(String(id || '')) && !/_monthly$/.test(String(id));
+function checkoutLine(planId) {
+  if (looksLikeStripePrice(PRICE_IDS[planId])) return { price: PRICE_IDS[planId], quantity: 1 };
+  return {
+    price_data: {
+      currency: 'usd',
+      unit_amount: PLAN_PRICE_CENTS[planId],
+      recurring: { interval: 'month' },
+      product_data: { name: PLAN_NAMES[planId], description: 'Billed monthly. Cancel any time from the console.' }
+    },
+    quantity: 1
+  };
+}
 
 // Plan limits — shared source of truth (also enforced in smartLinkService).
 const { PLAN_LIMITS } = require('./planLimits');
@@ -172,13 +191,10 @@ router.post('/create-checkout', requireAuth, requireBillingTenant, requireStripe
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
       payment_method_types: ['card'],
-      line_items: [{
-        price: PRICE_IDS[planId],
-        quantity: 1
-      }],
+      line_items: [checkoutLine(planId)],
       mode: 'subscription',
-      success_url: `${process.env.FRONTEND_URL || 'https://kaayko.com'}/admin/smartlinks.html?billing=success&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.FRONTEND_URL || 'https://kaayko.com'}/admin/smartlinks.html?billing=cancelled`,
+      success_url: `${process.env.FRONTEND_URL || 'https://kaayko.com'}/admin/kortex?billing=success&session_id={CHECKOUT_SESSION_ID}#/billing`,
+      cancel_url: `${process.env.FRONTEND_URL || 'https://kaayko.com'}/admin/kortex?billing=cancelled#/billing`,
       metadata: {
         tenantId,
         userId: req.user.uid,

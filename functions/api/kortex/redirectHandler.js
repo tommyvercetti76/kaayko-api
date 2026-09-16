@@ -453,7 +453,13 @@ async function handleRedirect(req, res, code, options = {}) {
     const { detectBot, isCanaryCode } = require('./linkSecurityService');
     const isCrawler = isSocialCrawler(userAgent) || isSearchCrawler(userAgent);
     const botCheck = detectBot(req);
-    if (botCheck.isBot && !isCrawler) {
+    // Unidentified automation (a script's user agent, no Accept-Language, a
+    // generic Accept) used to get a 404 here, which read as a dead link to
+    // uptime monitors, privacy scanners and link checkers. It now gets the
+    // redirect and nothing else: no scan recorded, no question, no badge.
+    // Headless browsers, the one signal that is only ever abuse, still get nothing.
+    const quiet = botCheck.isBot && !isCrawler;
+    if (quiet && botCheck.signals.includes('headless_chrome')) {
       return res.status(404).send(errorPage(404, 'Not Found', 'This page does not exist.'));
     }
 
@@ -481,7 +487,7 @@ async function handleRedirect(req, res, code, options = {}) {
     const scanned = isQrScan(req.query);
     // A scan that ends here is still a finding: recorded as an outcome, never as a visit.
     const miss = (outcome, extra = {}) => {
-      if (isCrawler || options.trackAnalytics === false) return;
+      if (isCrawler || quiet || options.trackAnalytics === false) return;
       trackOutcome({ linkCode: code, tenantId: linkData.tenantId || DEFAULT_TENANT_ID, outcome, ...extra, platform, userAgent, ip: getClientIp(req), referrer: req.get('referer') || null, scanned, host: options.host || null }).catch(() => {});
     };
 
@@ -706,7 +712,7 @@ async function handleRedirect(req, res, code, options = {}) {
     // Track click with full context (generates clickId for attribution).
     // Crawler fetches (link previews, search indexing) are not clicks.
     let clickId = null;
-    if (options.trackAnalytics && !isCrawler) {
+    if (options.trackAnalytics && !isCrawler && !quiet) {
       try {
         const clickData = await trackClick({
           linkCode: code,
@@ -729,7 +735,7 @@ async function handleRedirect(req, res, code, options = {}) {
     }
 
     // Track basic click metrics (async, non-blocking)
-    if (!isCrawler) {
+    if (!isCrawler && !quiet) {
       db.collection('short_links')
         .doc(code)
         .update({
@@ -771,7 +777,7 @@ async function handleRedirect(req, res, code, options = {}) {
 
     // A code that asks a question shows it here: every guard above has passed
     // and the scan is already recorded. The answer page leads on to `destination`.
-    if (options.askPage && linkData.ask && !isCrawler && !req.query.go) {
+    if (options.askPage && linkData.ask && !isCrawler && !quiet && !req.query.go) {
       const { askPage } = require('./linkAnswers');
       res.setHeader('Cache-Control', 'no-store');
       res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'");
@@ -783,7 +789,7 @@ async function handleRedirect(req, res, code, options = {}) {
     // "Powered by Kortex" interstitial for Starter-tier links (PLG viral loop)
     const tenantId = linkData.tenantId || 'kaayko-default';
     const isStarterTier = await isStarterLink(tenantId);
-    if (isStarterTier && !isCrawler) {
+    if (isStarterTier && !isCrawler && !quiet) {
       return res.status(200).set('Content-Type', 'text/html; charset=utf-8').send(
         poweredByPage(destination, linkData.title || code)
       );

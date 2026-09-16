@@ -136,10 +136,13 @@ describe('Crawlers and the house tenant', () => {
     expect(deliveredEvents()).toHaveLength(0);
   });
 
-  test('a UA-less client is still refused', async () => {
+  test('a UA-less client is sent on, quietly: no scan is recorded', async () => {
     houseLink('nouа1');
     const res = await request(redirectApp).get('/l/nouа1');
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(302);
+    expect(res.headers.location).toContain('https://kaayko.com/paddlingout');
+    await new Promise(r => setTimeout(r, 60));
+    expect(Object.keys(admin._mocks.docData).filter(k => k.startsWith('click_events/'))).toHaveLength(0);
   });
 });
 

@@ -333,6 +333,43 @@ exports.kortexDemoRefresh = onSchedule({
   console.log(`[KortexDemo] Done: links=${result.links.length} events=${result.events}`);
 });
 
+/**
+ * Redirect probe: every 15 minutes, fetch a sample code on the short host the
+ * way a phone does and the way a bare script does, and record what came back.
+ * The public status page reads the result (GET /kortex/guest/status). A miss is
+ * logged at error level so Cloud Logging can alert on it.
+ */
+exports.kortexRedirectProbe = onSchedule({
+  schedule: "every 15 minutes",
+  memory: "256MiB",
+  timeoutSeconds: 60
+}, async () => {
+  const targets = [
+    { name: "phone", url: "https://www.kaay.link/kx-lakecard", headers: { "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1", "Accept": "text/html", "Accept-Language": "en-US" }, expect: [200, 302] },
+    { name: "script", url: "https://www.kaay.link/kx-lakecard", headers: { "User-Agent": "curl/8.4.0 kortex-probe", "Accept": "*/*", "Accept-Language": "" }, expect: [302] },
+    { name: "qr", url: "https://www.kaay.link/qr/kx-lakecard.png", headers: {}, expect: [200] },
+    { name: "api", url: "https://api-vwcc5j4qda-uc.a.run.app/health", headers: {}, expect: [200] }
+  ];
+  const checks = [];
+  for (const t of targets) {
+    const t0 = Date.now();
+    try {
+      const r = await fetch(t.url, { headers: t.headers, redirect: "manual", signal: AbortSignal.timeout(10000) });
+      checks.push({ name: t.name, status: r.status, ms: Date.now() - t0, ok: t.expect.includes(r.status) });
+    } catch (e) {
+      checks.push({ name: t.name, status: 0, ms: Date.now() - t0, ok: false, error: String(e.message || e).slice(0, 120) });
+    }
+  }
+  const ok = checks.every(c => c.ok);
+  const ref = admin.firestore().collection("kortex_status").doc("probe");
+  const prev = await ref.get();
+  const recent = ((prev.exists && prev.data().recent) || []).slice(-95);
+  recent.push({ atMs: Date.now(), ok });
+  await ref.set({ atMs: Date.now(), ok, checks, recent }, { merge: true });
+  if (!ok) console.error("[KortexProbe] redirect probe failed:", JSON.stringify(checks));
+  else console.log("[KortexProbe] ok", checks.map(c => `${c.name}:${c.status}/${c.ms}ms`).join(" "));
+});
+
 exports.kortexGuestHousekeeping = onSchedule({
   schedule: "45 3 * * *",
   timeZone: "Asia/Kolkata",
