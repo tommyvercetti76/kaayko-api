@@ -81,3 +81,12 @@ functions/docs/admin/
 # Allow the documented example files (real .env files stay ignored above)
 !.env.example
 !functions/.env.example
+
+# Debug logs — every one, at every depth.
+# `functions/*.log` used to be the only rule, so firebase-debug.log at the repo
+# ROOT was never ignored and got committed with the full deployed env-var dump
+# in it (18 Sep 2026). Emulator and CLI logs are never worth keeping.
+*.log
+*-debug.log
+firebase-debug.log
+firestore-debug.log
