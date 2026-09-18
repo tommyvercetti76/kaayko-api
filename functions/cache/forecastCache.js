@@ -1,11 +1,19 @@
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const { logger } = require('firebase-functions');
+const { ALGORITHM_VERSION } = require('../api/weather/scoringConstants');
 
 class ForecastCache {
     constructor() {
         this.db = getFirestore();
         this.CACHE_COLLECTION = 'forecast_cache';
         this.CACHE_TTL_HOURS = 3.5; // Refresh every 3.5 hours (fits 6 daily updates)
+        // A cached forecast carries SCORES, so it is only valid for the algorithm
+        // that produced it. Without this, a deploy that changes scoring keeps
+        // serving the old numbers for up to CACHE_TTL_HOURS — which is exactly
+        // what happened on the 2.5.0 → 2.6.0 deploy: a lake with no water sensor
+        // went on publishing an invented water temperature, labelled "measured
+        // now at the nearest station", for hours after the fix was live.
+        this.ALGORITHM_VERSION = ALGORITHM_VERSION;
     }
 
     /**
@@ -33,6 +41,16 @@ class ForecastCache {
                 return null;
             }
 
+            // Stale-by-version. Treated as a miss, not as an error: the next
+            // request regenerates and overwrites. An entry with NO recorded
+            // version predates this check and is likewise refused, because we
+            // cannot tell which algorithm produced it.
+            const cachedVersion = data.algorithm_version || data.forecast?.metadata?.algorithmVersion || null;
+            if (cachedVersion !== this.ALGORITHM_VERSION) {
+                logger.info(`Cache version mismatch for ${locationId}: cached ${cachedVersion || 'none'}, current ${this.ALGORITHM_VERSION} — regenerating`);
+                return null;
+            }
+
             logger.info(`Cache hit for location: ${locationId}, cached ${hoursSinceCache.toFixed(1)} hours ago`);
             return {
                 ...data.forecast,
@@ -57,6 +75,7 @@ class ForecastCache {
             const cacheDoc = {
                 location_id: locationId,
                 forecast: forecastData,
+                algorithm_version: this.ALGORITHM_VERSION,
                 cached_at: FieldValue.serverTimestamp(),
                 ttl_hours: this.CACHE_TTL_HOURS
             };
