@@ -88,12 +88,34 @@ async function transformToFastForecastFormat(weatherData, locationQuery) {
                 const marineDay = marineData.forecast.forecastday.find(d => d.date === dayData.date);
                 marineHour = marineDay?.hour?.find(h => h.time === hourData.time) || null;
             }
-            const waterTemp = marineHour?.water_temp_c || Math.max(2, hourData.tempC - 8);
+            // WATER TEMPERATURE — one policy, shared with paddleScoreCompute.js.
+            //
+            // Two defects lived on this line. First, `||` treats a MEASURED 0.0 C —
+            // ice water, the most dangerous possible reading for cold shock — as
+            // falsy and silently replaces it with the air-derived estimate. It must
+            // be an explicit null check.
+            //
+            // Second, and worse for trust: this single value was used both as the
+            // MODEL INPUT and as the PUBLISHED number. paddleScoreCompute.js adopted
+            // MEASURED OR NOTHING and publishes null when nobody measured the water,
+            // so the hero read "No sensor" while this path published "81F" for the
+            // same river in the same hour, on the same screen. A user who sees that
+            // is right to distrust everything else on the page.
+            //
+            // The split below is the same one paddleScoreCompute makes:
+            //   - the model keeps a derived value, because that is how it was trained
+            //   - the RULES and the UI get null, so every water rule stands down and
+            //     the surface says "no sensor" rather than inventing a temperature.
+            // The MODEL's derived input is produced inside standardizeForMLModel from
+            // (marineData, marineHour); we do not duplicate it here.
+            const measuredWaterTempC = marineHour?.water_temp_c ?? null;
+            const waterTempPublished = measuredWaterTempC;   // null when unmeasured — deliberate
 
             // ML input — real values, no hardcoded defaults. Government alerts are
             // location-wide, so every hour inherits the current alert state.
             const mlInputData = standardizeForMLModel({
                 temperature:          hourData.tempC,
+                feelsLike:            hourData.feelsLikeC,
                 windSpeedKph:         hourData.windKPH,
                 windDirection:        hourData.windDir,
                 humidity:             hourData.humidity,
@@ -109,6 +131,16 @@ async function transformToFastForecastFormat(weatherData, locationQuery) {
                 longitude: lng
             }, marineData, marineHour);
 
+            // Tell the penalty layer whether anyone actually MEASURED this water.
+            // paddlePenalties stands its water rules down only on an explicit
+            // `false` (see paddlePenalties.js: `features.waterTempMeasured !== false`).
+            // This path never set the flag, so it read as undefined and the water
+            // penalties FIRED on the air-derived estimate — while the current-
+            // conditions path, which does set it, correctly suppressed them. Same
+            // water, same hour, different score. That is the divergence the ONE
+            // scoring core exists to prevent.
+            mlInputData.waterTempMeasured = measuredWaterTempC !== null;
+
             // The shared scoring core — same predict→calibrate→penalize→interpret
             // path the current-conditions score uses.
             const score = await scoreFromFeatures({
@@ -116,6 +148,11 @@ async function transformToFastForecastFormat(weatherData, locationQuery) {
                 marineHour,
                 forecast: weatherData.forecast,
                 loc: { lat, lng },
+                // hourData.time is already LOCATION-LOCAL ("2026-09-18 14:00").
+                // Season and forecast-trend calibration read it; a forecast hour
+                // three days out must be scored against ITS month and hour, not
+                // against the server's clock at request time.
+                localTime: hourData.time,
                 includeWarnings: false
             });
             if (!score) return;
@@ -130,7 +167,8 @@ async function transformToFastForecastFormat(weatherData, locationQuery) {
                     cloudCover:  hourData.cloudCover,
                     uvIndex:     hourData.uvIndex,
                     visibility:  realVisKm,
-                    waterTemp:   waterTemp
+                    // null when unmeasured, so the water-temperature warnings stand down
+                    waterTemp:   waterTempPublished
                 },
                 weatherData,
                 { latitude: lat, longitude: lng }
@@ -155,7 +193,8 @@ async function transformToFastForecastFormat(weatherData, locationQuery) {
                 hasWarnings:   smartWarnings.length > 0,
                 warnings:      smartWarnings,
                 beaufortScale: calculateBeaufortFromKph(hourData.windKPH),
-                waterTemp:     waterTemp,
+                waterTemp:     waterTempPublished,          // C, or null when no sensor
+                waterTempMeasured: measuredWaterTempC !== null,
                 marineDataAvailable: !!marineHour,
                 prediction: {
                     rating:           score.rating,
@@ -164,14 +203,41 @@ async function transformToFastForecastFormat(weatherData, locationQuery) {
                     mlModelUsed:      score.mlModelUsed,
                     predictionSource: score.predictionSource,
                     modelType:        score.modelType,
+                    degraded:         score.degraded === true,
+                    degradedReason:   score.degradedReason ?? null,
+                    // 'measured' | 'estimated' | 'unvalidated' — one vocabulary
+                    // for every producer, normalized in scoringPipeline (#19).
                     confidence:       score.confidence,
+                    confidenceBasis:  score.confidenceBasis ?? null,
+                    uncertainty:      score.uncertainty ?? null,
+                    algorithmVersion: score.algorithmVersion ?? null,
                     isGoldStandard:   !!score.mlModelUsed,
                     v3ModelUsed:      !!score.mlModelUsed,
                     riskClass:        score.riskClass,
                     originalMLRating:     score.originalMLRating,
                     calibrationApplied:   score.calibrationApplied,
                     adjustments:          score.adjustments,
-                    penaltiesApplied:     score.penaltiesApplied
+                    // ── AUDIT-2026-09-18 #9: the forecast path was un-auditable ──
+                    // Measured on the live API: an hour whose originalMLRating was
+                    // 2.5 published 1.5, and reported `penaltyDetails: []` with
+                    // `totalPenalty: null`. A full point of safety deduction had
+                    // been applied and NOTHING in the payload said which rule
+                    // fired or how much it took. The hero path (paddleScore.js)
+                    // reported both all along, so the same deduction was auditable
+                    // on one surface and invisible on the other.
+                    //
+                    // These four fields are now the SAME structured objects the
+                    // hero publishes, straight off the shared scoring core — not
+                    // re-derived here, so the two surfaces cannot drift again.
+                    //
+                    // They also carry the only signal that distinguishes a 20 mph
+                    // hour from a 40 mph one: both publish a clamped 1.0 rating,
+                    // and only totalPenalty/penaltyDetails show how far past the
+                    // floor the day is (#21).
+                    penaltiesApplied:     score.penaltiesApplied || [],
+                    penaltyDetails:       score.penaltyDetails || [],
+                    totalPenalty:         score.totalPenalty ?? 0,
+                    dynamicOffset:        score.dynamicOffset ?? 0
                 },
                 originalRating:   score.originalMLRating,
                 safetyDeduction:  score.totalPenalty || 0,
@@ -322,9 +388,19 @@ router.get('/', createInputMiddleware('fastForecast'), async (req, res) => {
         }
 
         // Craft layer — applied at response time so the cached forecast stays
-        // craft-neutral. Hour objects carry windSpeed/gustSpeed in KPH; per-hour
-        // penaltyDetails aren't stored, so wave escalation doesn't apply here
-        // (wind + gust sensitivity do — the dominant hourly factors).
+        // craft-neutral. Hour objects carry windSpeed/gustSpeed in KPH.
+        //
+        // penaltyDetails used to be passed as a hard-coded `[]` here, because the
+        // per-hour payload did not store them — so wave escalation (the extra
+        // deduction a paddleboard takes in chop) silently never fired on the
+        // forecast strip while it did fire on the hero. Finding #9 put the real
+        // structured penalties on every hour, so the craft layer now reads them.
+        // Craft deltas are clamped to <= 0, so this can only ever make a small
+        // craft's forecast MORE cautious, never more optimistic.
+        //
+        // `?? []` matters: forecasts cached before #9 shipped have no
+        // penaltyDetails, and those hours keep the previous behaviour until the
+        // cache turns over rather than throwing.
         const craftId = sanitizeCraft(req.query.craft);
         if (craftId !== 'kayak' && Array.isArray(forecast.forecast)) {
             forecast = JSON.parse(JSON.stringify(forecast)); // never mutate a cached object
@@ -335,7 +411,7 @@ router.get('/', createInputMiddleware('fastForecast'), async (req, res) => {
                         rating: h.rating,
                         ratingPrecise: h.ratingPrecise ?? h.rating,
                         conditions: { windSpeed: h.windSpeed, gustSpeed: h.gustSpeed },
-                        penaltyDetails: []
+                        penaltyDetails: h.prediction?.penaltyDetails ?? []
                     }, craftId);
                     if (adj && adj.craftAdjustment) {
                         h.rating = adj.rating;

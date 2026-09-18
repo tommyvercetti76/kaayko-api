@@ -10,8 +10,40 @@
 // via KaaykoPrefs — no unit strings are baked into tip text server-side.
 
 const { CRAFT_PROFILES, sanitizeCraft } = require('./craftAdjustments');
+const { STALE_HOURS: HYDROLOGY_STALE_HOURS } = require('./hydrologyService');
 
 const KPH_TO_MPH = 0.621371;
+
+/**
+ * Is this hydrology context too old to say anything about the river RIGHT NOW?
+ *
+ * The flow gate in paddlePenalties.js already refuses a stale context
+ * (`ENABLE_FLOW_GATE && hydrologyContext && !hydrologyContext.stale`); this tip
+ * did not, so a three-day-old gauge reading still told a paddler the river was
+ * running high or low while the score said nothing. Same fail-open class as the
+ * missing-input bugs closed in v2.5.0: absent evidence must produce no claim.
+ *
+ * Two independent tests, either of which condemns the reading:
+ *   1. the `stale` flag hydrologyService computed at fetch time — the exact
+ *      predicate the penalty uses, so tip and penalty cannot diverge on it;
+ *   2. the observation timestamp itself, re-checked here against the same
+ *      HYDROLOGY_STALE_HOURS threshold, so a context assembled by hand or
+ *      replayed from a stale cache without the flag still cannot fire a tip.
+ * A context that carries neither a flag nor a timestamp is undated, and an
+ * undated reading is not a live reading: no tip.
+ */
+function isHydrologyStale(hydrology, nowMs = Date.now()) {
+  if (!hydrology) return true;
+  if (hydrology.stale === true) return true;
+  const observedAt = hydrology.discharge?.observedAt || hydrology.observedAt || null;
+  if (observedAt) {
+    const ageHours = (nowMs - Date.parse(observedAt)) / 3600000;
+    if (!Number.isFinite(ageHours) || ageHours > HYDROLOGY_STALE_HOURS) return true;
+    return false;
+  }
+  // No timestamp at all: trust the flag only if it was explicitly set false.
+  return hydrology.stale !== false;
+}
 
 /**
  * NWS Rothfusz heat index (input/output °F) — applied above 80°F.
@@ -144,8 +176,20 @@ function getPreparationTips({ conditions, craft, spot = null, hydrology = null, 
     });
   }
 
-  // RIVER FLOW — Phase 6 wiring; inert until live hydrology exists
-  if (hydrology?.pctOfNormalBand === 'high' || hydrology?.pctOfNormalBand === 'above') {
+  // RIVER FLOW — only from a live, non-stale gauge reading.
+  //
+  // Boundary: 'high' ONLY, deliberately NOT 'above'. This tip used to fire on
+  // both, while the FLOW_HIGH penalty in paddlePenalties.js fires only on
+  // 'high' — so a paddler could read "River running above normal" with no
+  // matching deduction, two surfaces disagreeing about the same river.
+  // 'high' is the right boundary of the two: bandFor() calls p75-p90 'above',
+  // and by construction a quarter of all days in the normal record sit there.
+  // A warning that fires on one day in four is ordinary seasonal variation
+  // dressed up as an event. 'high' is >p90 — the tail, where scouting the
+  // takeout is genuinely different advice. Change one of these two and you
+  // must change the other; they are one judgement about one river.
+  const flowBand = isHydrologyStale(hydrology) ? null : hydrology?.pctOfNormalBand;
+  if (flowBand === 'high') {
     tips.push({
       code: 'FLOW_HIGH',
       priority: 1,
@@ -153,7 +197,7 @@ function getPreparationTips({ conditions, craft, spot = null, hydrology = null, 
       title: 'River running above normal',
       detail: 'Scout your takeouts before launching — current is stronger than usual'
     });
-  } else if (hydrology?.pctOfNormalBand === 'low') {
+  } else if (flowBand === 'low') {
     tips.push({
       code: 'FLOW_LOW',
       priority: 2,
@@ -196,4 +240,4 @@ function renderTipDetail(tip, opts = {}) {
   return detail;
 }
 
-module.exports = { getPreparationTips, renderTipDetail };
+module.exports = { getPreparationTips, renderTipDetail, isHydrologyStale };

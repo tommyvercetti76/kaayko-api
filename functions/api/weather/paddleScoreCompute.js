@@ -82,8 +82,12 @@ async function computePaddleScoreForSpot(loc, options = {}) {
 
     const current = weatherData.current;
 
-    // Location-local hour drives marine + PoP hourly indexing ("2026-08-31 19:05")
-    const localHourStr = String(weatherData.location?.localTime || '').split(' ')[1];
+    // Location-local hour drives marine + PoP hourly indexing ("2026-08-31 19:05").
+    // The full local timestamp also travels into the scoring pipeline: the
+    // season and forecast-trend calibrations must read THIS clock, not the
+    // Cloud Functions UTC clock (see modelCalibration.js).
+    const localTime = String(weatherData.location?.localTime || '');
+    const localHourStr = localTime.split(' ')[1];
     const localHour = Math.max(0, Math.min(23, parseInt(localHourStr, 10) || 0));
     const marineHour = selectMarineHour(marineData, localHour);
 
@@ -93,6 +97,9 @@ async function computePaddleScoreForSpot(loc, options = {}) {
     // Standardize into ML input — pass ALL available real values
     const mlFeatures = standardizeForMLModel({
         temperature:   current.temperature?.celsius,
+        // The V2 model's most important feature. Provider-supplied; never
+        // substituted with dry-bulb temperature when absent.
+        feelsLike:     current.temperature?.feelsLikeC,
         windSpeed:     current.wind?.speedMPH  || current.windSpeed,
         gustSpeed:     current.wind?.gustMPH   || (current.wind?.speedMPH || 0) * 1.3,
         windDirection: current.wind?.direction || current.windDirection,
@@ -149,6 +156,7 @@ async function computePaddleScoreForSpot(loc, options = {}) {
             marineHour,
             forecast: weatherData.forecast || null,
             loc,
+            localTime,
             dynamicOffset: calibrationOffsets.get(loc.id) || 0,
             hydrologyContext,
             weatherData,

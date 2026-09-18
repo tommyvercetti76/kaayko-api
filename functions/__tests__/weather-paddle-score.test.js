@@ -58,23 +58,49 @@ describe('modelCalibration — calibrateModelPrediction', () => {
   });
 
   test('deteriorating forecast (wind increasing >5kph) produces a negative adjustment', () => {
-    // Simulate forecast with wind increasing over next hours
+    // Fixed hours and an explicit LOCATION-LOCAL hour. This test used to build
+    // its hour strings from `new Date().getHours()` and rely on the calibrator
+    // reading the server clock — which was the bug (fixed 2026-09-18: the local
+    // hour of the scored slot is now an input). It also produced "24:00"/"25:00"
+    // late in the day. Local hour and forecast hours now agree by construction.
     const deterioratingForecast = {
       forecast: {
         forecastday: [{
           hourly: [
-            { time: `${new Date().toISOString().split('T')[0]} ${String(new Date().getHours()).padStart(2,'0')}:00`, windKPH: 5, tempC: 20 },
-            { time: `${new Date().toISOString().split('T')[0]} ${String(new Date().getHours() + 1).padStart(2,'0')}:00`, windKPH: 8, tempC: 20 },
-            { time: `${new Date().toISOString().split('T')[0]} ${String(new Date().getHours() + 2).padStart(2,'0')}:00`, windKPH: 14, tempC: 20 }
+            { time: '2026-09-18 10:00', windKPH: 5,  tempC: 20 },
+            { time: '2026-09-18 11:00', windKPH: 8,  tempC: 20 },
+            { time: '2026-09-18 12:00', windKPH: 14, tempC: 20 }
           ]
         }]
       }
     };
 
-    const result = calibrateModelPrediction(3.5, baseConditions, deterioratingForecast, baseLoc);
+    const localLoc = { ...baseLoc, localHour: 10, localMonth: 9 };
+    const result = calibrateModelPrediction(3.5, baseConditions, deterioratingForecast, localLoc);
     const forecastAdj = result.adjustments.find(a => a.type === 'forecast_trend');
     expect(forecastAdj).toBeDefined();
     expect(forecastAdj.adjustment).toBeLessThan(0);
+  });
+
+  test('without a location-local clock the time-dependent rules stand down', () => {
+    // The stand-down contract, asserted from the public entry point: no month
+    // and no hour means no seasonal and no forecast-trend adjustment — not a
+    // guess made from the server's UTC clock.
+    const forecast = {
+      forecast: {
+        forecastday: [{
+          hourly: [
+            { time: '2026-09-18 10:00', windKPH: 5,  tempC: 20 },
+            { time: '2026-09-18 11:00', windKPH: 8,  tempC: 20 },
+            { time: '2026-09-18 12:00', windKPH: 14, tempC: 20 }
+          ]
+        }]
+      }
+    };
+    const result = calibrateModelPrediction(3.5, baseConditions, forecast, baseLoc);
+    expect(result.adjustments.some(a => a.type === 'forecast_trend')).toBe(false);
+    expect(result.adjustments.some(a => a.type === 'seasonal')).toBe(false);
+    expect(result.localClock).toEqual({ localHour: null, localMonth: null });
   });
 
   test('high wind (≥20mph) in analyzeWindPatterns produces a negative or zero adjustment', () => {
@@ -235,15 +261,15 @@ describe('paddleScoreCache', () => {
   });
 
   test('setMany() calls batch.commit', async () => {
-    const batchSpy = admin._mocks.firestore.batch();
     const cache = new PaddleScoreCache();
     const entries = [
       { spotId: 'spot1', scoreData: { rating: 4.0 } },
       { spotId: 'spot2', scoreData: { rating: 3.0 } }
     ];
     await cache.setMany(entries);
-    // batch().commit should have been called
-    expect(batchSpy.commit).toHaveBeenCalled();
+    // Batches are independent per db.batch() call (AUDIT #20), so read the
+    // batch setMany actually used rather than pre-seeding a shared one.
+    expect(admin._mocks.lastBatch().commit).toHaveBeenCalled();
   });
 });
 

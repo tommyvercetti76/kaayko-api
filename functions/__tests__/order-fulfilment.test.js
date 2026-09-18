@@ -46,7 +46,31 @@ jest.mock('./order-fulfilment.state', () => ({ value: null, calls: 0 }), { virtu
 const stripeState = require('./order-fulfilment.state');
 
 const PI_ID = 'pi_fulfil_1';
-const ORIGINAL_ENV = { ...process.env };
+
+// ─── Environment hygiene ───────────────────────────────────────
+// This file used to end with `process.env = { ...ORIGINAL_ENV }`. Node treats
+// that as a REPLACEMENT of the magic env object, not a restore: every variable
+// set after the snapshot is dropped, and the replacement is a plain object that
+// no longer coerces assigned values to strings. Jest gives each test FILE its own
+// module registry and its own `globalThis`, but every file in a worker shares one
+// real `process`, so that single line reached across suite boundaries. Restore
+// only the keys this file actually writes, and never reassign process.env.
+const OWNED_ENV_KEYS = ['ORDER_NOTIFY_EMAIL', 'STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET'];
+const ORIGINAL_ENV = Object.fromEntries(OWNED_ENV_KEYS.map(k => [k, process.env[k]]));
+
+function restoreOwnedEnv() {
+  for (const key of OWNED_ENV_KEYS) {
+    if (ORIGINAL_ENV[key] === undefined) delete process.env[key];
+    else process.env[key] = ORIGINAL_ENV[key];
+  }
+}
+
+/** What `mockSetup`'s afterEach does — called in beforeEach too, so no test in
+ *  this file inherits Firestore-mock state (or a staged-but-uncommitted batch)
+ *  from whatever ran before it. */
+function resetMockState() {
+  admin._mocks.resetAll();
+}
 
 function buildWebhookApp() {
   const app = express();
@@ -128,6 +152,7 @@ function mailDocs() {
 }
 
 beforeEach(() => {
+  resetMockState();
   stripeState.value = null;
   stripeState.calls = 0;
   delete process.env.ORDER_NOTIFY_EMAIL;
@@ -135,8 +160,52 @@ beforeEach(() => {
   process.env.STRIPE_WEBHOOK_SECRET = 'whsec_test_fake';
 });
 
-afterAll(() => {
-  process.env = { ...ORIGINAL_ENV };
+afterEach(restoreOwnedEnv);
+afterAll(restoreOwnedEnv);
+
+// ────────────────────────────────────────────────────────────────
+// Guards for the intermittent failure recorded as AUDIT finding #20: this file
+// passed 18/18 in isolation but failed once in a full 62-suite run, on the
+// `shippingAddress` assertion in "a genuinely address-less order is flagged".
+// Both mechanisms below produce exactly that symptom — a shipping address from
+// an earlier order appearing on an order that has none.
+describe('Suite isolation', () => {
+  test('staged-but-uncommitted batch writes cannot replay into a later commit', async () => {
+    const db = admin.firestore();
+
+    // __mocks__/firebase-admin.js hands every caller of db.batch() the SAME
+    // object until something commits it, so a handler that stages writes and
+    // then throws leaves its ops queued on the batch the next caller receives.
+    const abandoned = db.batch();
+    abandoned.set(db.collection('orders').doc('poison'), {
+      shippingAddress: { city: 'McKinney', line1: '5205 Tuskegee Trail' }
+    });
+
+    resetMockState();   // exactly what beforeEach does
+
+    const fresh = db.batch();
+    fresh.set(db.collection('orders').doc('clean'), { ok: true });
+    await fresh.commit();
+
+    expect(admin._mocks.docData['orders/poison']).toBeUndefined();
+    expect(admin._mocks.docData['orders/clean']).toEqual({ ok: true });
+  });
+
+  test('the suite hands back every env key it owns, without replacing process.env', () => {
+    const envObject = process.env;
+
+    process.env.ORDER_NOTIFY_EMAIL = 'leak@example.com';
+    process.env.STRIPE_SECRET_KEY = 'sk_live_LEAKED';
+    process.env.STRIPE_WEBHOOK_SECRET = 'whsec_LEAKED';
+    restoreOwnedEnv();
+
+    expect(process.env).toBe(envObject);   // never reassigned — see OWNED_ENV_KEYS
+    for (const key of OWNED_ENV_KEYS) {
+      expect(process.env[key]).toBe(ORIGINAL_ENV[key]);
+    }
+    // A key set by __tests__/setup.js and owned by nobody here must be untouched.
+    expect(process.env.GCLOUD_PROJECT).toBe('kaayko-test');
+  });
 });
 
 // ────────────────────────────────────────────────────────────────

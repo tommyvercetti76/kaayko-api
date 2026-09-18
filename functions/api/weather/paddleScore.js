@@ -207,10 +207,22 @@ router.get('/', createInputMiddleware('paddleScore'), async (req, res) => {
         baseRatingPrecise: adjusted.baseRatingPrecise,
         craft: adjusted.craft,
         craftAdjustment: adjusted.craftAdjustment,
+        // 'measured' | 'estimated' | 'unvalidated'. ONE vocabulary across every
+        // producer (local model, remote ml-model, heuristic fallback), normalized
+        // in scoringPipeline.normalizeConfidence — see AUDIT-2026-09-18 #19.
+        // confidenceBasis keeps the producer, the raw value it declared and the
+        // uncertainty block, so a measured error bar is never confused with an
+        // asserted one.
         confidence: score.confidence,
+        confidenceBasis: score.confidenceBasis ?? null,
+        uncertainty: score.uncertainty ?? null,
         mlModelUsed: score.mlModelUsed,
         predictionSource: score.predictionSource,
         modelType: score.modelType,
+        // Surfaced so a client, a dashboard or an alert can tell that this
+        // number did not come from the model. See mlService.js.
+        degraded: score.degraded === true,
+        degradedReason: score.degradedReason ?? null,
         riskClass: score.riskClass,
         explanations: score.explanations,
         originalMLRating: score.originalMLRating,
@@ -218,6 +230,11 @@ router.get('/', createInputMiddleware('paddleScore'), async (req, res) => {
         adjustments: score.adjustments,
         penaltiesApplied: score.penaltiesApplied,
         penaltyDetails: score.penaltyDetails,
+        // The hero reported the individual penalties but not their sum, while the
+        // forecast path reported neither (#9). Both surfaces now publish the same
+        // four fields, so a client can reconcile originalMLRating -> rating on
+        // either one without re-adding the details itself.
+        totalPenalty: score.totalPenalty ?? 0,
         dynamicOffset: score.dynamicOffset,
         algorithmVersion: score.algorithmVersion,
         night: score.night || null,        // daylight-only gate (see methodology)
@@ -732,7 +749,10 @@ router.post('/batch', async (req, res) => {
         rating: score ? score.rating : null,
         ratingPrecise: score ? (score.ratingPrecise ?? score.rating) : null,
         interpretation: score ? score.interpretation : null,
+        // Same closed vocabulary as the single-spot response (#19) — a batch
+        // caller must not have to handle a different type from the same field.
         confidence: score ? score.confidence : null,
+        confidenceBasis: score ? (score.confidenceBasis ?? null) : null,
         algorithmVersion: score ? (score.algorithmVersion ?? null) : null
       };
     });

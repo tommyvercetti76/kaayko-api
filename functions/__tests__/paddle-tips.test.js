@@ -24,8 +24,13 @@ describe('preparation tips', () => {
     expect(hot.values.waterLiters).toBe(1.5);
   });
 
-  test('low river flow → FLOW_LOW; high → FLOW_HIGH', () => {
-    expect(getPreparationTips({ conditions: warm, hydrology: { pctOfNormalBand: 'low' } }).map(t => t.code)).toContain('FLOW_LOW');
-    expect(getPreparationTips({ conditions: warm, hydrology: { pctOfNormalBand: 'high' } }).map(t => t.code)).toContain('FLOW_HIGH');
+  // Updated 18 Sep 2026 (audit finding #16): a flow tip now requires a LIVE
+  // reading. A band with no observation time is undated and fires nothing;
+  // the fresh-vs-stale contract is covered in api/weather/__tests__/flowTips.test.js.
+  test('low river flow → FLOW_LOW; high → FLOW_HIGH (fresh readings only)', () => {
+    const fresh = () => ({ discharge: { cms: 1, observedAt: new Date().toISOString() }, stale: false });
+    expect(getPreparationTips({ conditions: warm, hydrology: { ...fresh(), pctOfNormalBand: 'low' } }).map(t => t.code)).toContain('FLOW_LOW');
+    expect(getPreparationTips({ conditions: warm, hydrology: { ...fresh(), pctOfNormalBand: 'high' } }).map(t => t.code)).toContain('FLOW_HIGH');
+    expect(getPreparationTips({ conditions: warm, hydrology: { pctOfNormalBand: 'high' } }).map(t => t.code)).not.toContain('FLOW_HIGH');
   });
 });

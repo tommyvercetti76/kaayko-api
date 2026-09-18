@@ -204,9 +204,33 @@ function standardizeForMLModel(rawData, marineData = null, marineHourOverride = 
                 (standardWindMph > DEFAULTS.WIND_WAVE_THRESHOLD_MPH ? 
                  standardWindMph * DEFAULTS.WIND_WAVE_FACTOR_MPH : 
                  DEFAULTS.WAVE_HEIGHT_M),
-    waterTemp: marineHour?.water_temp_c || 
+    // `||` treats a MEASURED 0.0 C — ice water, the most dangerous reading there is
+    // for cold shock — as falsy and replaces it with the air-derived estimate.
+    // Explicit nullish check: only ABSENT data falls back.
+    waterTemp: marineHour?.water_temp_c ??
                Math.max(DEFAULTS.MIN_WATER_TEMP_C, standardTemp + DEFAULTS.WATER_TEMP_OFFSET_C),
     
+    // feels-like air temperature. WeatherAPI supplies feelslike_c on both the
+    // current and hourly payloads; it was simply never plumbed into the ML
+    // features. The V2 model ranks it as its MOST important feature
+    // (permutation importance +0.657, ahead of wind_mph at +0.448), which is
+    // physically reasonable: a paddler experiences heat/wind-chill load, not a
+    // dry-bulb reading. Deliberately NOT defaulted to `temperature` — a silent
+    // substitution here would be indistinguishable from a real measurement, and
+    // localModel.js correctly refuses to score when a feature is absent.
+    feelsLike: rawData.feelsLike,
+
+    // Derived, always computable when wind and gust are present. This was absent
+    // from every row of the 187-label corpus and silently trained as 0.0; once
+    // actually computed it has 80 distinct values and ranks 3rd by importance.
+    gustDelta: Math.max(0, standardGustMph - standardWindMph),
+
+    // Whether real marine data backed this hour, as a modelling signal. Inland
+    // water has none (WeatherAPI fabricates marine records for landlocked
+    // points), so this is how the model tells a measured sea state from a
+    // derived one.
+    marineAvailable: !!marineHour,
+
     // Location
     latitude: latitude ?? 0,
     longitude: longitude ?? 0

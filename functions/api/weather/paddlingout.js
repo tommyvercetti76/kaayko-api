@@ -1812,7 +1812,12 @@ router.get('/:id', async (req, res) => {
     // Live hydrology for gauged river spots (cache-first, 30-min TTL)
     const [imgSrc, hydrologyNow] = await Promise.all([
       fetchSpotImages(id),
-      data.hydrology ? getHydrology(data.hydrology).catch(() => null) : Promise.resolve(null)
+      // Audit #17: normals month must come from the SPOT's clock, not Greenwich.
+      // Longitude gives mean solar time (worst-case ~3 h of error against the
+      // civil zone) instead of up to 14 h from UTC at a month boundary.
+      data.hydrology
+        ? getHydrology(data.hydrology, { longitude: data.location?.longitude }).catch(() => null)
+        : Promise.resolve(null)
     ]);
     spot.imgSrc      = imgSrc;
     spot.hydrologyNow = hydrologyNow;

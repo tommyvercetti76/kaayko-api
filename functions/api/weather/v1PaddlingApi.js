@@ -152,7 +152,10 @@ router.get('/spots/:id', requireApiKey(SCOPE), async (req, res) => {
 
     const data = docSnap.data();
     const score = applyCraftAdjustment(cachedScore || null, req.query.craft);
-    const hydrology = data.hydrology ? await getHydrology(data.hydrology).catch(() => null) : null;
+    // Audit #17: spot-local normals month (see paddlingout.js detail route).
+    const hydrology = data.hydrology
+      ? await getHydrology(data.hydrology, { longitude: data.location?.longitude }).catch(() => null)
+      : null;
 
     const body = spotDto(id, data, score);
     body.tips = score ? getPreparationTips({

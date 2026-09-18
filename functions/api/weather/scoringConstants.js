@@ -7,7 +7,21 @@
 // Version history lives in functions/docs/ALGORITHM_CHANGELOG.md; bump
 // ALGORITHM_VERSION whenever scoring semantics change.
 
-const ALGORITHM_VERSION = '2.0.0';
+// NOTE (2026-09-18): this constant read '2.0.0' while ALGORITHM_CHANGELOG.md
+// had already documented v2.1 through v2.4 — the two had silently drifted, so
+// every response has been reporting a version that does not match the algorithm
+// it describes. Realigned to the changelog, which is the stated source of truth.
+//
+// 2.5.0 (2026-09-18, DEPLOYED): calibration reads the LOCATION-LOCAL clock of
+// the scored hour instead of the server's UTC clock; the estimated water-
+// temperature bonus is removed.
+//
+// 2.6.0 (2026-09-18): the model is evaluated IN PROCESS from a JSON artifact
+// (13 of 17 spots were silently falling back to a rule heuristic on Cloud Run
+// cold starts); missing weather inputs no longer read as good weather; one
+// water-temperature policy end to end; FLOW_LOW gate; hydrology normals use the
+// spot-local month. See docs/ALGORITHM_CHANGELOG.md.
+const ALGORITHM_VERSION = '2.6.0';
 
 // Canonical 3-tier scale. Must match the client (KaaykoPrefs.paddleScoreColor)
 // and methodology.html. Labels derive from the PRECISE rating, not the 0.5 snap.

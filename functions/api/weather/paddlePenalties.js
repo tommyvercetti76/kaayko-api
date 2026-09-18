@@ -393,8 +393,61 @@ function applyEnhancedPenalties(prediction, features, marineData = null, hydrolo
   if (ENABLE_FLOW_GATE && hydrologyContext && !hydrologyContext.stale) {
     if (hydrologyContext.pctOfNormalBand === 'high') {
       addPenalty(details, 1.0, "FLOW_HIGH",
-        `River well above normal (${hydrologyContext.pctOfNormal ?? '>90'}th percentile for this month)`);
+        `River well above normal (${hydrologyContext.pctOfNormal ?? '>90'}th percentile for this month)`,
+        { pctOfNormal: hydrologyContext.pctOfNormal ?? null, band: 'high', gaugeId: hydrologyContext.gaugeId ?? null });
+    } else if (hydrologyContext.pctOfNormalBand === 'low') {
+      // ---- FLOW_LOW: unrunnably shallow water ----------------------------
+      //
+      // Why the PERCENTILE and not an absolute cms threshold:
+      //   "Low" is a property of a reach, not of a number. 20 m³/s is a drought
+      //   on the Colorado and a flood on a creek. hydrologyService already
+      //   normalizes against this spot's own monthlyNormals, so the band is the
+      //   only cross-river-comparable signal we actually have. An absolute
+      //   threshold would be a plausible number we have not earned.
+      //
+      // Why only the 'low' band, and not 'below':
+      //   bandFor() calls 'low' when the current discharge sits under this
+      //   month's p10 — below the tenth percentile of what this river normally
+      //   does at this time of year. 'below' (p10..p25) is ordinary late-summer
+      //   variation; plenty of runnable rivers live there for months. Penalizing
+      //   it would be manufacturing a warning out of normal seasonal behaviour.
+      //   Note also that pctOfNormal() CLAMPS to [10, 90], so the numeric
+      //   percentile cannot distinguish the 10th from the 1st percentile — the
+      //   band is the honest signal, the number is only for display.
+      //
+      // Why gageHeight is NOT used here, although hydrologyContext carries it:
+      //   Stage (USGS 00065) is a height above an arbitrary per-gauge datum. It
+      //   is only meaningful against that gauge's rating curve or a published
+      //   minimum-runnable stage for the reach, and we hold neither. 1.2 m is
+      //   bony on one river and comfortable on the next, so any threshold we
+      //   picked would be invented. The discharge percentile already carries the
+      //   per-river normalization that stage lacks, so stage adds nothing beyond
+      //   it. An unused-but-plausible input is exactly how the estimated
+      //   water-temperature bonus survived as long as it did — so it stays out
+      //   until a per-reach minimum-stage dictionary exists.
+      //
+      // Why 0.5 and not FLOW_HIGH's 1.0:
+      //   High water is a drowning mechanism — pushy current, strainers, a swim
+      //   you do not get to end where you choose — so it carries the same 1.0 as
+      //   WIND/WAVE/WATER_COLD majors. Low water strands you, forces portages and
+      //   grinds hulls on rock; it is an unpleasant, expensive day, not a
+      //   life-safety event. 0.5 is this file's documented minor tier
+      //   (VIS_MARGINAL, WAVE_MOD, WATER_COLD_MINOR) and is deliberately half of
+      //   FLOW_HIGH: enough to move a 5.0 off a perfect score, not enough on its
+      //   own to push an otherwise good day out of its rating band.
+      //
+      // Fail-closed: this branch is unreachable without a live, non-stale
+      // hydrologyContext AND a band, and bandFor() returns null whenever the
+      // spot has no monthlyNormals or the discharge is not finite. Missing data
+      // manufactures a warning no more than it manufactures a bonus.
+      addPenalty(details, 0.5, "FLOW_LOW",
+        `River well below normal (${hydrologyContext.pctOfNormal ?? '<10'}th percentile for this month) — expect dragging over shallows and portaging`,
+        { pctOfNormal: hydrologyContext.pctOfNormal ?? null, band: 'low', gaugeId: hydrologyContext.gaugeId ?? null });
     }
+    // The bands from hydrologyService.bandFor() are mutually exclusive, and the
+    // else-if above makes FLOW_HIGH + FLOW_LOW structurally impossible to double
+    // count even if a caller hands us a context it built by hand.
+    //
     // FLOW_FLOOD (-2.0) reserved for NWPS flood categories — inert until that
     // data source ships; never inferred from percentile alone.
   }

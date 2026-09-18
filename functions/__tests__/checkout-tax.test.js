@@ -474,6 +474,17 @@ describe('Tax route — mounted behind the checkout router', () => {
         .send({ paymentIntentId: PI_ID, address: US_ADDRESS });
       statuses.push(res.status);
     }
+    // AUDIT #20, second flake: this assertion failed once in ~25 full-suite runs
+    // and has not reproduced under instrumentation. The limiter key
+    // (rate_limit_checkout_203.0.113.77) is used by no other suite, so the
+    // leak is not the obvious shared-bucket one. Left in place so the NEXT
+    // occurrence reports the evidence instead of just a boolean. Logs only on
+    // failure; costs nothing on a green run.
+    if (!statuses.slice(0, 15).every(s => s === 200)) {
+      console.log('DIAG statuses=' + JSON.stringify(statuses));
+      console.log('DIAG doc=' + JSON.stringify(require('firebase-admin')._mocks.docData['rate_limits/rate_limit_checkout_203.0.113.77']));
+      console.log('DIAG keys=' + JSON.stringify(Object.keys(require('firebase-admin')._mocks.docData).filter(k=>k.includes('rate_limit'))));
+    }
     expect(statuses.slice(0, 15).every(s => s === 200)).toBe(true);
     expect(statuses.slice(15).every(s => s === 429)).toBe(true);
   });

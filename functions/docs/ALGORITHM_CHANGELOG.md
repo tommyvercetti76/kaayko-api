@@ -1,5 +1,214 @@
 # Paddle Score Algorithm Changelog
 
+## v2.6.0 — 2026-09-18
+
+Round 2+3 of the production audit (`AUDIT-2026-09-18.md`). Every item here either
+moves a published score or changes what the API claims about one.
+
+### 1. The model now actually runs — in-process, not over the network
+
+13 of 17 live spots were silently scored by `calculateFallbackRating`, a rule
+heuristic, because Cloud Run cold starts exceeded the 10 s ML timeout
+(`Cloud Run ML prediction failed: ML service request timed out after 10000ms`
+in production logs). The published score said nothing about it.
+
+- `localModel.js` evaluates the gradient-boosted ensemble **in process** from a
+  JSON artifact (`data/models/paddle-score-model-v1.json`,
+  `direct-hgb-mono-v2-2026-09-18`, 400 trees, 19 features, nested
+  grouped-by-lake 5-fold out-of-fold MAE **0.6026**, 95% CI [0.514, 0.696],
+  n=187). No network call, no cold start.
+- Monotonic constraints are fitted into the model: score never rises as wind or
+  precipitation rises. Verified through the JS evaluator over 0–40 mph.
+- python→JS parity checked on 12 random rows: max divergence **0.00e+0**.
+- `PADDLE_LOCAL_MODEL_PATH` is now an EXCLUSIVE override. It used to be merely
+  the first candidate, so a wrong path silently loaded a different artifact.
+
+Measured against the labelled corpus, this replaces a 0.947 MAE scorer with a
+0.619 one (Wilcoxon **p = 1.6e-08**).
+
+### 2. A fallback is now loud, and declared in the response
+
+When the model cannot be evaluated the response carries `degraded: true` and
+`degradedReason`, and a structured `ERROR` log records that the published score
+came from the unevaluated rule heuristic. One retry is attempted first. The
+flag survives cache reuse — a cached degraded score does not come back clean.
+
+### 3. Missing data no longer reads as good weather
+
+`modelCalibration.js` treated absent wind / visibility / precipitation as
+benign, so a weather outage RAISED the score. Missing severity inputs now
+suppress every positive term. This is the single change with the largest
+effect on the numbers: on the labelled corpus the expert rule's MAE moved
+1.281 → **1.045** and its dangerous-condition recall 0.337 → **0.538**.
+
+### 4. One water-temperature policy, end to end
+
+MEASURED OR NOTHING, applied consistently for the first time:
+- `waterTempPublished` is the measured marine reading or `null`. Never an
+  air-derived estimate.
+- `waterTempMeasured` is published alongside it, so a client can tell "cold"
+  from "unknown".
+- `dataStandardization.js` uses `??`, not `||` — 0.0 °C is a real reading and
+  was being discarded as falsy.
+- This closes the screenshot contradiction: the hero said "no sensor" while the
+  expanded heatmap showed a temperature. Both now read the same field.
+
+The model still receives an air-derived water temperature as an INPUT, declared
+in `FEATURE_CAVEATS`. Input estimation and published measurement are different
+claims and are now kept apart.
+
+### 5. Low-flow gate
+
+`FLOW_LOW`: 0.5 penalty when a gauged river sits below the 10th percentile for
+the spot-local month — dragging over shallows and portaging. Fail-closed:
+no gauge, stale reading or missing normals means no gate, never a free pass.
+Paired with a staleness guard on the flow TIP, which previously kept telling
+paddlers about a 3-day-old reading the penalty gate had already refused.
+
+### 6. Hydrology normals use the spot's month, not Greenwich's
+
+Same bug class as v2.5.0's clock fix. `resolveNormalsMonth()` prefers the
+spot's local wall clock, falls back to mean solar time from longitude
+(worst case ~3 h of error instead of up to 14 h), and declares which it used
+in `normalsMonthSource`. Both callers now pass the spot's longitude.
+
+### 7. `feels_like_c` is computed in production
+
+The model's most important feature was never being computed on the serving
+path at all. Added, with `gust_delta_mph` and `marine_available`.
+
+### 8. Response consistency
+
+`confidence` is consistently typed. Penalties expose structured
+`penaltyDetails` rather than pre-formatted strings for the client to parse
+back.
+
+### Known and NOT fixed in this release
+
+- The model **saturates at 2.42 from ~15 mph upward** — there is no training
+  data above that, so it cannot distinguish 15 mph from 40 mph. The wind
+  penalty gates carry that range, which is why they are not removed.
+- V2 misses two project gates: dangerous-condition recall 0.875 (target 0.90)
+  and over-optimism 0.193 (target 0.05). Shipped as a deliberate owner
+  decision, because the alternative live today is materially worse on both.
+- 55% of real lake-hours fall in feature cells with **zero** human labels, and
+  the unlabelled mass is the common warm/calm case. This is the accuracy
+  ceiling and no code change moves it.
+- The flow gate cannot fire on any current spot: none carries `hydrologyMeta`
+  with a gauge id.
+
+
+## v2.5.0 — 2026-09-18 — DEPLOYED (verified live: `algorithmVersion: 2.5.0` on all 18 spots)
+
+### Calibration read the server's clock, not the water's
+
+Three bugs in `modelCalibration.js`, all the same shape: a rule about time or
+season read `new Date()` on a Cloud Functions instance (UTC) rather than the
+local clock of the hour being scored.
+
+1. **Season came from the server's UTC month.** `isSummer` was true everywhere
+   on earth in June–August, so a southern-hemisphere lake collected a summer
+   bonus in the middle of its winter and lost it in its summer; a forecast hour
+   three days out was scored against today's month. Season is now derived from
+   the **scored hour's local month and the signed latitude**, with a single
+   hemisphere-corrected month rule set.
+   - Tropical latitudes (|lat| < 23.44°) get **no** seasonal term: between the
+     tropics the annual cycle is wet/dry, not warm/cold, and there is no wet/dry
+     climatology in this pipeline to key off.
+   - Polar latitudes (|lat| > 66.56°) likewise.
+   - The **South Asian southwest monsoon** (IMD season, June–September, over
+     5–35 °N / 65–95 °E) stands the bonus down. A large part of India sits above
+     the Tropic of Cancer, so the tropical gate alone did not cover it: Indian
+     lakes were collecting a "summer" bonus through the wettest, windiest
+     months of their year.
+
+2. **Forecast-trend hour comparison was off by the UTC offset.** The server's
+   UTC hour was compared against **location-local** forecast hour strings —
+   5.5 h out in IST. It now takes the scored hour's local hour.
+   Also fixed: the window was `slice(0, 6)` **then** filter, i.e. hours
+   00:00–05:00 of the day filtered to "at or after the current hour", so outside
+   the small hours the list emptied and the term silently never fired at all.
+   Now filters first, then takes six — "the next six hours" as documented.
+
+3. **The water-temperature bonus is gone.** `calibrateWaterTemperature()`
+   awarded up to **+0.3** from an air-derived water-temperature estimate.
+   v2.4.0 had already adopted MEASURED OR NOTHING for water temperature
+   (`waterTempC = null` when no sensor exists; every water rule stands down),
+   but this calibrator kept moving the **published** score on the strength of
+   the very estimate that had been refused. Removed, not reduced. If a
+   water-temperature term returns it must fire only on a measured reading and
+   be fitted against labels rather than hand-chosen.
+
+Also: missing coordinates defaulted to `(40, -100)` — the middle of Kansas —
+which quietly placed unknown-location scores inside the "Great Lakes" and
+"Southern US" bonus boxes. No coordinates now means no location adjustment.
+
+**Stand-down is the new default.** Every one of these rules returns a zero
+adjustment with a stated reason when it cannot read what it needs, rather than
+falling back to a plausible value. `scoreFromFeatures` gained a `localTime`
+parameter; `paddleScoreCompute` passes `weatherData.location.localTime` and
+`fastForecast` passes each hour's own `hourData.time`.
+
+### Isotonic recalibration (new: `scoreCalibration.js`)
+
+Measured 2026-09-18 against 187 human labels over 93 lakes (grouped-by-lake
+5-fold out-of-fold, seed 42), the expert rule is **biased optimistic**:
+
+| | MAE | bias | over-optimistic |
+|---|---|---|---|
+| expert rule (as published) | 1.045 | +0.869 | 0.513 |
+| rule + isotonic | 0.682 | −0.001 | 0.262 |
+
+A fitted non-decreasing map score → score, applied **between the score
+generator and the safety gate**: after the heuristic adjustments (the curve is
+fitted against the whole rule stack's output) and before the penalties (which
+are absolute safety subtractions and must not be recalibrated away).
+
+Failure policy: missing file, unparseable JSON, non-monotone table, a curve on
+a different output scale, or a prediction source the curve was not fitted on →
+**identity**, plus a machine-readable reason. Never a default curve. The
+artifact is produced in `paddle-llm` and must be copied to
+`functions/data/models/isotonic-calibrator-v1.json` as a release step.
+
+Responses now carry `calibrationVersion`, a `scoreCalibration` block
+(applied / version / reason / before / after) and `localClock`, so every
+published number is traceable to the artifact and the clock that produced it.
+
+### In-process model evaluation (new: `localModel.js`)
+
+`mlService` POSTs every spot-hour to Cloud Run with a 10 s timeout; the
+arithmetic is microseconds and the network is hundreds of milliseconds.
+`localModel.js` loads a versioned JSON tree-ensemble artifact once per function
+instance and evaluates it in pure JS. **Additive** — with no artifact on disk
+(the state today) it returns null and the existing remote path runs unchanged.
+`PADDLE_LOCAL_MODEL=off` forces remote. An artifact without an `uncertainty`
+block is refused: a safety number with no error bar is a bug. Residual models
+are refused until the composition order is decided.
+
+### Version drift
+
+`ALGORITHM_VERSION` read `2.0.0` while this changelog had already reached
+v2.4.0 — every response has been reporting a version that did not describe the
+algorithm serving it. Realigned to this file, which the constant itself names
+as the source of truth.
+
+### Expected effect on published scores
+
+Modelled over 12 000 synthetic spot-hours (8 real lakes on five continents ×
+12 months × 5 local hours × 5 temperatures × 5 wind speeds), holding the model
+prediction at 3.0 and with **no** isotonic artifact present:
+
+- mean published score **3.26 → 3.03** (mean change **−0.23**)
+- **77.4%** of spot-hours score lower, 19.5% unchanged, **3.1%** higher
+- 5th percentile −0.50, median −0.20, 95th percentile +0.00
+
+The 3.1% that rise (max +0.35) are dominated by southern-hemisphere summer —
+Lake Wakatipu in December–February — which is the fix working, not a regression.
+Shipping the isotonic artifact on top of this moves scores **further down**
+again: on the fitted curve a 3.0 maps to 1.89, a tier change from "Careful" to
+"Hard pass".
+
+
 ## v2.4.0 — 2026-09-01
 
 ### Water temperature: measured where possible, physically-modelled where not

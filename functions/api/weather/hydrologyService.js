@@ -99,12 +99,62 @@ async function getWaterTemp(meta) {
   }
 }
 
+/**
+ * Month (1-12) whose normals apply AT THE SPOT, not at Greenwich.
+ *
+ * Same bug class as the location-local clock fixed in algorithm v2.5.0: a gauge
+ * in Hawaii (UTC-10) or New Zealand (UTC+13) sits in a different calendar month
+ * from UTC for up to 14 hours around every month boundary, and the month selects
+ * the percentile normals that decide the flow band — which feeds a score penalty
+ * and a paddler-facing tip. The wrong month is a wrong band.
+ *
+ * Three sources, most trustworthy first. The chosen one is published on the
+ * payload as `normalsMonthSource` so a consumer can see what it got:
+ *   'local-time'       — the caller passed the spot's local wall clock
+ *                        (WeatherAPI "YYYY-MM-DD HH:mm"), same string
+ *                        paddleScoreCompute.js reads for its local hour. Exact.
+ *   'solar-longitude'  — mean solar time from the spot's longitude
+ *                        (offset = lon/15 h). Civil zones differ from mean solar
+ *                        time by at most ~3 h in practice (zone width + DST), so
+ *                        this cuts the worst-case month error from ~14 h of the
+ *                        year to ~3 h of it.
+ *   'utc'              — nothing positional was supplied; last resort, declared.
+ *
+ * @param {object} [opts]
+ * @param {string} [opts.localTime]  spot-local wall clock, "YYYY-MM-DD HH:mm"
+ * @param {number} [opts.longitude]  spot longitude in degrees east
+ * @param {number} [opts.now]        epoch ms override (tests)
+ * @returns {{month: number, source: string}}
+ */
+function resolveNormalsMonth(opts = {}) {
+  const nowMs = Number.isFinite(opts.now) ? opts.now : Date.now();
+
+  const lt = String(opts.localTime || '');
+  const m = lt.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) {
+    const month = Number(m[2]);
+    if (month >= 1 && month <= 12) return { month, source: 'local-time' };
+  }
+
+  // Number(null) is 0 — i.e. Greenwich. A missing longitude must stay missing
+  // rather than silently claiming the prime meridian (same null-as-zero class
+  // as the 0.0 °C water-temperature bug in dataStandardization.js).
+  const rawLon = opts.longitude;
+  const lon = (rawLon === null || rawLon === undefined || rawLon === '') ? NaN : Number(rawLon);
+  if (Number.isFinite(lon) && Math.abs(lon) <= 180) {
+    const shifted = new Date(nowMs + (lon / 15) * 3600000);
+    return { month: shifted.getUTCMonth() + 1, source: 'solar-longitude' };
+  }
+
+  return { month: new Date(nowMs).getUTCMonth() + 1, source: 'utc' };
+}
+
 function bandFor(cms, normalsForMonth) {
   if (!normalsForMonth || !Number.isFinite(cms)) return null;
   const { p10, p25, p75, p90 } = normalsForMonth;
   if (cms > p90) return 'high';
   if (cms > p75) return 'above';
-  if (cms < p10) return 'low';
+  if (cms < p10) return 'low';   // drives FLOW_LOW in paddlePenalties.js
   if (cms < p25) return 'below';
   return 'normal';
 }
@@ -125,16 +175,48 @@ function pctOfNormal(cms, n) {
 }
 
 /**
+ * Percentile context + staleness, derived from a payload's own discharge and
+ * observation time. Kept separate from the fetch so a CACHED payload can be
+ * re-contextualised in-process: the cache is keyed by gauge only, so a payload
+ * stored under one month (or by a caller that supplied no position) must not
+ * hand the next caller that month's band. No network call, no extra USGS quota.
+ */
+function withNormals(payload, hydrologyMeta, monthInfo, nowMs = Date.now()) {
+  const cms = Number(payload?.discharge?.cms);
+  const normals = hydrologyMeta?.monthlyNormals?.[String(monthInfo.month)]
+    || hydrologyMeta?.monthlyNormals?.[monthInfo.month]
+    || null;
+  const observedAt = payload?.discharge?.observedAt;
+  const ageHours = observedAt ? (nowMs - Date.parse(observedAt)) / 3600000 : NaN;
+  return {
+    ...payload,
+    pctOfNormal: pctOfNormal(cms, normals),
+    pctOfNormalBand: bandFor(cms, normals),
+    normalsMonth: monthInfo.month,
+    normalsMonthSource: monthInfo.source,
+    // Unknown age is stale: a reading we cannot date is not a live reading.
+    stale: !Number.isFinite(ageHours) || ageHours > STALE_HOURS
+  };
+}
+
+/**
  * Live hydrology for one gauge. Cache-first; { unavailable: true } is cached too.
  * @param {object} hydrologyMeta - the spot doc's hydrology block ({gaugeId, monthlyNormals, ...})
+ * @param {object} [opts] - spot position for the normals month; see resolveNormalsMonth
+ * @param {string} [opts.localTime] spot-local wall clock "YYYY-MM-DD HH:mm"
+ * @param {number} [opts.longitude] spot longitude, degrees east
+ * @param {number} [opts.now] epoch ms override (tests)
  */
-async function getHydrology(hydrologyMeta) {
+async function getHydrology(hydrologyMeta, opts = {}) {
   const gaugeId = hydrologyMeta?.gaugeId;
   if (!gaugeId || hydrologyMeta.active === false) return null;
 
+  const nowMs = Number.isFinite(opts.now) ? opts.now : Date.now();
+  const monthInfo = resolveNormalsMonth({ ...opts, now: nowMs });
+
   const cache = new HydrologyCache();
   const cached = await cache.get(gaugeId);
-  if (cached) return cached.unavailable ? null : cached;
+  if (cached) return cached.unavailable ? null : withNormals(cached, hydrologyMeta, monthInfo, nowMs);
 
   let payload;
   try {
@@ -149,23 +231,26 @@ async function getHydrology(hydrologyMeta) {
     }
 
     const cms = discharge.value * CFS_TO_CMS;
-    const month = new Date().getUTCMonth() + 1;
-    const normalsForMonth = hydrologyMeta.monthlyNormals?.[String(month)] || hydrologyMeta.monthlyNormals?.[month] || null;
-    const ageHours = (Date.now() - Date.parse(discharge.time)) / 3600000;
 
     payload = {
       gaugeId,
       gaugeName: hydrologyMeta.gaugeName || gaugeId,
       distanceKm: hydrologyMeta.distanceKm ?? null,
       discharge: { cms: Math.round(cms * 100) / 100, observedAt: discharge.time },
+      // DISPLAY ONLY — deliberately not a scoring input. Stage is a height above
+      // an arbitrary per-gauge datum and is meaningless without that gauge's rating
+      // curve or a published minimum-runnable stage for the reach, neither of which
+      // we hold. The FLOW_LOW / FLOW_HIGH gates in paddlePenalties.js key off the
+      // discharge percentile instead, which is normalized per river. Do not wire
+      // gageHeight into a penalty until per-reach minimum stages exist.
       gageHeight: stage ? { m: Math.round(stage.value * FT_TO_M * 100) / 100, observedAt: stage.time } : null,
-      pctOfNormal: pctOfNormal(cms, normalsForMonth),
-      pctOfNormalBand: bandFor(cms, normalsForMonth),
-      stale: ageHours > STALE_HOURS,
       source: 'USGS Water Data API',
       gaugeUrl: `https://waterdata.usgs.gov/monitoring-location/${gaugeId.replace(/^USGS-/, '')}`,
-      fetchedAt: new Date().toISOString()
+      fetchedAt: new Date(nowMs).toISOString()
     };
+    // pctOfNormal / pctOfNormalBand / stale are assigned by withNormals, from
+    // the spot-local month — never from the server's UTC month.
+    payload = withNormals(payload, hydrologyMeta, monthInfo, nowMs);
   } catch (err) {
     console.warn(`getHydrology ${gaugeId}: ${err.message}`);
     await cache.set(gaugeId, { unavailable: true });
@@ -176,4 +261,4 @@ async function getHydrology(hydrologyMeta) {
   return payload;
 }
 
-module.exports = { getHydrology, getWaterTemp, HydrologyCache };
+module.exports = { getHydrology, getWaterTemp, HydrologyCache, resolveNormalsMonth, STALE_HOURS };

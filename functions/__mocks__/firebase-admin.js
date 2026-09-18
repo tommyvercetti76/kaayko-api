@@ -18,7 +18,9 @@ const mockState = globalThis.__KAAYKO_FIREBASE_ADMIN_MOCK_STATE__ ||
   (globalThis.__KAAYKO_FIREBASE_ADMIN_MOCK_STATE__ = {
     docData: {},
     collectionData: {},
-    activeBatch: null
+    // AUDIT #20: every db.batch() call returns its OWN batch, as the real
+    // Firestore client does. `lastBatch` is only a handle for assertions.
+    lastBatch: null
   });
 
 const mockDocData = mockState.docData;     // docPath → data
@@ -124,7 +126,6 @@ function createMockBatch() {
     commit: jest.fn(async () => {
       for (const op of ops) await op();
       ops.length = 0;
-      mockState.activeBatch = null;
     })
   };
   return batch;
@@ -142,11 +143,17 @@ const mockFirestore = {
     };
     return fn(tx);
   }),
+  // AUDIT #20 (the kortex full-suite flake): this used to cache ONE batch on
+  // mockState and hand it to every caller until something committed it. Real
+  // WriteBatches are independent, so two open batches — a handler staging
+  // writes while a helper batches its own, or a chunked loop like
+  // kortex/guestRouter.js:399 — shared one op queue: whoever committed first
+  // flushed the other's writes, and a handler that threw before committing
+  // left its ops queued on the batch the NEXT test received. Fresh every call.
   batch: jest.fn(() => {
-    if (!mockState.activeBatch) {
-      mockState.activeBatch = createMockBatch();
-    }
-    return mockState.activeBatch;
+    const b = createMockBatch();
+    mockState.lastBatch = b;
+    return b;
   })
 };
 
@@ -244,10 +251,14 @@ module.exports._mocks = {
     Object.keys(mockDocData).forEach(k => delete mockDocData[k]);
     Object.keys(mockCollectionData).forEach(k => delete mockCollectionData[k]);
     if (mockState.storageFiles) Object.keys(mockState.storageFiles).forEach(k => delete mockState.storageFiles[k]);
-    mockState.activeBatch = null;
+    mockState.lastBatch = null;
   },
   storageFiles() {
     if (!mockState.storageFiles) mockState.storageFiles = {};
     return mockState.storageFiles;
-  }
+  },
+  // The most recent batch handed out by db.batch(). Batches are independent
+  // (AUDIT #20), so a test that wants to assert on one must run the code
+  // first and read this afterwards — not grab a batch up front.
+  lastBatch() { return mockState.lastBatch; }
 };
