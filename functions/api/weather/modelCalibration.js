@@ -98,9 +98,39 @@ function calibrateModelPrediction(baseRating, currentConditions, forecastData, l
   let adjustedRating = baseRating;
   const adjustments = [];
 
+  // ── NO UNVALIDATED OPTIMISM (2026-09-19) ────────────────────────────────
+  // Measured, out-of-fold, on the 187-row human corpus: this layer's positive
+  // adjustments make the published score WORSE on every axis we track.
+  //
+  //   V2 out-of-fold           MAE 0.6267  recall 0.846  over-optimism 0.241
+  //   + calibration            MAE 0.6496  recall 0.798  over-optimism 0.316
+  //   + calibration + gates    MAE 0.5802  recall 0.933  over-optimism 0.075
+  //   + gates, NO positives    MAE 0.6043  recall 0.962  over-optimism 0.043
+  //
+  // Across the corpus the layer handed out +31.68 of optimism against -3.75 of
+  // caution -- 8.4 to 1 -- from three terms (seasonal +12.85 over 77 rows,
+  // wind_pattern +10.00 over 90, location +6.45 over 32). Not one of them was
+  // ever fitted against a label; they are hand-chosen bonuses. The penalty
+  // gates downstream then spend their effort clawing that optimism back.
+  //
+  // Suppressing them costs 0.024 MAE and buys BOTH project safety gates:
+  // dangerous recall 0.933 -> 0.962 (needs 0.90) and over-optimism
+  // 0.075 -> 0.043 (needs 0.05). This is the first configuration that passes
+  // both. For a product whose failure mode is telling somebody a bad day is a
+  // good one, that is the right side of the trade.
+  //
+  // NEGATIVE adjustments are untouched: an unvalidated reason to be MORE
+  // cautious costs a paddler an outing, not a rescue.
+  //
+  // A positive term may return -- when it is fitted against labels and shown
+  // to improve the published score, not the intermediate one. `sweep` in
+  // experiments/results/009_calibration_layer.json has the frontier.
+  const ALLOW_POSITIVE_CALIBRATION = process.env.PADDLE_ALLOW_POSITIVE_CALIBRATION === 'true';
+
   // Helper: apply adjustment, but skip positive ones when conditions are severe
   const applyAdj = (adj) => {
     if (!adj || adj.adjustment === 0) return;
+    if (adj.adjustment > 0 && !ALLOW_POSITIVE_CALIBRATION) return;
     if (suppressPositive && adj.adjustment > 0) return; // never boost in rain/storm
     adjustedRating += adj.adjustment;
     adjustments.push(adj);

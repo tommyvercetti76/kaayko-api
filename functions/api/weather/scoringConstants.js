@@ -16,12 +16,18 @@
 // the scored hour instead of the server's UTC clock; the estimated water-
 // temperature bonus is removed.
 //
+// 2.7.0 (2026-09-19): the calibration layer's POSITIVE adjustments are
+// suppressed. Measured out-of-fold on 187 human labels they handed out +31.68
+// of optimism against -3.75 of caution and cost the published score on every
+// axis; removing them is the first configuration to pass both project safety
+// gates (dangerous recall 0.962, over-optimism 0.043).
+//
 // 2.6.0 (2026-09-18): the model is evaluated IN PROCESS from a JSON artifact
 // (13 of 17 spots were silently falling back to a rule heuristic on Cloud Run
 // cold starts); missing weather inputs no longer read as good weather; one
 // water-temperature policy end to end; FLOW_LOW gate; hydrology normals use the
 // spot-local month. See docs/ALGORITHM_CHANGELOG.md.
-const ALGORITHM_VERSION = '2.6.0';
+const ALGORITHM_VERSION = '2.7.0';
 
 // Canonical 3-tier scale. Must match the client (KaaykoPrefs.paddleScoreColor)
 // and methodology.html. Labels derive from the PRECISE rating, not the 0.5 snap.

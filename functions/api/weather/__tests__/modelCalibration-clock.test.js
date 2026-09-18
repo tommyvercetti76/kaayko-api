@@ -257,16 +257,42 @@ describe('calibrateModelPrediction — no estimate-driven water temperature bonu
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('calibrateModelPrediction — clock plumbed end to end', () => {
+  // The seasonal term is a POSITIVE adjustment, and production no longer ships
+  // positive adjustments (see noUnvalidatedOptimism.test.js: measured
+  // out-of-fold they cost the published score on every axis). These two tests
+  // are about the HEMISPHERE LOGIC being right, not about the bonus shipping,
+  // so they enable the term explicitly. The default-off behaviour is asserted
+  // in the test below them.
+  const withPositive = (fn) => {
+    const old = process.env.PADDLE_ALLOW_POSITIVE_CALIBRATION;
+    process.env.PADDLE_ALLOW_POSITIVE_CALIBRATION = 'true';
+    try { fn(); } finally {
+      if (old === undefined) delete process.env.PADDLE_ALLOW_POSITIVE_CALIBRATION;
+      else process.env.PADDLE_ALLOW_POSITIVE_CALIBRATION = old;
+    }
+  };
+
   test('the same conditions score differently in the two hemispheres in July', () => {
-    const north = calibrateModelPrediction(3.0, MILD, null, { ...LAKE_TAHOE, localHour: 13, localMonth: 7 });
-    const south = calibrateModelPrediction(3.0, MILD, null, { ...LAKE_WAKATIPU, localHour: 13, localMonth: 7 });
-    expect(north.calibratedRatingPrecise).toBeGreaterThan(south.calibratedRatingPrecise);
+    withPositive(() => {
+      const north = calibrateModelPrediction(3.0, MILD, null, { ...LAKE_TAHOE, localHour: 13, localMonth: 7 });
+      const south = calibrateModelPrediction(3.0, MILD, null, { ...LAKE_WAKATIPU, localHour: 13, localMonth: 7 });
+      expect(north.calibratedRatingPrecise).toBeGreaterThan(south.calibratedRatingPrecise);
+    });
   });
 
   test('the same southern lake scores higher in its own summer', () => {
-    const jan = calibrateModelPrediction(3.0, MILD, null, { ...LAKE_WAKATIPU, localHour: 13, localMonth: 1 });
-    const jul = calibrateModelPrediction(3.0, MILD, null, { ...LAKE_WAKATIPU, localHour: 13, localMonth: 7 });
-    expect(jan.calibratedRatingPrecise).toBeGreaterThan(jul.calibratedRatingPrecise);
+    withPositive(() => {
+      const jan = calibrateModelPrediction(3.0, MILD, null, { ...LAKE_WAKATIPU, localHour: 13, localMonth: 1 });
+      const jul = calibrateModelPrediction(3.0, MILD, null, { ...LAKE_WAKATIPU, localHour: 13, localMonth: 7 });
+      expect(jan.calibratedRatingPrecise).toBeGreaterThan(jul.calibratedRatingPrecise);
+    });
+  });
+
+  test('BY DEFAULT neither hemisphere is boosted at all — the season decides nothing a paddler sees', () => {
+    const north = calibrateModelPrediction(3.0, MILD, null, { ...LAKE_TAHOE, localHour: 13, localMonth: 7 });
+    const south = calibrateModelPrediction(3.0, MILD, null, { ...LAKE_WAKATIPU, localHour: 13, localMonth: 7 });
+    expect(north.calibratedRatingPrecise).toBeLessThanOrEqual(3.0);
+    expect(south.calibratedRatingPrecise).toBeLessThanOrEqual(3.0);
   });
 
   test('with no clock supplied, every time-dependent rule stands down', () => {

@@ -1,5 +1,66 @@
 # Paddle Score Algorithm Changelog
 
+## v2.7.0 — 2026-09-19
+
+### The calibration layer was making the published score worse. Measured.
+
+Every offline experiment scored the MODEL. Users receive
+`penalties(calibrate(model))`. Nobody had ever measured the published number —
+so audit finding #15 ("V2 fails the recall gate at 0.875") was a statement about
+an intermediate value no surface ever shows.
+
+Measured out-of-fold on the 187-row human corpus, grouped-by-lake 5-fold
+(`paddle-llm/experiments/009_calibration_layer.js`; both layers are
+hand-written and fit nothing, so running them on out-of-fold input leaks
+nothing):
+
+| pipeline | MAE | bias | dangerous recall | over-optimism |
+|---|---|---|---|---|
+| V2 out-of-fold | 0.6267 | +0.043 | 0.846 | 0.241 |
+| + calibration | 0.6203 | +0.193 | 0.865 | 0.203 |
+| **+ calibration + penalty gates (what was live)** | **0.5802** | −0.286 | 0.933 | 0.075 |
+| **+ penalty gates, NO positive calibration** | 0.6043 | −0.412 | **0.962** | **0.043** |
+
+Across the corpus the layer handed out **+31.68 of optimism against −3.75 of
+caution — 8.5 to 1** — from three terms, none of which was ever fitted against
+a label:
+
+| term | rows | total |
+|---|---|---|
+| seasonal | 77 | +12.85 |
+| wind_pattern | 90 | +10.00 |
+| location | 32 | +6.45 |
+
+The penalty gates downstream then spend their effort clawing that optimism back.
+
+**Positive calibration adjustments are now suppressed.** Cost: 0.024 MAE. Bought:
+dangerous recall 0.933 → **0.962** (gate needs 0.90) and over-optimism
+0.075 → **0.043** (gate needs 0.05). This is the first configuration in the
+project's history to pass BOTH safety gates. For a product whose failure mode is
+telling somebody a bad day is a good one, that is the right side of the trade.
+
+Negative adjustments are untouched. An unvalidated reason to be more cautious
+costs a paddler an outing; an unvalidated reason to be optimistic can cost more.
+
+The terms are not deleted — the hemisphere-correct seasonal logic from v2.5.0 is
+still there and still tested. `PADDLE_ALLOW_POSITIVE_CALIBRATION=true` restores
+the old behaviour in one environment variable, and the full accuracy/safety
+frontier (positive-scale 0.0 → 1.0) is in
+`experiments/results/009_calibration_layer.json`. A positive term may return when
+it is fitted against labels and shown to improve the PUBLISHED score.
+
+### Corrections to the audit ledger
+
+- **Finding #15 was measured on the wrong thing.** The published score's
+  dangerous recall was 0.933, not 0.875; it now stands at 0.962. The over-
+  optimism gate was the one genuinely failing (0.075), and it now passes.
+- **Finding #14's conclusion was wrong.** A learning curve
+  (`experiments/006_learning_curve.py`) shows MAE flattening — 0.923, 0.714,
+  0.659, 0.641, 0.627 — with a fitted asymptote of 0.596 and 10× the labels
+  projected to reach 0.597. The 55%-unlabelled measurement stands; "labelling is
+  the accuracy ceiling" does not follow.
+
+
 ## v2.6.0 — 2026-09-18
 
 Round 2+3 of the production audit (`AUDIT-2026-09-18.md`). Every item here either
