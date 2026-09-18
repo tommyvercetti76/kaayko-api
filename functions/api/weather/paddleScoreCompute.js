@@ -89,6 +89,15 @@ async function computePaddleScoreForSpot(loc, options = {}) {
     const localTime = String(weatherData.location?.localTime || '');
     const localHourStr = localTime.split(' ')[1];
     const localHour = Math.max(0, Math.min(23, parseInt(localHourStr, 10) || 0));
+    // `month` is one of the model's 19 features and this path never supplied it,
+    // so buildFeatureVector rejected EVERY vector with
+    // "missing/non-finite features: month" and the in-process model silently
+    // fell through to the remote service on every single spot-hour. The local
+    // model has therefore never once run in production; the "18/18 ml-model"
+    // observed after v2.6.0 was Cloud Run answering, not the artifact.
+    // Same location-local clock as the hour, for the same reason.
+    const localMonthNum = parseInt(localTime.slice(5, 7), 10);
+    const localMonth = (localMonthNum >= 1 && localMonthNum <= 12) ? localMonthNum : null;
     const marineHour = selectMarineHour(marineData, localHour);
 
     // PoP: current.json has no chance-of-rain — source it from this hour's forecast
@@ -113,6 +122,7 @@ async function computePaddleScoreForSpot(loc, options = {}) {
         precipMm:      current.precipitation?.amountMM ?? 0,
         precipChancePercent: forecastHour?.chance_of_rain ?? 0,
         hour:          localHour,
+        month:         localMonth,
         latitude:  loc.lat,
         longitude: loc.lng
     }, marineData, marineHour);

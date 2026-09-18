@@ -127,6 +127,14 @@ async function transformToFastForecastFormat(weatherData, locationQuery) {
                 gustSpeedKph:         realGustKph,
                 hasWarnings:          weatherData.current?.hasWarnings ?? false,
                 hour,
+                // See paddleScoreCompute.js: `month` is a model feature and its
+                // absence made the in-process model reject every vector. Taken
+                // from THIS forecast hour's own local timestamp, so an hour
+                // three days out is scored against its month, not today's.
+                month: (() => {
+                    const m = parseInt(String(hourData.time).slice(5, 7), 10);
+                    return (m >= 1 && m <= 12) ? m : null;
+                })(),
                 latitude:  lat,
                 longitude: lng
             }, marineData, marineHour);
