@@ -38,7 +38,10 @@ const LIMITS = Object.freeze({
   TAGLINE: 72,     // 11px letterspaced across 1018 units
   PROPERTIES: 80,
   CONTACT: 60,
-  LABEL: 16
+  LABEL: 16,
+  LINE: 64,        // one sentence under the name on the back
+  FACT: 22,        // 17px letterspaced, three across a 874-unit row
+  FACTS: 3         // three, in the same three places on every card
 });
 
 /* ── validators ───────────────────────────────────────────────
@@ -93,6 +96,24 @@ const bool = (raw) => (typeof raw === 'boolean'
   ? { ok: true, value: raw }
   : { ok: false, message: 'must be true or false' });
 
+/* The three facts along the bottom of the back. Exactly three, because the row
+   is a fixed three-cell grid and the series only reads as a set when every card
+   fills the same three places. Each is short enough to stay on one line at
+   17px with 4px of letterspacing. */
+const facts = (raw) => {
+  if (!Array.isArray(raw)) return { ok: false, message: 'must be a list of three short facts' };
+  if (raw.length !== LIMITS.FACTS) return { ok: false, message: `must be exactly ${LIMITS.FACTS} facts` };
+  const out = [];
+  for (const item of raw) {
+    if (typeof item !== 'string') return { ok: false, message: 'each fact must be text' };
+    const value = item.trim().replace(/\s+/g, ' ');
+    if (!value) return { ok: false, message: 'a fact cannot be blank' };
+    if (value.length > LIMITS.FACT) return { ok: false, message: `each fact is at most ${LIMITS.FACT} characters` };
+    out.push(value);
+  }
+  return { ok: true, value: out };
+};
+
 const EDITABLE = Object.freeze({
   name: str(LIMITS.NAME),
   hook: str(LIMITS.HOOK),
@@ -101,7 +122,9 @@ const EDITABLE = Object.freeze({
   accent: hex,
   art: artName,
   n: order,
-  live: bool
+  live: bool,
+  line: str(LIMITS.LINE),
+  facts
 });
 
 const BRAND_EDITABLE = Object.freeze({
@@ -135,6 +158,10 @@ function shape(doc) {
     url: d.url ?? '',
     accent: d.accent ?? '#8A5A2B',
     art: d.art ?? doc.id,
+    // The back of a card advertises itself: one sentence and three checkable
+    // facts. Without these the back falls back to the hook and an empty row.
+    line: d.line ?? '',
+    facts: Array.isArray(d.facts) ? d.facts.slice(0, LIMITS.FACTS) : [],
     live: d.live !== false,
     updatedAt: d.updatedAt ? d.updatedAt.toMillis?.() ?? d.updatedAt : null
   };
