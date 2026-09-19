@@ -14,6 +14,11 @@ class ForecastCache {
         // went on publishing an invented water temperature, labelled "measured
         // now at the nearest station", for hours after the fix was live.
         this.ALGORITHM_VERSION = ALGORITHM_VERSION;
+        // Append-only archive of what we PREDICTED, so forecast skill can be
+        // measured later. See archiveForecast() for why this exists.
+        this.ARCHIVE_COLLECTION = 'forecast_archive';
+        // Hours ahead worth keeping. Beyond this the API has no forecast.
+        this.ARCHIVE_MAX_LEAD_H = 72;
     }
 
     /**
@@ -86,11 +91,129 @@ class ForecastCache {
                 .set(cacheDoc);
 
             logger.info(`Forecast cached for location: ${locationId}`);
+
+            // Archive AFTER the cache write and never in front of it: this is
+            // measurement, and it must not be able to break serving.
+            this.archiveForecast(locationId, forecastData).catch((e) =>
+                logger.error(`forecast archive failed for ${locationId}: ${e.message}`)
+            );
             return true;
         } catch (error) {
             logger.error(`Error caching forecast for ${locationId}:`, error);
             return false;
         }
+    }
+
+    /**
+     * Append what we predicted, keyed by (issuedAt, validAt), so forecast skill
+     * at a LEAD TIME can be measured later.
+     *
+     * WHY THIS EXISTS
+     * ---------------
+     * `storeForecast` is an unconditional `.set()` on `doc(locationId)`, so
+     * every regeneration DESTROYED the previous forecast. The consequence is
+     * that the product has never measured its own skill at any lead time above
+     * zero, and cannot do so retroactively: the predictions are gone. The only
+     * predicted/actual pairs retained anywhere came from a 15-minute cache,
+     * i.e. lead ~0.
+     *
+     * Meanwhile hour 71 of /api/fastForecast ships `confidence: 'measured'`
+     * with the SAME error bar as hour 0 — an out-of-fold residual computed on
+     * observations, not forecasts. A multi-day journey is a bet on 48-120 hour
+     * leads, and that error bar describes none of it.
+     *
+     * This is the only remediation item where waiting costs data permanently.
+     * Everything else can be built later from what is on disk; a forecast that
+     * was never written down cannot be recovered.
+     *
+     * SHAPE: one document per (spot, issue, valid) hour, so a later join
+     * against observed weather gives (lead_hours, predicted, actual) directly.
+     * Deliberately NOT a subcollection of the cache doc, which is overwritten.
+     *
+     * COST: 18 spots x 72 hours x ~6 refreshes/day is ~7,800 writes/day.
+     * Trimmed to ARCHIVE_MAX_LEAD_H and stored flat, that is a few MB/day.
+     *
+     * @param {string} locationId
+     * @param {object} forecastData - the payload handed to storeForecast
+     * @param {number} [issuedAtMs] - issue time override; injectable so a test
+     *   can archive two DIFFERENT issues of the same valid hour without racing
+     *   the wall clock.
+     */
+    async archiveForecast(locationId, forecastData, issuedAtMs = Date.now()) {
+        const issuedAt = new Date(issuedAtMs).toISOString();
+        const days = Array.isArray(forecastData?.forecast) ? forecastData.forecast : [];
+        if (!days.length) return 0;
+
+        const rows = [];
+        for (const day of days) {
+            const hourly = day?.hourly || {};
+            for (const key of Object.keys(hourly)) {
+                const h = hourly[key];
+                if (!h || !h.prediction) continue;
+                // The hour's own LOCATION-LOCAL timestamp. Lead time is computed
+                // from the UTC epoch of that hour, not from the local string,
+                // because the two differ by the zone offset.
+                const validLocal = h.time || day?.date || null;
+                const validMs = validLocal ? Date.parse(String(validLocal).replace(' ', 'T')) : NaN;
+                const leadH = Number.isFinite(validMs)
+                    ? Math.round((validMs - issuedAtMs) / 3600000)
+                    : null;
+                // Past hours of today are not forecasts; negative leads are
+                // dropped rather than archived as if they were predictions.
+                if (leadH === null || leadH < 0 || leadH > this.ARCHIVE_MAX_LEAD_H) continue;
+                rows.push({
+                    location_id: locationId,
+                    issued_at: issuedAt,
+                    issued_at_ms: issuedAtMs,
+                    valid_local: validLocal,
+                    valid_ms: validMs,
+                    lead_hours: leadH,
+                    algorithm_version: this.ALGORITHM_VERSION,
+                    // What we predicted...
+                    rating_precise: h.prediction.ratingPrecise ?? null,
+                    interpretation: h.prediction.interpretation ?? null,
+                    prediction_source: h.prediction.predictionSource ?? null,
+                    degraded: h.prediction.degraded === true,
+                    confidence: h.prediction.confidence ?? null,
+                    // ...and the inputs it was predicted FROM, so a later
+                    // re-score against observed weather isolates forecast error
+                    // from model error. Without these the archive can only say
+                    // THAT we were wrong, never WHY.
+                    inputs: {
+                        temperature: h.temperature ?? null,
+                        windSpeed: h.windSpeed ?? null,
+                        gustSpeed: h.gustSpeed ?? null,
+                        humidity: h.humidity ?? null,
+                        cloudCover: h.cloudCover ?? null,
+                        uvIndex: h.uvIndex ?? null,
+                        visibility: h.visibility ?? null,
+                        precipMM: h.precipMM ?? null,
+                        chanceOfRain: h.chanceOfRain ?? null,
+                        waterTemp: h.waterTemp ?? null,
+                        waterTempMeasured: h.waterTempMeasured === true,
+                        isDay: h.isDay ?? null
+                    },
+                    archived_at: FieldValue.serverTimestamp()
+                });
+            }
+        }
+        if (!rows.length) return 0;
+
+        // Firestore caps a batch at 500 writes.
+        const col = this.db.collection(this.ARCHIVE_COLLECTION);
+        for (let i = 0; i < rows.length; i += 400) {
+            const batch = this.db.batch();
+            for (const r of rows.slice(i, i + 400)) {
+                // Key on (spot, ISSUE time, VALID time). Keying on lead hours
+                // instead loses the distinction the archive exists for: the same
+                // valid hour predicted from two different issues is two
+                // predictions, and the later one must not overwrite the earlier.
+                batch.set(col.doc(`${r.location_id}__${issuedAtMs}__${r.valid_ms}`), r);
+            }
+            await batch.commit();
+        }
+        logger.info(`forecast archive: ${rows.length} hours for ${locationId}`);
+        return rows.length;
     }
 
     /**
